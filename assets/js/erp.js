@@ -369,6 +369,7 @@ const LABEL = {
   nama: 'Nama', jabatan: 'Daftar Jabatan', t: 'Pertanyaan', j: 'Jawaban', subjek: 'Pilihan Subjek',
   tampilkanFilter: 'Tampilkan Filter', tema: 'Tema Warna', ikon: 'Ikon',
   logo: 'Lambang Organisasi', favicon: 'Ikon Tab — Website', faviconErp: 'Ikon Tab — ERP',
+  masjid: 'Gambar Masjid Hero', gambar: 'Foto Latar',
 };
 
 /* Keterangan tambahan untuk medan tertentu. */
@@ -376,11 +377,12 @@ const BANTU = {
   logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
   favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
   faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
+  masjid    : 'Muncul dari bawah pada sisi kanan hero. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
 };
 
 /* Batas lebar unggahan per jenis medan. Logo dan ikon tidak perlu besar;
    membatasinya menjaga penyimpanan tetap lapang. */
-const LEBAR_MAKS = { logo: 512, favicon: 180, faviconErp: 180 };
+const LEBAR_MAKS = { logo: 512, favicon: 180, faviconErp: 180, masjid: 900 };
 const labelKunci = (k) => LABEL[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
 const adalahGambar = (v) => typeof v === 'string' && (v.startsWith('data:image') || /\.(jpe?g|png|webp|svg|gif)$/i.test(v));

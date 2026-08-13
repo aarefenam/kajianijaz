@@ -95,9 +95,40 @@ a { color: inherit; text-decoration: none; }
 .hero-bg img { width: 100%; height: 100%; object-fit: cover; opacity: .5; }
 .hero-bg::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(100deg, var(--hijau-tua) 8%, rgba(14,46,28,.90) 42%, rgba(14,46,28,.35) 100%);
+  /* Sisi kanan dibuat lebih pekat daripada sebelumnya supaya masjid
+     berdiri di atas hijau, bukan di atas foto latar yang ramai. */
+  background: linear-gradient(100deg, var(--hijau-tua) 6%, rgba(14,46,28,.93) 44%, rgba(14,46,28,.74) 100%);
 }
 .hero-in { position: relative; z-index: 2; padding: 92px 0 130px; max-width: 620px; }
+
+/* --- Masjid yang muncul dari bawah, sisi kanan ---
+   Gerak masuknya memakai TRANSISI yang dipicu skrip satu frame setelah
+   elemen terpasang, bukan @keyframes. Sebabnya: animasi CSS yang mulai
+   bersamaan dengan pelukisan pertama membuat Chrome tidak pernah melukis
+   gambar ini sama sekali — elemennya ada, ukuran dan opacity-nya benar,
+   tetapi layarnya kosong. Diuji berpasangan: dengan/tanpa filter, dengan
+   transform maupun dengan bottom, di DPR 1 dan 2 — yang menentukan
+   hanyalah ada tidaknya animasi yang mulai pada frame pertama.          */
+.hero-masjid {
+  position: absolute; right: clamp(0px, 3vw, 72px); bottom: 0; z-index: 1;
+  height: min(88%, 540px);
+  pointer-events: none; user-select: none;
+}
+.hero-masjid img {
+  height: 100%; width: auto; display: block;
+  filter: drop-shadow(0 22px 46px rgba(0, 0, 0, .38));
+}
+/* Keadaan awal & akhir gerak masuk. Keduanya kelas tambahan, sehingga
+   keadaan DASAR di atas sudah merupakan keadaan akhir yang terlihat:
+   bila skrip gagal jalan, masjid tetap tampil, hanya tanpa gerak. */
+.hero-masjid.siap-masuk { opacity: 0; bottom: -80px; }
+.hero-masjid.masuk {
+  opacity: 1; bottom: 0;
+  transition: opacity .9s ease .25s, bottom 1.3s cubic-bezier(.22, .85, .3, 1) .25s;
+}
+@media (max-width: 860px) {
+  .hero-masjid.masuk { opacity: .26; }
+}
 
 /* --- Kaligrafi Arab beranimasi --- */
 .kaligrafi { margin-bottom: 20px; }
@@ -153,6 +184,8 @@ a { color: inherit; text-decoration: none; }
   .kaligrafi text { animation: none; fill: rgba(240,149,30,.95); stroke: none; }
   .kaligrafi .pena { display: none; }
   .hero-skrip, .hero-judul, .hero-sub, .hero .tombol { opacity: 1; animation: none; }
+  .hero-masjid.siap-masuk { opacity: 1; bottom: 0; }
+  .hero-masjid.masuk { transition: none; }
 }
 
 /* Pembatas gelombang lime + oranye seperti pada desain */
@@ -577,6 +610,7 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
 
 /* ============================ RESPONSIF ============================ */
 @media (max-width: 1024px) {
+  .hero-masjid { height: min(72%, 430px); right: 0; }
   .tata-artikel { grid-template-columns: 1fr; }
   .samping { position: static; }
   .grid-timeline, .grid-visi { grid-template-columns: 1fr; gap: 30px; }
@@ -593,6 +627,10 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   .kartu-artikel { grid-template-columns: 1fr; }
   .sec { padding: 58px 0; }
   .hero-in { padding: 62px 0 108px; }
+  /* Di layar sempit teks memakai seluruh lebar, jadi masjid diturunkan
+     jadi latar suasana agar tidak bertabrakan dengan judul. */
+  .hero-masjid { height: 54%; right: -6%; opacity: .26; }
+  .hero-masjid img { filter: none; }
   .kepala { gap: 14px; }
   .nomor { width: 50px; height: 50px; font-size: 19px; }
   .baca-isi { padding: 24px 22px 34px; }

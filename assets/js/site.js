@@ -185,6 +185,7 @@ const RENDER = {
   hero(d) {
     const n = el(`<section class="hero">
       <div class="hero-bg"><img src="${d.gambar}" alt=""></div>
+      ${d.masjid ? `<div class="hero-masjid" aria-hidden="true"><img src="${d.masjid}" alt=""></div>` : ''}
       <div class="wrap hero-in">
         <div class="kaligrafi" style="--durasi:${d.durasiAnimasi || 4.5}s">
           <svg viewBox="0 0 400 120" role="img" aria-label="${esc(d.arab)}">
@@ -199,6 +200,20 @@ const RENDER = {
       </div>
       ${GELOMBANG}
     </section>`);
+
+    /* Gerak masuk masjid dipicu satu frame SETELAH elemen terpasang.
+       Animasi CSS yang mulai bersamaan dengan pelukisan pertama membuat
+       Chrome tidak pernah melukis gambar ini sama sekali; menunda satu
+       frame menghindari jalur render bermasalah itu. Keadaan dasarnya
+       sudah terlihat, jadi kegagalan skrip tidak menghilangkannya. */
+    const masjid = n.querySelector('.hero-masjid');
+    if (masjid) {
+      masjid.classList.add('siap-masuk');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        masjid.classList.remove('siap-masuk');
+        masjid.classList.add('masuk');
+      }));
+    }
     return n;
   },
 
