@@ -6,6 +6,13 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Kredensial — JANGAN pernah masuk repo, apalagi repo publik.
+# Simpan kunci Supabase/API di sini secara lokal saja; untuk deploy
+# gunakan GitHub Secrets (lihat DEPLOY.md).
+.env
+.env.*
+!.env.example
+
 # Dependensi (prototipe ini tidak memerlukannya, jaga-jaga saja)
 node_modules/
 

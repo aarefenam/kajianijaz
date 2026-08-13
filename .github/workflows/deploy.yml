@@ -1,0 +1,62 @@
+# ============================================================
+# Kirim otomatis ke hosting Hostinger setiap kali main diperbarui.
+#
+# Sebelum dipakai, tambahkan tiga secret di GitHub:
+#   Settings → Secrets and variables → Actions → New repository secret
+#
+#   FTP_SERVER    147.93.80.88
+#   FTP_USERNAME  u191793547
+#   FTP_PASSWORD  (kata sandi FTP dari hPanel → File → Akun FTP)
+#
+# Kata sandi TIDAK boleh ditulis di berkas ini. Secret hanya terbaca
+# oleh Actions dan tidak tampil di log.
+#
+# Memakai FTPS (FTP terenkripsi) di port 21 — bukan FTP polos.
+# ============================================================
+
+name: Kirim ke Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # bisa juga dijalankan manual dari tab Actions
+
+concurrency:
+  group: kirim-hosting      # cegah dua pengiriman berbarengan
+  cancel-in-progress: false
+
+jobs:
+  kirim:
+    name: Unggah ke public_html
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Periksa sintaks JavaScript
+        run: |
+          for f in assets/js/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "Seluruh berkas JavaScript lolos pemeriksaan sintaks."
+
+      - name: Unggah lewat FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          port: 21
+          local-dir: ./
+          server-dir: public_html/
+          # Berkas yang tidak perlu ikut ke server publik
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/*.pdf
+            README.md
+            DEPLOY.md
+            .nojekyll
