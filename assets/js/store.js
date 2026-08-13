@@ -421,25 +421,48 @@ function berlanggananNewsletter(email) {
   return true;
 }
 
-/* ---------- kompresi gambar untuk unggahan ---------- */
-/* localStorage hanya ~5MB. Foto mentah dari kamera bisa 4MB sendiri,
-   jadi setiap unggahan dikecilkan dulu lewat canvas. */
+/* ---------- kompresi gambar untuk unggahan ----------
+   localStorage hanya ~5MB, jadi foto dikecilkan dulu lewat canvas.
+
+   Format keluaran mengikuti format masukan, bukan selalu JPEG:
+   - SVG   diteruskan apa adanya. Ia sudah ringan dan bebas skala;
+           melewatkannya ke canvas justru merusaknya jadi raster.
+   - PNG / WebP / GIF menjadi PNG, agar latar transparan tetap utuh.
+           Logo tanpa transparansi akan tampil sebagai kotak putih
+           di atas header hijau.
+   - Selebihnya menjadi JPEG, yang jauh lebih hemat untuk foto.        */
 function unggahGambar(file, lebarMaks = 1400, mutu = 0.82) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) return reject(new Error('Berkas harus berupa gambar.'));
+
     const reader = new FileReader();
     reader.onload = () => {
+      /* SVG: simpan langsung, tanpa melewati canvas.
+         Catatan keamanan — SVG boleh memuat <script>. Di sini aman sebab
+         logo & ikon SELALU dipasang lewat <img src> dan <link rel=icon>,
+         dan peramban tidak menjalankan skrip pada SVG yang dimuat begitu.
+         Bila kelak ada fitur yang menyisipkan SVG langsung ke DOM, berkas
+         unggahan wajib disanitasi lebih dulu di sisi server. */
+      if (file.type === 'image/svg+xml') {
+        if (String(reader.result).length > 400_000)
+          return reject(new Error('Berkas SVG terlalu besar. Sederhanakan gambarnya lebih dulu.'));
+        return resolve(reader.result);
+      }
+
+      const punyaAlfa = ['image/png', 'image/webp', 'image/gif'].includes(file.type);
       const img = new Image();
       img.onload = () => {
         const skala = Math.min(1, lebarMaks / img.width);
         const c = document.createElement('canvas');
-        c.width = Math.round(img.width * skala);
-        c.height = Math.round(img.height * skala);
+        c.width = Math.max(1, Math.round(img.width * skala));
+        c.height = Math.max(1, Math.round(img.height * skala));
         const ctx = c.getContext('2d');
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, c.width, c.height);
+        if (!punyaAlfa) {                 // JPEG tidak mengenal transparansi
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, c.width, c.height);
+        }
         ctx.drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', mutu));
+        resolve(punyaAlfa ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', mutu));
       };
       img.onerror = () => reject(new Error('Gambar tidak dapat dibaca.'));
       img.src = reader.result;

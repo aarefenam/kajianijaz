@@ -500,7 +500,7 @@ flowchart TB
     </div>
     <div class="kartu-peran" style="--tanda:#7C5CD6">
       <h4>PJ Website <span class="pil">Divisi</span></h4>
-      <p class="tugas">Mengubah foto, warna, font, teks, dan urutan section di seluruh halaman. Seluruh hasil kerjanya masuk draft dan menunggu persetujuan Ketua.</p>
+      <p class="tugas">Mengubah lambang, ikon tab, foto, warna, font, teks, dan urutan section di seluruh halaman — termasuk identitas visual ERP itu sendiri. Seluruh hasil kerjanya masuk draft dan menunggu persetujuan Ketua.</p>
       <span class="kunci">cms.page.edit · cms.theme.edit · cms.media.upload · cms.submit</span>
     </div>
     <div class="kartu-peran" style="--tanda:#D9536F">
@@ -834,6 +834,12 @@ erDiagram
   <div class="catatan prosa">
     <span class="label">Kunci Rancangan</span>
     <p>Section menyimpan <code>tipe</code> dan <code>data</code>. Perender di website memilih fungsi berdasarkan <code>tipe</code>; editor di ERP membangun form berdasarkan bentuk <code>data</code>. Menambah jenis section baru cukup dengan menambah satu entri data dan satu fungsi render — form penyuntingnya terbentuk sendiri.</p>
+  </div>
+
+  <div class="catatan prosa">
+    <span class="label">Identitas Visual Ikut Menjadi Data</span>
+    <p>Lambang organisasi dan ikon tab peramban disimpan sebagai <code>situs.logo</code>, <code>situs.favicon</code>, dan <code>situs.faviconErp</code> — bukan ditanam di kode. Karena nilainya berbentuk data-URI gambar, editor CMS mengenalinya dan menyediakan pengunggah secara otomatis, tanpa satu baris pun form khusus.</p>
+    <p>ERP sendiri memakai versi <b>tayang</b>, bukan draft. Andai ia memakai draft, PJ Website dapat mengubah tampilan panel yang dipakai seluruh pengurus tanpa persetujuan — persis celah yang hendak ditutup aturan dua kunci. Jadi identitas ERP pun hanya berubah setelah Ketua menyetujuinya.</p>
   </div>
 </section>
 

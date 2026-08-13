@@ -92,6 +92,16 @@ penyuntingnya terbentuk sendiri.
 dirender dari `Store.cms`. Inilah yang membuat website benar-benar dapat dikendalikan
 dari ERP.
 
+**Identitas visual juga data.** Lambang organisasi dan ikon tab peramban — untuk website
+maupun untuk ERP — disimpan di `situs.logo`, `situs.favicon`, dan `situs.faviconErp`,
+lalu diganti lewat **Tema & Identitas** di ERP. Tidak ada logo yang ditanam di kode.
+ERP memakai versi tayang, sehingga tampilannya pun baru berubah setelah Ketua menyetujui.
+
+Unggahan mempertahankan format: SVG diteruskan apa adanya, PNG/WebP tetap PNG agar latar
+transparan utuh, selebihnya jadi JPEG. Logo berlatar putih akan tampak sebagai kotak di
+atas header hijau — karena itu pratinjaunya diberi latar kotak-kotak, supaya ketahuan
+sebelum diajukan.
+
 ## Mengulang dari awal
 
 Data tersimpan di `localStorage` peramban. Untuk mengembalikan ke kondisi awal, jalankan

@@ -67,7 +67,8 @@ a { color: inherit; text-decoration: none; }
   background: linear-gradient(140deg, rgba(140,198,63,.22), rgba(240,149,30,.16));
   border: 1px solid rgba(255,255,255,.20);
 }
-.merek-lambang svg { width: 28px; height: 28px; }
+.merek-lambang svg,
+.merek-lambang img { width: 28px; height: 28px; object-fit: contain; }
 .merek-nama {
   font-family: var(--font-skrip); font-size: 30px; font-weight: 700;
   color: #fff; line-height: 1; letter-spacing: .4px;

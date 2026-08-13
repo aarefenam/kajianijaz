@@ -73,17 +73,30 @@ function terapkanTema() {
   r.setProperty('--font-skrip', t.fontSkrip);
   r.setProperty('--radius', t.radius + 'px');
   r.setProperty('--lebar', t.lebarKonten + 'px');
+  terapkanFavicon(Store.cms.situs.favicon);
 }
 
 /* ---------------- kerangka: header, footer, nav ---------------- */
-const LAMBANG = `<svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/><path d="M20 7c5 4 8 8 8 13a8 8 0 0 1-16 0c0-5 3-9 8-13z" stroke="var(--hijau-muda)" stroke-width="1.5" fill="rgba(140,198,63,.18)"/><path d="M20 15v10M16 19h8" stroke="var(--oranye)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+/* Lambang tidak lagi ditanam di kode — ia dibaca dari CMS agar
+   PJ Website dapat menggantinya lewat ERP. */
+const lambang = () => `<img src="${Store.cms.situs.logo}" alt="Lambang ${esc(Store.cms.situs.nama)}">`;
+
+/** Ganti ikon tab peramban mengikuti pengaturan CMS. */
+function terapkanFavicon(url) {
+  if (!url) return;
+  document.querySelectorAll('link[rel~="icon"]').forEach((l) => l.remove());
+  const l = document.createElement('link');
+  l.rel = 'icon';
+  l.href = url;
+  document.head.appendChild(l);
+}
 
 function renderHeader(aktif) {
   const s = Store.cms.situs;
   const menu = s.menu.map((m) => `<a href="${esc(m.href)}" class="${m.href === aktif ? 'aktif' : ''}">${esc(m.label)}</a>`).join('');
   const h = el(`<header class="header"><div class="wrap header-in">
     <a class="merek" href="index.html">
-      <span class="merek-lambang">${LAMBANG}</span>
+      <span class="merek-lambang">${lambang()}</span>
       <span><span class="merek-nama">${esc(s.nama)}</span><br><span class="merek-tag">${esc(s.tagline)}</span></span>
     </a>
     <nav class="nav">${menu}</nav>
@@ -109,7 +122,7 @@ function renderFooter() {
     <div class="footer-grid">
       <div>
         <div class="merek" style="margin-bottom:14px">
-          <span class="merek-lambang">${LAMBANG}</span>
+          <span class="merek-lambang">${lambang()}</span>
           <span><span class="merek-nama">${esc(s.nama)}</span><br><span class="merek-tag">${esc(s.tagline)}</span></span>
         </div>
         <p>${esc(s.deskripsi)}</p>

@@ -58,6 +58,25 @@ function toast(pesan, galat = false) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(26px)'; setTimeout(() => t.remove(), 260); }, 4200);
 }
 
+/* ---------------- identitas visual ----------------
+   ERP sengaja memakai versi TAYANG (Store.cms), bukan draft. Kalau ia
+   memakai draft, PJ Website bisa mengubah tampilan panel yang dipakai
+   seluruh pengurus tanpa melewati persetujuan — persis celah yang
+   hendak ditutup aturan dua kunci. Hasil kerjanya tetap terlihat
+   sebagai pratinjau di halaman Tema & Identitas.                      */
+const lambang = (px) =>
+  `<img src="${Store.cms.situs.logo}" alt="Lambang ${esc(Store.cms.situs.nama)}" style="width:${px}px;height:${px}px;object-fit:contain">`;
+
+function terapkanFaviconErp() {
+  const url = Store.cms.situs.faviconErp;
+  if (!url) return;
+  document.querySelectorAll('link[rel~="icon"]').forEach((l) => l.remove());
+  const l = document.createElement('link');
+  l.rel = 'icon';
+  l.href = url;
+  document.head.appendChild(l);
+}
+
 /** Bungkus aksi agar setiap penolakan RBAC tampil rapi, bukan crash. */
 function aman(fn) {
   try { fn(); return true; }
@@ -146,7 +165,7 @@ function layarLogin() {
   const n = el(`<div class="layar-login">
     <div class="login-kiri">
       <div class="login-merek">
-        <span class="lambang"><svg width="32" height="32" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/><path d="M20 7c5 4 8 8 8 13a8 8 0 0 1-16 0c0-5 3-9 8-13z" stroke="#8CC63F" stroke-width="1.5" fill="rgba(140,198,63,.18)"/><path d="M20 15v10M16 19h8" stroke="#F0951E" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        <span class="lambang">${lambang(32)}</span>
         <span><span class="nama">Al-I'jaz</span><br><span class="tag">ERP — Sistem Informasi Organisasi</span></span>
       </div>
       <h1>Satu sistem untuk website<br>dan operasional kajian.</h1>
@@ -208,7 +227,7 @@ function kerangka() {
   const n = el(`<div class="tata">
     <aside class="sidebar" id="sidebar">
       <div class="sb-merek">
-        <span class="lambang"><svg width="26" height="26" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="rgba(255,255,255,.5)" stroke-width="1.2"/><path d="M20 7c5 4 8 8 8 13a8 8 0 0 1-16 0c0-5 3-9 8-13z" stroke="#8CC63F" stroke-width="1.5" fill="rgba(140,198,63,.18)"/></svg></span>
+        <span class="lambang">${lambang(26)}</span>
         <span><span class="nama">Al-I'jaz</span><br><span class="tag">ERP ORGANISASI</span></span>
       </div>
       <nav class="sb-nav">${menuHtml}</nav>
@@ -349,7 +368,19 @@ const LABEL = {
   perHalaman: 'Artikel per Halaman', durasiAnimasi: 'Durasi Animasi (detik)', posisiGambar: 'Posisi Gambar',
   nama: 'Nama', jabatan: 'Daftar Jabatan', t: 'Pertanyaan', j: 'Jawaban', subjek: 'Pilihan Subjek',
   tampilkanFilter: 'Tampilkan Filter', tema: 'Tema Warna', ikon: 'Ikon',
+  logo: 'Lambang Organisasi', favicon: 'Ikon Tab — Website', faviconErp: 'Ikon Tab — ERP',
 };
+
+/* Keterangan tambahan untuk medan tertentu. */
+const BANTU = {
+  logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
+  favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
+  faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
+};
+
+/* Batas lebar unggahan per jenis medan. Logo dan ikon tidak perlu besar;
+   membatasinya menjaga penyimpanan tetap lapang. */
+const LEBAR_MAKS = { logo: 512, favicon: 180, faviconErp: 180 };
 const labelKunci = (k) => LABEL[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
 const adalahGambar = (v) => typeof v === 'string' && (v.startsWith('data:image') || /\.(jpe?g|png|webp|svg|gif)$/i.test(v));
@@ -367,25 +398,31 @@ function medan(kunci, nilai, path, bisaEdit, bisaGambar) {
 
   /* --- gambar --- */
   if (adalahGambar(nilai)) {
+    const lebarMaks = LEBAR_MAKS[kunci] || 1400;
+    const kecil = lebarMaks <= 512;   // logo & ikon: pratinjau di atas kotak-kotak
     const p = el(`<div class="pratinjau-gambar">
-      <img src="${nilai}" alt="">
+      <img src="${nilai}" alt="" class="${kecil ? 'pratinjau-alfa' : ''}"
+           style="${kecil ? 'width:92px;height:92px;object-fit:contain;padding:8px' : ''}">
       <div style="flex:1;min-width:0">
-        <p style="margin:0 0 10px;font-size:12.4px;color:var(--e-abu)">Format JPG/PNG/WebP. Gambar otomatis dikecilkan ke lebar maks 1400px agar hemat penyimpanan.</p>
-        <label class="btn btn-garis btn-kecil" style="display:inline-flex;cursor:pointer;margin:0">
+        <p style="margin:0 0 10px;font-size:12.4px;color:var(--e-abu)">
+          ${esc(BANTU[kunci] || `Format JPG, PNG, WebP, atau SVG. Gambar dikecilkan otomatis ke lebar maks ${lebarMaks}px agar hemat penyimpanan.`)}
+        </p>
+        <label class="btn btn-garis btn-kecil" style="display:inline-flex;cursor:${bisaGambar ? 'pointer' : 'not-allowed'};margin:0;opacity:${bisaGambar ? 1 : .5}">
           ${I.gambar} Ganti Gambar<input type="file" accept="image/*" hidden ${bisaGambar ? '' : 'disabled'}>
         </label>
       </div>
     </div>`);
     const inp = p.querySelector('input[type=file]');
-    if (!bisaGambar) { p.querySelector('label.btn').classList.add('btn-garis'); p.querySelector('label.btn').style.opacity = '.5'; p.querySelector('label.btn').style.cursor = 'not-allowed'; }
     inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
       try {
-        const dataUri = await Store.unggahGambar(f);
         RBAC.assertCan(U, 'cms.media.upload');
+        const dataUri = await Store.unggahGambar(f, lebarMaks);
         simpan(dataUri, 'cms.media.upload');
         p.querySelector('img').src = dataUri;
-        toast('Gambar diperbarui pada draft.');
+        toast(kunci === 'logo' || kunci.startsWith('favicon')
+          ? 'Tersimpan di draft. Baru berlaku setelah Ketua menyetujui.'
+          : 'Gambar diperbarui pada draft.');
       } catch (e) { toast(e.message, true); }
       inp.value = '';
     };
@@ -639,6 +676,27 @@ HAL.tema = () => {
     <div class="panel-isi" id="ms"></div></div>`);
   Object.entries(s).forEach(([k, v]) =>
     kanan.querySelector('#ms').appendChild(medan(k, v, `situs.${k}`, RBAC.can(U, 'cms.page.edit'), RBAC.can(U, 'cms.media.upload'))));
+
+  /* Pratinjau identitas — lambang di atas latar hijau yang sebenarnya,
+     bukan di atas kotak putih yang menyesatkan. */
+  box.appendChild(el(`<div class="panel"><div class="panel-kepala"><h3>Pratinjau Identitas</h3>
+    <span class="ket">tampilan draft — begini nanti setelah disetujui</span></div>
+    <div class="panel-isi" style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <div style="font-size:11.6px;color:var(--e-abu);margin-bottom:8px">Header website &amp; sidebar ERP</div>
+        <div class="pratinjau-merek">
+          <span class="kotak"><img src="${s.logo}" alt=""></span>
+          <span><span class="nm">${esc(s.nama)}</span><br><span class="tg">${esc(s.tagline)}</span></span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11.6px;color:var(--e-abu);margin-bottom:8px">Ikon tab peramban</div>
+        <div style="display:flex;gap:6px">
+          <div class="pratinjau-tab"><img src="${s.favicon}" alt=""><span>${esc(s.nama)}</span></div>
+          <div class="pratinjau-tab"><img src="${s.faviconErp}" alt=""><span>ERP — ${esc(s.nama)}</span></div>
+        </div>
+      </div>
+    </div></div>`));
 
   /* pratinjau langsung palet */
   const pra = el(`<div class="panel"><div class="panel-kepala"><h3>Pratinjau Palet</h3>
@@ -1304,6 +1362,7 @@ HAL.log.judul = () => ['Log Aktivitas', 'Seluruh tindakan tercatat untuk pertang
 function gambar() {
   const app = document.getElementById('erp');
   app.innerHTML = '';
+  terapkanFaviconErp();
 
   if (!U) { app.appendChild(layarLogin()); return; }
 

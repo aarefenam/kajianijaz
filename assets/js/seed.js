@@ -26,6 +26,27 @@ function ph(label, c1, c2, arab) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/\s+/g, ' '));
 }
 
+/* Lambang & ikon bawaan sebagai data-URI, bukan SVG sebaris.
+   Bentuk data-URI penting: itulah yang membuat editor CMS mengenalinya
+   sebagai gambar dan otomatis menyediakan pengunggah, sehingga PJ Website
+   dapat menggantinya dengan berkas sendiri tanpa menyentuh kode. */
+function lambangBawaan() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+    <circle cx="20" cy="20" r="18" stroke="rgba(255,255,255,.55)" stroke-width="1.2"/>
+    <path d="M20 7c5 4 8 8 8 13a8 8 0 0 1-16 0c0-5 3-9 8-13z" stroke="#8CC63F" stroke-width="1.5" fill="rgba(140,198,63,.20)"/>
+    <path d="M20 15v10M16 19h8" stroke="#F0951E" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/\s+/g, ' '));
+}
+
+function ikonBawaan(latar, tinta) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+    <rect width="32" height="32" rx="7" fill="${latar}"/>
+    <text x="16" y="23.5" text-anchor="middle" font-size="20" fill="${tinta}" font-family="Amiri, Georgia, serif">ا</text>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/\s+/g, ' '));
+}
+
 function avatar(nama, warna) {
   const inisial = nama.split(' ').filter(w => w.length > 2).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
@@ -60,6 +81,14 @@ const SEED = {
   situs: {
     nama      : "Al-I'jaz",
     tagline   : "Kajian Tafsir & 'Ulum al-Quran",
+    /* Identitas visual — seluruhnya dapat diganti dari ERP.
+       logo       : lambang di header & footer website, sidebar & layar masuk ERP
+       favicon    : ikon tab peramban untuk website publik
+       faviconErp : ikon tab peramban untuk ERP, sengaja dibedakan warnanya
+                    agar tab admin mudah dibedakan dari tab website */
+    logo      : lambangBawaan(),
+    favicon   : ikonBawaan('#0E2E1C', '#8CC63F'),
+    faviconErp: ikonBawaan('#8CC63F', '#0E2E1C'),
     naungan   : 'Di bawah naungan IKPM Kairo, Mesir',
     deskripsi : "Forum keilmuan yang berfokus pada studi tafsir al-Quran dan 'ulum al-Quran.",
     email     : 'kajianalijaz@gmail.com',
