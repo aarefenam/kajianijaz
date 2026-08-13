@@ -202,26 +202,41 @@ section { display: flex; flex-direction: column; gap: 1.35rem; scroll-margin-top
 .catatan p { font-size: .93rem; color: var(--ink-lembut); }
 
 /* ---------------- langkah berurutan ---------------- */
-.langkah { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .9rem; counter-reset: lk; }
+/* Tiap langkah adalah grid 2 kolom dengan TIGA item: nomor (::before),
+   nama pelaku, dan isi langkah. Ketiganya wajib ditempatkan eksplisit —
+   tanpa itu penempatan otomatis melemparkan .isi ke baris berikutnya di
+   kolom nomor yang hanya selebar 1.75rem, dan teksnya terperas menjadi
+   satu kata per baris. */
+.langkah { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1rem; counter-reset: lk; }
 .langkah > li {
   counter-increment: lk;
-  display: grid; grid-template-columns: 1.75rem 1fr; gap: .95rem; align-items: start;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  column-gap: .95rem;
+  row-gap: .2rem;
+  align-items: start;
 }
 .langkah > li::before {
   content: counter(lk);
+  grid-column: 1; grid-row: 1 / span 2;
   font-family: ui-monospace, Menlo, monospace;
   font-size: .78rem; font-weight: 700;
   color: var(--zaitun);
   background: var(--sorot);
   width: 1.75rem; height: 1.75rem; border-radius: 5px;
   display: grid; place-items: center;
-  margin-top: .1rem;
+  margin-top: .05rem;
 }
 .langkah .aktor {
+  grid-column: 2; grid-row: 1;
   font-weight: 700; font-size: .82rem; letter-spacing: .02em;
-  color: var(--ink); display: block; margin-bottom: .1rem;
+  color: var(--ink);
 }
-.langkah .isi { font-size: .93rem; color: var(--ink-lembut); line-height: 1.66; }
+.langkah .isi {
+  grid-column: 2; grid-row: 2;
+  font-size: .93rem; color: var(--ink-lembut); line-height: 1.66;
+  text-wrap: pretty;
+}
 
 /* ---------------- daftar ---------------- */
 ul.poin { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .55rem; }
@@ -441,10 +456,10 @@ flowchart TB
 
   subgraph DATA["LAPISAN DATA"]
     direction LR
-    TAYANG[("cms<br/>versi TAYANG")]
-    DRAFT[("cmsDraft<br/>ruang kerja")]
-    ARSIP[("versi<br/>arsip snapshot")]
-    OPS[("artikel · kajian<br/>anggota · keuangan")]
+    TAYANG[("cms&lt;br/&gt;versi TAYANG")]
+    DRAFT[("cmsDraft&lt;br/&gt;ruang kerja")]
+    ARSIP[("versi&lt;br/&gt;arsip snapshot")]
+    OPS[("artikel · kajian&lt;br/&gt;anggota · keuangan")]
   end
 
   subgraph ERPX["ERP — perlu login"]
@@ -457,13 +472,13 @@ flowchart TB
 
   PUB -->|baca| TAYANG
   PUB -->|baca| OPS
-  P4 -.->|"kirim pesan<br/>(satu-satunya tulis publik)"| OPS
+  P4 -.->|"kirim pesan&lt;br/&gt;(satu-satunya tulis publik)"| OPS
 
   E1 -->|tulis| DRAFT
   E2 -->|tulis| DRAFT
   E4 -->|tulis| OPS
   DRAFT -->|ajukan| E3
-  E3 ==>|"setujui<br/>(izin cms.approve)"| TAYANG
+  E3 ==>|"setujui&lt;br/&gt;(izin cms.approve)"| TAYANG
   TAYANG -->|snapshot| ARSIP
   ARSIP -.->|rollback| TAYANG
 
@@ -609,17 +624,17 @@ flowchart TB
   <div class="diagram">
 <pre class="mermaid">
 flowchart TD
-  A["PJ Website membuka<br/>Editor Halaman"] --> B["Ubah teks / foto / warna<br/>urutan section"]
-  B --> C[("Tersimpan ke cmsDraft<br/>publik belum melihat apa pun")]
+  A["PJ Website membuka&lt;br/&gt;Editor Halaman"] --> B["Ubah teks / foto / warna&lt;br/&gt;urutan section"]
+  B --> C[("Tersimpan ke cmsDraft&lt;br/&gt;publik belum melihat apa pun")]
   C --> D{"Sudah siap?"}
   D -->|belum| B
-  D -->|"ya — klik Ajukan"| E["Sistem hitung selisih<br/>draft vs tayang"]
-  E --> F["Pengajuan masuk antrean<br/>+ catatan pengaju"]
-  F --> G{"Ketua Umum<br/>meninjau rincian"}
-  G -->|"Kembalikan<br/>(wajib beri alasan)"| H["Status: dikembalikan<br/>draft TETAP utuh"]
+  D -->|"ya — klik Ajukan"| E["Sistem hitung selisih&lt;br/&gt;draft vs tayang"]
+  E --> F["Pengajuan masuk antrean&lt;br/&gt;+ catatan pengaju"]
+  F --> G{"Ketua Umum&lt;br/&gt;meninjau rincian"}
+  G -->|"Kembalikan&lt;br/&gt;(wajib beri alasan)"| H["Status: dikembalikan&lt;br/&gt;draft TETAP utuh"]
   H --> B
   G -->|Setujui| J["cms := cuplikan draft"]
-  J --> K["Snapshot diarsipkan<br/>ke riwayat versi"]
+  J --> K["Snapshot diarsipkan&lt;br/&gt;ke riwayat versi"]
   K --> L(["Tayang di website publik"])
   K -.->|"bila keliru"| M["Ketua pilih Rollback"]
   M --> L
@@ -655,7 +670,7 @@ stateDiagram-v2
   direction LR
   [*] --> Draft : Anggota menulis
   Draft --> Tinjauan : kirim untuk ditinjau
-  Tinjauan --> Revisi : PJ KTI minta revisi<br/>(catatan wajib)
+  Tinjauan --> Revisi : PJ KTI minta revisi&lt;br/&gt;(catatan wajib)
   Revisi --> Tinjauan : penulis kirim ulang
   Tinjauan --> Terbit : PJ KTI setujui
   Terbit --> Draft : ditarik kembali
@@ -702,23 +717,23 @@ stateDiagram-v2
 flowchart LR
   subgraph J["JENJANG ANGGOTA"]
     direction TB
-    T["Tatsqif<br/><small>al-Laali al-Hisan</small>"] --> L1["Level 1<br/><small>'Ulum al-Quran</small>"]
-    L1 --> L2["Level 2<br/><small>Ilmu &amp; Tokoh Tafsir</small>"]
-    L2 --> L3["Level 3<br/><small>Grand Tema &amp; Buku</small>"]
+    T["Tatsqif&lt;br/&gt;al-Laali al-Hisan"] --> L1["Level 1&lt;br/&gt;'Ulum al-Quran"]
+    L1 --> L2["Level 2&lt;br/&gt;Ilmu &amp; Tokoh Tafsir"]
+    L2 --> L3["Level 3&lt;br/&gt;Grand Tema &amp; Buku"]
     L3 --> AL["Alumni"]
   end
 
   subgraph S["SIKLUS TIAP KAJIAN"]
     direction TB
-    K1["PJ Kajian susun jadwal<br/>+ tunjuk pemakalah"] --> K2["Pemakalah siapkan<br/>makalah / presentasi"]
+    K1["PJ Kajian susun jadwal&lt;br/&gt;+ tunjuk pemakalah"] --> K2["Pemakalah siapkan&lt;br/&gt;makalah / presentasi"]
     K2 --> K3["Kajian berlangsung"]
     K3 --> K4["Absensi diisi"]
     K4 --> K5["Notulensi ditulis"]
     K5 --> K6(["Status: selesai"])
   end
 
-  J -.->|"anggota tiap level<br/>masuk sebagai peserta"| S
-  K5 -.->|"makalah dikembangkan"| ART["Artikel<br/>ke PJ Karya Tulis"]
+  J -.->|"anggota tiap level&lt;br/&gt;masuk sebagai peserta"| S
+  K5 -.->|"makalah dikembangkan"| ART["Artikel&lt;br/&gt;ke PJ Karya Tulis"]
 
   classDef hasil fill:#3E6B2A,stroke:#9CC85C,color:#F1F8E8,font-weight:bold
   class K6 hasil
