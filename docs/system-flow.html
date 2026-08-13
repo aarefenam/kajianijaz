@@ -1,0 +1,869 @@
+<title>Cetak Biru Al-I'jaz</title>
+
+<style>
+/* ============================================================
+   TOKEN — palet lengkap didefinisikan di :root (tema terang),
+   lalu HANYA token yang ditimpa ulang untuk tema gelap.
+   ============================================================ */
+:root {
+  --ground:      #F6F5F0;
+  --panel:       #FFFFFF;
+  --panel-alt:   #EFEFE7;
+  --ink:         #16241B;
+  --ink-lembut:  #4B5B50;
+  --ink-samar:   #7A8A7F;
+  --garis:       #DCDDD2;
+  --garis-tegas: #C3C7B9;
+  --hijau:       #0E2E1C;
+  --zaitun:      #5F8F28;
+  --amber:       #B06E12;
+  --kode-bg:     #ECEDE3;
+  --kode-ink:    #3D5C22;
+  --sorot:       rgba(95,143,40,.10);
+  --bayang:      0 1px 2px rgba(22,36,27,.05), 0 8px 28px rgba(22,36,27,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0F1712;
+    --panel:       #16211A;
+    --panel-alt:   #1C2A21;
+    --ink:         #E3EADF;
+    --ink-lembut:  #A9B8AC;
+    --ink-samar:   #7C8C80;
+    --garis:       #27362C;
+    --garis-tegas: #37493D;
+    --hijau:       #B9D89A;
+    --zaitun:      #9CC85C;
+    --amber:       #E0A44E;
+    --kode-bg:     #1D2B22;
+    --kode-ink:    #A8CE72;
+    --sorot:       rgba(156,200,92,.11);
+    --bayang:      0 1px 2px rgba(0,0,0,.30), 0 8px 28px rgba(0,0,0,.26);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:      #0F1712;
+  --panel:       #16211A;
+  --panel-alt:   #1C2A21;
+  --ink:         #E3EADF;
+  --ink-lembut:  #A9B8AC;
+  --ink-samar:   #7C8C80;
+  --garis:       #27362C;
+  --garis-tegas: #37493D;
+  --hijau:       #B9D89A;
+  --zaitun:      #9CC85C;
+  --amber:       #E0A44E;
+  --kode-bg:     #1D2B22;
+  --kode-ink:    #A8CE72;
+  --sorot:       rgba(156,200,92,.11);
+  --bayang:      0 1px 2px rgba(0,0,0,.30), 0 8px 28px rgba(0,0,0,.26);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+
+.laman {
+  width: min(100% - 2.5rem, 60rem);
+  margin-inline: auto;
+  padding: 4rem 0 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3.25rem;
+}
+.prosa { max-width: 42rem; }
+
+/* ---------------- tipografi ---------------- */
+h1, h2, h3, h4 {
+  font-family: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-weight: 600;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -.012em;
+}
+h1 { font-size: clamp(2.1rem, 5vw, 3.05rem); line-height: 1.08; }
+h2 { font-size: clamp(1.5rem, 3vw, 1.9rem); line-height: 1.18; }
+h3 { font-size: 1.16rem; line-height: 1.35; }
+h4 { font-size: 1rem; line-height: 1.4; }
+p { margin: 0; }
+
+.eyebrow {
+  font-size: .705rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--zaitun);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.dek { color: var(--ink-lembut); font-size: 1.06rem; }
+.kecil { font-size: .875rem; color: var(--ink-lembut); }
+
+code, .mono {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .855em;
+}
+code {
+  background: var(--kode-bg);
+  color: var(--kode-ink);
+  padding: .12em .42em;
+  border-radius: 4px;
+}
+
+a { color: var(--zaitun); text-underline-offset: .18em; }
+:focus-visible { outline: 2px solid var(--zaitun); outline-offset: 3px; border-radius: 3px; }
+
+/* ---------------- kepala halaman ---------------- */
+.kepala {
+  display: flex; flex-direction: column; gap: 1.1rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid var(--garis-tegas);
+}
+.kepala .arab {
+  font-family: 'Amiri', 'Geeza Pro', 'Al Bayan', serif;
+  font-size: 1.9rem; color: var(--amber); line-height: 1; direction: rtl;
+}
+.jejak {
+  display: flex; flex-wrap: wrap; gap: .5rem 1.4rem;
+  font-size: .82rem; color: var(--ink-samar);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+/* ---------------- seksi ---------------- */
+section { display: flex; flex-direction: column; gap: 1.35rem; scroll-margin-top: 2rem; }
+.judul-seksi { display: flex; flex-direction: column; gap: .45rem; }
+
+/* ---------------- panel & kartu ---------------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--garis);
+  border-radius: 10px;
+  padding: 1.5rem 1.65rem;
+  box-shadow: var(--bayang);
+}
+.kisi { display: grid; gap: 1rem; }
+@media (min-width: 46rem) {
+  .kisi-2 { grid-template-columns: repeat(2, 1fr); }
+  .kisi-3 { grid-template-columns: repeat(3, 1fr); }
+}
+.kartu-peran {
+  background: var(--panel);
+  border: 1px solid var(--garis);
+  border-left: 3px solid var(--tanda, var(--zaitun));
+  border-radius: 8px;
+  padding: 1.1rem 1.2rem;
+  display: flex; flex-direction: column; gap: .42rem;
+}
+.kartu-peran h4 { font-family: inherit; font-weight: 700; font-size: .95rem; }
+.kartu-peran .tugas { font-size: .85rem; color: var(--ink-lembut); line-height: 1.6; }
+.kartu-peran .kunci {
+  font-family: ui-monospace, Menlo, monospace; font-size: .72rem;
+  color: var(--ink-samar); padding-top: .35rem; border-top: 1px dashed var(--garis);
+}
+
+.pil {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .17rem .6rem; border-radius: 999px;
+  font-size: .705rem; font-weight: 700; letter-spacing: .04em;
+  background: var(--sorot); color: var(--zaitun);
+  font-family: ui-monospace, Menlo, monospace;
+  white-space: nowrap;
+}
+.pil-amber { background: rgba(176,110,18,.13); color: var(--amber); }
+
+/* ---------------- catatan ---------------- */
+.catatan {
+  display: flex; flex-direction: column; gap: .4rem;
+  border-left: 3px solid var(--amber);
+  background: var(--panel-alt);
+  padding: 1.05rem 1.3rem;
+  border-radius: 0 8px 8px 0;
+}
+.catatan .label {
+  font-size: .705rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--amber);
+  font-family: ui-monospace, Menlo, monospace;
+}
+.catatan p { font-size: .93rem; color: var(--ink-lembut); }
+
+/* ---------------- langkah berurutan ---------------- */
+.langkah { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .9rem; counter-reset: lk; }
+.langkah > li {
+  counter-increment: lk;
+  display: grid; grid-template-columns: 1.75rem 1fr; gap: .95rem; align-items: start;
+}
+.langkah > li::before {
+  content: counter(lk);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: .78rem; font-weight: 700;
+  color: var(--zaitun);
+  background: var(--sorot);
+  width: 1.75rem; height: 1.75rem; border-radius: 5px;
+  display: grid; place-items: center;
+  margin-top: .1rem;
+}
+.langkah .aktor {
+  font-weight: 700; font-size: .82rem; letter-spacing: .02em;
+  color: var(--ink); display: block; margin-bottom: .1rem;
+}
+.langkah .isi { font-size: .93rem; color: var(--ink-lembut); line-height: 1.66; }
+
+/* ---------------- daftar ---------------- */
+ul.poin { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .55rem; }
+ul.poin li {
+  position: relative; padding-left: 1.15rem; font-size: .93rem; color: var(--ink-lembut);
+}
+ul.poin li::before {
+  content: ''; position: absolute; left: 0; top: .62em;
+  width: .34rem; height: .34rem; border-radius: 1px;
+  background: var(--zaitun); transform: rotate(45deg);
+}
+ul.poin li b, ul.poin li strong { color: var(--ink); font-weight: 650; }
+
+/* ---------------- tabel ---------------- */
+.gulir { overflow-x: auto; border: 1px solid var(--garis); border-radius: 10px; background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: .87rem; font-variant-numeric: tabular-nums; }
+th, td { padding: .68rem .9rem; text-align: left; border-bottom: 1px solid var(--garis); }
+thead th {
+  background: var(--panel-alt);
+  font-size: .695rem; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-lembut); font-weight: 700; white-space: nowrap;
+  font-family: ui-monospace, Menlo, monospace;
+}
+tbody tr:last-child td { border-bottom: 0; }
+td.pusat { text-align: center; }
+.ya { color: var(--zaitun); font-weight: 700; }
+.tidak { color: var(--ink-samar); }
+th.tegak {
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  height: 9.5rem; padding: .7rem .35rem; text-align: left;
+}
+td.izin code { background: none; padding: 0; color: var(--ink); font-weight: 600; }
+td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-family: system-ui, sans-serif; }
+
+/* ---------------- diagram ---------------- */
+.diagram {
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--garis);
+  border-radius: 10px;
+  padding: 1.4rem 1rem;
+}
+.diagram pre.mermaid { margin: 0; background: none; display: flex; justify-content: center; min-width: 30rem; }
+.kap { font-size: .8rem; color: var(--ink-samar); text-align: center; margin-top: .25rem; }
+
+/* ---------------- peta berkas ---------------- */
+.pohon {
+  font-family: ui-monospace, Menlo, monospace; font-size: .815rem; line-height: 1.85;
+  background: var(--panel); border: 1px solid var(--garis); border-radius: 10px;
+  padding: 1.25rem 1.4rem; overflow-x: auto; color: var(--ink-lembut);
+}
+.pohon b { color: var(--ink); font-weight: 650; }
+.pohon .note { color: var(--ink-samar); }
+
+/* ---------------- kaki ---------------- */
+.kaki {
+  border-top: 1px solid var(--garis-tegas); padding-top: 1.75rem;
+  font-size: .85rem; color: var(--ink-samar);
+  display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<div class="laman">
+
+<header class="kepala">
+  <div class="arab">كِتَابُ النِّظَام</div>
+  <span class="eyebrow">Cetak Biru Sistem · Website CMS &amp; ERP Organisasi</span>
+  <h1>Kajian Al-I'jaz</h1>
+  <p class="dek prosa">Satu sistem yang menyatukan dua hal yang biasanya terpisah: <b>wajah publik</b> kajian di website, dan <b>kerja harian pengurus</b> di balik layar. Keduanya membaca sumber data yang sama, dengan pembagian wewenang yang tegas antar jabatan.</p>
+  <div class="jejak">
+    <span>Forum tafsir &amp; 'ulum al-Quran</span>
+    <span>Di bawah IKPM Kairo, Mesir</span>
+    <span>Berdiri 23 November 2011</span>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="gagasan">
+  <div class="judul-seksi">
+    <span class="eyebrow">Gagasan Pokok</span>
+    <h2>Website bukan proyek sekali jadi</h2>
+  </div>
+  <p class="prosa">Website organisasi biasanya mati setelah bulan ketiga: yang bisa mengubahnya cuma satu orang, dan orang itu lulus. Sistem ini menyelesaikannya dengan memindahkan seluruh isi website dari kode ke <b>data</b> — teks, foto, warna, bahkan urutan section — lalu memberi pengurus antarmuka untuk mengubahnya tanpa menyentuh satu baris pun kode.</p>
+  <p class="prosa">Tetapi kebebasan mengubah tanpa pengawasan justru berbahaya. Karena itu berlaku satu aturan yang menjadi tulang punggung seluruh rancangan:</p>
+
+  <div class="catatan prosa">
+    <span class="label">Aturan Dua Kunci</span>
+    <p>PJ Website memegang seluruh izin <b>mengubah</b> tampilan, tetapi tidak memegang izin <b>menayangkan</b>. Ketua Umum memegang izin menayangkan, dan tidak dapat menyetujui pengajuannya sendiri selama masih ada pemegang izin lain. Akibatnya tidak ada satu orang pun yang mampu mengubah wajah publik Kajian Al-I'jaz seorang diri.</p>
+  </div>
+
+  <div class="kisi kisi-3">
+    <div class="panel">
+      <h3>Draft</h3>
+      <p class="kecil" style="margin-top:.5rem">Ruang kerja pengurus. Bebas diubah, disimpan otomatis, tidak terlihat publik sama sekali.</p>
+    </div>
+    <div class="panel">
+      <h3>Pengajuan</h3>
+      <p class="kecil" style="margin-top:.5rem">Draft dibekukan jadi cuplikan, disertai catatan dan rincian tiap perubahan, lalu masuk antrean Ketua.</p>
+    </div>
+    <div class="panel">
+      <h3>Tayang</h3>
+      <p class="kecil" style="margin-top:.5rem">Satu-satunya versi yang dibaca pengunjung. Setiap publikasi diarsipkan agar dapat dikembalikan.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="arsitektur">
+  <div class="judul-seksi">
+    <span class="eyebrow">Peta Sistem</span>
+    <h2>Bagaimana bagian-bagiannya terhubung</h2>
+  </div>
+  <p class="prosa">Website publik hanya punya izin <i>baca</i> terhadap versi tayang — kecuali satu jalur tulis: form kontak, yang mengirim pesan ke kotak masuk Sekretaris. Semua perubahan lain masuk lewat ERP.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','secondaryColor':'#7A4E10','tertiaryColor':'#2A3D31','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
+flowchart TB
+  subgraph PUB["WEBSITE PUBLIK — hanya baca"]
+    direction LR
+    P1["Beranda"]
+    P2["Tentang Kajian"]
+    P3["Artikel"]
+    P4["Kontak"]
+  end
+
+  subgraph DATA["LAPISAN DATA"]
+    direction LR
+    TAYANG[("cms<br/>versi TAYANG")]
+    DRAFT[("cmsDraft<br/>ruang kerja")]
+    ARSIP[("versi<br/>arsip snapshot")]
+    OPS[("artikel · kajian<br/>anggota · keuangan")]
+  end
+
+  subgraph ERPX["ERP — perlu login"]
+    direction LR
+    E1["Editor Halaman"]
+    E2["Tema &amp; Identitas"]
+    E3["Persetujuan"]
+    E4["Modul Operasional"]
+  end
+
+  PUB -->|baca| TAYANG
+  PUB -->|baca| OPS
+  P4 -.->|"kirim pesan<br/>(satu-satunya tulis publik)"| OPS
+
+  E1 -->|tulis| DRAFT
+  E2 -->|tulis| DRAFT
+  E4 -->|tulis| OPS
+  DRAFT -->|ajukan| E3
+  E3 ==>|"setujui<br/>(izin cms.approve)"| TAYANG
+  TAYANG -->|snapshot| ARSIP
+  ARSIP -.->|rollback| TAYANG
+
+  classDef gerbang fill:#7A4E10,stroke:#E0A44E,color:#FFF3E0,font-weight:bold
+  class E3 gerbang
+</pre>
+  </div>
+  <p class="kap">Anak panah tebal adalah satu-satunya jalur menuju versi tayang, dan jalur itu dijaga izin <code>cms.approve</code>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="peran">
+  <div class="judul-seksi">
+    <span class="eyebrow">Struktur Organisasi</span>
+    <h2>Delapan peran, wewenang yang tidak tumpang tindih</h2>
+  </div>
+  <p class="prosa">Setiap orang yang masuk ERP hanya melihat menu yang menjadi tanggung jawabnya. Bendahara tidak melihat editor website; PJ Website tidak melihat buku kas. Ini bukan sekadar menyembunyikan tombol — setiap aksi diperiksa ulang di lapisan data, sehingga menu yang tersembunyi tidak bisa diakali lewat jalan lain.</p>
+
+  <div class="kisi kisi-2">
+    <div class="kartu-peran" style="--tanda:#5F8F28">
+      <h4>Ketua Umum <span class="pil">BPH</span></h4>
+      <p class="tugas">Menyetujui atau mengembalikan setiap pengajuan perubahan website. Menerbitkan artikel. Menetapkan jabatan anggota. Melihat seluruh log aktivitas.</p>
+      <span class="kunci">pemegang tunggal: cms.approve · cms.rollback · user.manage</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#3E7FB8">
+      <h4>Sekretaris Umum <span class="pil">BPH</span></h4>
+      <p class="tugas">Data keanggotaan, notulensi kajian, arsip surat masuk dan keluar, serta kotak masuk dari form kontak website.</p>
+      <span class="kunci">anggota.manage · surat.manage · pesan.read · kajian.notulensi</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#B06E12">
+      <h4>Bendahara <span class="pil">BPH</span></h4>
+      <p class="tugas">Mencatat kas masuk dan keluar, iuran anggota, serta menyusun laporan keuangan organisasi.</p>
+      <span class="kunci">keuangan.manage · keuangan.report</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#7C5CD6">
+      <h4>PJ Website <span class="pil">Divisi</span></h4>
+      <p class="tugas">Mengubah foto, warna, font, teks, dan urutan section di seluruh halaman. Seluruh hasil kerjanya masuk draft dan menunggu persetujuan Ketua.</p>
+      <span class="kunci">cms.page.edit · cms.theme.edit · cms.media.upload · cms.submit</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#D9536F">
+      <h4>PJ Media <span class="pil">Divisi</span></h4>
+      <p class="tugas">Dokumentasi kegiatan dan aset publikasi. Dapat mengganti gambar serta menyunting teks, dengan alur persetujuan yang sama.</p>
+      <span class="kunci">cms.media.upload · cms.page.edit · cms.submit</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#2FA98C">
+      <h4>PJ Karya Tulis Ilmiah <span class="pil">Divisi</span></h4>
+      <p class="tugas">Koordinator penulis. Menugaskan tema, meninjau naskah, meminta revisi, dan menerbitkan artikel ke halaman publik.</p>
+      <span class="kunci">artikel.review · artikel.publish · artikel.assign</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#C77A2B">
+      <h4>PJ Koordinator Kajian <span class="pil">Divisi</span></h4>
+      <p class="tugas">Jadwal kajian, silabus berjenjang, penunjukan pemakalah dan moderator, absensi, serta notulensi.</p>
+      <span class="kunci">kajian.manage · kajian.attendance · kajian.notulensi</span>
+    </div>
+    <div class="kartu-peran" style="--tanda:#7A8B7F">
+      <h4>Anggota <span class="pil">Anggota</span></h4>
+      <p class="tugas">Menulis makalah dan artikel, lalu mengirimkannya untuk ditinjau. Hanya dapat menyunting tulisan sendiri.</p>
+      <span class="kunci">artikel.write</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="matriks">
+  <div class="judul-seksi">
+    <span class="eyebrow">Kendali Akses</span>
+    <h2>Matriks izin</h2>
+  </div>
+  <p class="prosa">Dua puluh izin, delapan peran. Kolom paling penting adalah <code>cms.approve</code>: hanya satu kolom yang mencentangnya.</p>
+
+  <div class="gulir">
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:17rem">Izin</th>
+          <th class="tegak">Ketua Umum</th>
+          <th class="tegak">Sekretaris</th>
+          <th class="tegak">Bendahara</th>
+          <th class="tegak">PJ Website</th>
+          <th class="tegak">PJ Media</th>
+          <th class="tegak">PJ Karya Tulis</th>
+          <th class="tegak">PJ Kajian</th>
+          <th class="tegak">Anggota</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="izin"><code>cms.page.edit</code><span class="ket">Ubah teks &amp; konten section</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>cms.theme.edit</code><span class="ket">Ubah warna, font, tema visual</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>cms.media.upload</code><span class="ket">Unggah &amp; ganti foto</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>cms.section.toggle</code><span class="ket">Sembunyikan &amp; urutkan section</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>cms.submit</code><span class="ket">Ajukan draft untuk ditinjau</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr style="background:var(--sorot)"><td class="izin"><code>cms.approve</code><span class="ket">Menayangkan ke website publik</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>cms.rollback</code><span class="ket">Kembalikan ke versi sebelumnya</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>artikel.write</code><span class="ket">Menulis &amp; mengirim draft</span></td>
+          <td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td></tr>
+        <tr><td class="izin"><code>artikel.review</code><span class="ket">Meninjau &amp; meminta revisi</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>artikel.publish</code><span class="ket">Menerbitkan ke halaman Artikel</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>artikel.assign</code><span class="ket">Menugaskan penulis &amp; tema</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>kajian.manage</code><span class="ket">Jadwal, silabus, pemakalah</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>kajian.attendance</code><span class="ket">Mengisi absensi peserta</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>kajian.notulensi</code><span class="ket">Menulis risalah kajian</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>anggota.manage</code><span class="ket">Data &amp; status keanggotaan</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>surat.manage</code><span class="ket">Arsip surat masuk &amp; keluar</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>pesan.read</code><span class="ket">Kotak masuk form kontak</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>keuangan.manage</code><span class="ket">Mencatat kas &amp; iuran</span></td>
+          <td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>keuangan.report</code><span class="ket">Melihat laporan keuangan</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>user.manage</code><span class="ket">Menetapkan jabatan / role</span></td>
+          <td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+        <tr><td class="izin"><code>audit.view</code><span class="ket">Melihat log seluruh sistem</span></td>
+          <td class="pusat ya">✓</td><td class="pusat ya">✓</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td><td class="pusat tidak">·</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="kap">Bendahara sengaja tidak diberi <code>keuangan.report</code> saja — ia memegang keduanya; sebaliknya Ketua hanya memegang <code>keuangan.report</code> agar pencatatan tetap satu tangan sementara pengawasan tetap terbuka.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="alur-cms">
+  <div class="judul-seksi">
+    <span class="eyebrow">Alur Kerja Utama</span>
+    <h2>Mengubah tampilan website lewat ERP</h2>
+  </div>
+  <p class="prosa">Ini alur yang paling sering dipakai dan paling ketat dijaga. Perhatikan bahwa penolakan <b>tidak menghapus</b> pekerjaan pengaju — draftnya dibiarkan utuh agar bisa langsung diperbaiki, bukan diulang dari nol.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
+flowchart TD
+  A["PJ Website membuka<br/>Editor Halaman"] --> B["Ubah teks / foto / warna<br/>urutan section"]
+  B --> C[("Tersimpan ke cmsDraft<br/>publik belum melihat apa pun")]
+  C --> D{"Sudah siap?"}
+  D -->|belum| B
+  D -->|"ya — klik Ajukan"| E["Sistem hitung selisih<br/>draft vs tayang"]
+  E --> F["Pengajuan masuk antrean<br/>+ catatan pengaju"]
+  F --> G{"Ketua Umum<br/>meninjau rincian"}
+  G -->|"Kembalikan<br/>(wajib beri alasan)"| H["Status: dikembalikan<br/>draft TETAP utuh"]
+  H --> B
+  G -->|Setujui| J["cms := cuplikan draft"]
+  J --> K["Snapshot diarsipkan<br/>ke riwayat versi"]
+  K --> L(["Tayang di website publik"])
+  K -.->|"bila keliru"| M["Ketua pilih Rollback"]
+  M --> L
+
+  classDef gerbang fill:#7A4E10,stroke:#E0A44E,color:#FFF3E0,font-weight:bold
+  classDef hasil fill:#3E6B2A,stroke:#9CC85C,color:#F1F8E8,font-weight:bold
+  class G gerbang
+  class L hasil
+</pre>
+  </div>
+
+  <ol class="langkah prosa" style="margin-top:.75rem">
+    <li><span class="aktor">PJ Website</span><span class="isi">Membuka Editor Halaman, memilih halaman dan section. Form isian terbentuk otomatis mengikuti bentuk data section — teks panjang jadi area teks, warna jadi pemilih warna, gambar jadi pengunggah, daftar jadi baris yang bisa ditambah dan dihapus.</span></li>
+    <li><span class="aktor">Sistem</span><span class="isi">Setiap perubahan langsung disimpan ke draft dan bilah penanda memperbarui hitungannya. Gambar yang diunggah dikecilkan otomatis ke lebar maksimum 1400 px agar hemat penyimpanan.</span></li>
+    <li><span class="aktor">PJ Website</span><span class="isi">Menekan <b>Ajukan untuk Ditinjau</b> dan menulis catatan singkat — apa yang diubah dan mengapa.</span></li>
+    <li><span class="aktor">Sistem</span><span class="isi">Membandingkan draft dengan versi tayang secara mendalam, menghasilkan daftar perubahan per-medan, lalu membekukan draft menjadi cuplikan. Pengajuan baru ditolak selama masih ada yang menunggu keputusan.</span></li>
+    <li><span class="aktor">Ketua Umum</span><span class="isi">Membuka Persetujuan, membaca rincian tiap perubahan berdampingan — nilai lama dicoret, nilai baru disorot — lalu memutuskan.</span></li>
+    <li><span class="aktor">Sistem</span><span class="isi">Bila disetujui: versi tayang lama diarsipkan, cuplikan menjadi versi tayang, dan pengunjung website langsung melihat hasilnya. Bila dikembalikan: alasan wajib diisi dan tersimpan, draft pengaju tidak disentuh.</span></li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="alur-artikel">
+  <div class="judul-seksi">
+    <span class="eyebrow">Alur Kerja</span>
+    <h2>Karya tulis ilmiah</h2>
+  </div>
+  <p class="prosa">Alur ini mencerminkan tradisi akademik kajian: naskah tidak terbit karena penulisnya merasa selesai, tetapi karena telah melewati tinjauan. PJ Karya Tulis Ilmiah berperan sebagai koordinator penulis sekaligus penjaga mutu.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
+stateDiagram-v2
+  direction LR
+  [*] --> Draft : Anggota menulis
+  Draft --> Tinjauan : kirim untuk ditinjau
+  Tinjauan --> Revisi : PJ KTI minta revisi<br/>(catatan wajib)
+  Revisi --> Tinjauan : penulis kirim ulang
+  Tinjauan --> Terbit : PJ KTI setujui
+  Terbit --> Draft : ditarik kembali
+  Terbit --> [*] : tampil di halaman Artikel
+
+  note right of Draft
+    Hanya penulis sendiri
+    yang dapat menyunting
+  end note
+  note right of Terbit
+    Satu-satunya status
+    yang terbaca publik
+  end note
+</pre>
+  </div>
+
+  <div class="kisi kisi-2">
+    <div class="panel">
+      <h3>Yang dijaga sistem</h3>
+      <ul class="poin" style="margin-top:.75rem">
+        <li>Anggota <b>tidak bisa</b> menerbitkan tulisannya sendiri — izin <code>artikel.publish</code> tidak ada padanya.</li>
+        <li>Permintaan revisi <b>wajib</b> disertai catatan; tanpa itu aksi ditolak.</li>
+        <li>Anggota hanya dapat menyunting tulisan sendiri, kecuali ia pemegang <code>artikel.review</code>.</li>
+        <li>Artikel yang sudah terbit tidak dapat disunting diam-diam; ia harus ditarik ke draft lebih dulu.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Kaitan dengan jenjang kajian</h3>
+      <p class="kecil" style="margin-top:.75rem">Makalah yang dipresentasikan pada kajian reguler adalah bahan mentah artikel. Alurnya berkelanjutan: seorang anggota Level 2 menyusun makalah tentang tokoh tafsir, mempresentasikannya, menerima kritik forum, lalu mengembangkannya menjadi artikel yang terbit di website. Level 3 menaikkan taruhannya — grand tema yang bermuara pada penyusunan buku.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="alur-kajian">
+  <div class="judul-seksi">
+    <span class="eyebrow">Alur Kerja</span>
+    <h2>Operasional kajian &amp; jenjang keanggotaan</h2>
+  </div>
+  <p class="prosa">Sistem pembelajaran Kajian Al-I'jaz sudah berjenjang sejak awal. ERP tidak mengubahnya, hanya membuatnya terlacak: siapa berada di level mana, siapa pemakalah pekan depan, siapa yang absensinya menipis.</p>
+
+  <div class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
+flowchart LR
+  subgraph J["JENJANG ANGGOTA"]
+    direction TB
+    T["Tatsqif<br/><small>al-Laali al-Hisan</small>"] --> L1["Level 1<br/><small>'Ulum al-Quran</small>"]
+    L1 --> L2["Level 2<br/><small>Ilmu &amp; Tokoh Tafsir</small>"]
+    L2 --> L3["Level 3<br/><small>Grand Tema &amp; Buku</small>"]
+    L3 --> AL["Alumni"]
+  end
+
+  subgraph S["SIKLUS TIAP KAJIAN"]
+    direction TB
+    K1["PJ Kajian susun jadwal<br/>+ tunjuk pemakalah"] --> K2["Pemakalah siapkan<br/>makalah / presentasi"]
+    K2 --> K3["Kajian berlangsung"]
+    K3 --> K4["Absensi diisi"]
+    K4 --> K5["Notulensi ditulis"]
+    K5 --> K6(["Status: selesai"])
+  end
+
+  J -.->|"anggota tiap level<br/>masuk sebagai peserta"| S
+  K5 -.->|"makalah dikembangkan"| ART["Artikel<br/>ke PJ Karya Tulis"]
+
+  classDef hasil fill:#3E6B2A,stroke:#9CC85C,color:#F1F8E8,font-weight:bold
+  class K6 hasil
+</pre>
+  </div>
+
+  <div class="catatan prosa">
+    <span class="label">Detail Kecil yang Berguna</span>
+    <p>Mengisi notulensi otomatis menandai kajian sebagai selesai. Pengurus tidak perlu mengingat dua langkah terpisah, dan tidak ada kajian yang terlupa ditutup statusnya.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="alur-sekretariat">
+  <div class="judul-seksi">
+    <span class="eyebrow">Alur Kerja</span>
+    <h2>Sekretariat &amp; keuangan</h2>
+  </div>
+
+  <div class="kisi kisi-2">
+    <div class="panel">
+      <h3>Dari pengunjung ke pengurus</h3>
+      <ol class="langkah" style="margin-top:.85rem">
+        <li><span class="aktor">Pengunjung</span><span class="isi">Mengisi form di halaman Kontak — memilih subjek seperti "Pendaftaran Anggota Baru" atau "Kerja Sama".</span></li>
+        <li><span class="aktor">Sistem</span><span class="isi">Pesan masuk ke kotak masuk dengan tanda belum dibaca, dan lonceng di menu Sekretaris bertambah.</span></li>
+        <li><span class="aktor">Sekretaris</span><span class="isi">Membaca, membalas lewat email, menandai selesai. Bila berupa pendaftaran, ia menambahkan orang tersebut sebagai anggota baru berjenjang Tatsqif.</span></li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3>Buku kas</h3>
+      <ul class="poin" style="margin-top:.85rem">
+        <li>Bendahara mencatat kas masuk (iuran, donasi) dan kas keluar (konsumsi kajian, cetak modul, domain).</li>
+        <li>Saldo dihitung dari transaksi, bukan disimpan sebagai angka terpisah — sehingga tidak mungkin melenceng dari catatannya.</li>
+        <li>Ketua dapat melihat laporan tetapi tidak dapat mengubah catatan; pencatatan tetap satu tangan, pengawasan tetap terbuka.</li>
+        <li>Setiap transaksi tercatat di log audit lengkap dengan siapa yang memasukkannya.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="data">
+  <div class="judul-seksi">
+    <span class="eyebrow">Model Data</span>
+    <h2>Entitas dan hubungannya</h2>
+  </div>
+
+  <div class="diagram">
+<pre class="mermaid">
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'12px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
+erDiagram
+  USER ||--o{ ARTIKEL : menulis
+  USER ||--o{ ARTIKEL : meninjau
+  USER ||--o{ KAJIAN : "jadi pemakalah"
+  USER }o--o{ KAJIAN : menghadiri
+  USER ||--o{ PENGAJUAN : mengajukan
+  USER ||--o{ PENGAJUAN : memutuskan
+  USER ||--o{ KEUANGAN : mencatat
+  USER ||--o{ AUDIT : melakukan
+  PENGAJUAN ||--|| VERSI : "menjadi saat disetujui"
+  VERSI ||--|| CMS : "mengisi versi tayang"
+  CMS ||--o{ HALAMAN : memuat
+  HALAMAN ||--o{ SECTION : terdiri
+  PESAN }o--|| USER : "dibaca sekretaris"
+
+  USER {
+    string id PK
+    string nama
+    string email
+    string role FK "menentukan izin"
+    string angkatan
+    string level "Tatsqif s.d. Level 3"
+    string status "aktif nonaktif alumni"
+    string kategori "pendiri anggota alumni"
+  }
+  ARTIKEL {
+    string id PK
+    string judul
+    string kategori
+    string penulisId FK
+    string reviewerId FK
+    string status "draft review revisi terbit"
+    string reviewNote
+    int dilihat
+  }
+  KAJIAN {
+    string id PK
+    string judul
+    string jenis "tatsqif reguler"
+    string level
+    date tanggal
+    string pemakalahId FK
+    array absensi FK
+    text notulensi
+  }
+  PENGAJUAN {
+    string id PK
+    string olehId FK
+    string status "menunggu disetujui ditolak"
+    int jumlahPerubahan
+    array ringkasan "selisih per-medan"
+    json snapshot "draft yang dibekukan"
+  }
+  SECTION {
+    string id PK
+    string tipe "menentukan perender"
+    string nama
+    bool aktif
+    json data "isi yang disunting"
+  }
+</pre>
+  </div>
+
+  <div class="catatan prosa">
+    <span class="label">Kunci Rancangan</span>
+    <p>Section menyimpan <code>tipe</code> dan <code>data</code>. Perender di website memilih fungsi berdasarkan <code>tipe</code>; editor di ERP membangun form berdasarkan bentuk <code>data</code>. Menambah jenis section baru cukup dengan menambah satu entri data dan satu fungsi render — form penyuntingnya terbentuk sendiri.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="peta">
+  <div class="judul-seksi">
+    <span class="eyebrow">Peta Konten</span>
+    <h2>Empat halaman, empat belas section</h2>
+  </div>
+  <p class="prosa">Seluruhnya dapat disunting, disembunyikan, dan diurutkan ulang dari ERP tanpa menyentuh kode.</p>
+
+  <div class="gulir">
+    <table>
+      <thead><tr><th>Halaman</th><th>Section</th><th>Tipe perender</th><th>Isi yang dapat diubah</th></tr></thead>
+      <tbody>
+        <tr><td rowspan="5"><b>Beranda</b></td><td>Hero kaligrafi</td><td><code>hero</code></td><td>Teks Arab, judul, subjudul, tombol, foto latar, durasi animasi</td></tr>
+        <tr><td>Apa itu Kajian Al-I'jaz</td><td><code>teks-gambar</code></td><td>Tiga paragraf, gambar, posisi gambar kiri/kanan</td></tr>
+        <tr><td>Syarah / sejarah</td><td><code>timeline</code></td><td>Empat butir riwayat, gambar tegak</td></tr>
+        <tr><td>Sistem &amp; metode kajian</td><td><code>dua-kolom</code></td><td>Tatsqif dan Kajian Reguler, tiga level, poin pelatihan</td></tr>
+        <tr><td>Struktur organisasi</td><td><code>organisasi</code></td><td>Daftar jabatan dan pemangkunya</td></tr>
+
+        <tr><td rowspan="3"><b>Tentang Kajian</b></td><td>Hero halaman</td><td><code>hero-halaman</code></td><td>Judul, subjudul, foto latar</td></tr>
+        <tr><td>Visi &amp; misi</td><td><code>visi-misi</code></td><td>Satu visi, lima poin misi</td></tr>
+        <tr><td>Keluarga besar</td><td><code>anggota</code></td><td>Terhubung langsung ke data anggota di ERP</td></tr>
+
+        <tr><td rowspan="3"><b>Artikel</b></td><td>Hero halaman</td><td><code>hero-halaman</code></td><td>Judul, subjudul, foto latar</td></tr>
+        <tr><td>Daftar artikel</td><td><code>daftar-artikel</code></td><td>Kategori, jumlah per halaman; isi dari modul Karya Tulis</td></tr>
+        <tr><td>Kutipan &amp; langganan</td><td><code>kutipan</code></td><td>Kutipan, sumber, ajakan berlangganan</td></tr>
+
+        <tr><td rowspan="3"><b>Kontak</b></td><td>Hero halaman</td><td><code>hero-halaman</code></td><td>Judul, subjudul, foto latar</td></tr>
+        <tr><td>Form &amp; info kontak</td><td><code>form-kontak</code></td><td>Pilihan subjek, alamat, email, telepon, media sosial</td></tr>
+        <tr><td>Pertanyaan umum</td><td><code>faq</code></td><td>Daftar tanya-jawab, bebas ditambah</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="berkas">
+  <div class="judul-seksi">
+    <span class="eyebrow">Prototipe</span>
+    <h2>Susunan berkas</h2>
+  </div>
+  <p class="prosa">Prototipe berjalan penuh tanpa server, tanpa pemasangan apa pun, dan tanpa koneksi internet. Cukup buka <code>index.html</code> di peramban.</p>
+
+  <div class="pohon">
+<b>index.html</b>      <span class="note">— Beranda (5 section)</span>
+<b>tentang.html</b>    <span class="note">— Tentang Kajian: visi, misi, keluarga besar</span>
+<b>artikel.html</b>    <span class="note">— Artikel: pencarian, kategori, paginasi</span>
+<b>kontak.html</b>     <span class="note">— Kontak: form, info, FAQ</span>
+<b>erp.html</b>        <span class="note">— Panel ERP (login diperlukan)</span>
+
+assets/js/
+  <b>rbac.js</b>       <span class="note">— peran, izin, matriks. Sumber kebenaran wewenang</span>
+  <b>seed.js</b>       <span class="note">— seluruh isi website sebagai data + akun demo</span>
+  <b>store.js</b>      <span class="note">— penyimpanan, draft vs tayang, versi, audit</span>
+  <b>site.js</b>       <span class="note">— perender halaman publik</span>
+  <b>erp.js</b>        <span class="note">— router ERP, editor CMS generik, modul operasional</span>
+
+assets/css/
+  <b>site.css</b>      <span class="note">— tampilan publik; warna dari variabel CMS</span>
+  <b>erp.css</b>       <span class="note">— tampilan panel ERP</span>
+
+docs/
+  <b>system-flow.html</b> <span class="note">— dokumen ini</span>
+  </div>
+
+  <div class="catatan prosa">
+    <span class="label">Cara Mencoba Alurnya</span>
+    <p>Buka <code>erp.html</code>, masuk sebagai <b>PJ Website</b> (<code>web@alijaz.id</code> / <code>123456</code>), ubah judul hero atau warna aksen, lalu ajukan. Buka <code>index.html</code> — belum berubah. Kembali ke ERP, keluar, masuk sebagai <b>Ketua Umum</b> (<code>ketua@alijaz.id</code>), setujui. Muat ulang <code>index.html</code> — barulah berubah. Bila kedua tab terbuka bersamaan, halaman publik memperbarui dirinya sendiri.</p>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="produksi">
+  <div class="judul-seksi">
+    <span class="eyebrow">Langkah Berikutnya</span>
+    <h2>Dari prototipe ke sistem produksi</h2>
+  </div>
+  <p class="prosa">Prototipe ini menyimpan data di peramban masing-masing pengguna. Itu memadai untuk menguji dan menyepakati alur kerja, tetapi belum untuk dipakai bersama sungguhan. Yang perlu diganti hanya lapisan penyimpanan — seluruh aturan wewenang, alur persetujuan, dan antarmuka dapat dipertahankan apa adanya.</p>
+
+  <div class="gulir">
+    <table>
+      <thead><tr><th>Aspek</th><th>Prototipe sekarang</th><th>Yang dibutuhkan di produksi</th></tr></thead>
+      <tbody>
+        <tr><td><b>Penyimpanan</b></td><td>localStorage peramban</td><td>Basis data terpusat (PostgreSQL / MySQL)</td></tr>
+        <tr><td><b>Autentikasi</b></td><td>Kata sandi polos di data awal</td><td>Kata sandi ter-<i>hash</i>, sesi bertoken, pemulihan lewat email</td></tr>
+        <tr><td><b>Penegakan izin</b></td><td>Di sisi peramban</td><td>Diulang di sisi server — peramban tidak pernah dipercaya</td></tr>
+        <tr><td><b>Gambar</b></td><td>Data URI dalam basis data</td><td>Penyimpanan objek + CDN, dengan varian ukuran</td></tr>
+        <tr><td><b>Halaman publik</b></td><td>Dirender di peramban</td><td>Dirender di server / statis agar terbaca mesin pencari</td></tr>
+        <tr><td><b>Pemberitahuan</b></td><td>Lonceng di dalam ERP</td><td>Email atau WhatsApp saat ada pengajuan menunggu</td></tr>
+        <tr><td><b>Cadangan</b></td><td>Riwayat 25 versi terakhir</td><td>Pencadangan basis data terjadwal</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="kisi kisi-2" style="margin-top:.5rem">
+    <div class="panel">
+      <h3>Yang sudah siap dipakai ulang</h3>
+      <ul class="poin" style="margin-top:.75rem">
+        <li>Seluruh matriks peran dan izin di <code>rbac.js</code>.</li>
+        <li>Alur draft → pengajuan → persetujuan → versi, termasuk perhitungan selisih.</li>
+        <li>Skema data untuk anggota, artikel, kajian, keuangan, dan audit.</li>
+        <li>Seluruh antarmuka publik maupun ERP.</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Usulan tambahan berikutnya</h3>
+      <ul class="poin" style="margin-top:.75rem">
+        <li>Galeri dokumentasi kegiatan untuk PJ Media.</li>
+        <li>Repositori makalah dengan pencarian penuh teks.</li>
+        <li>Rekap kehadiran per anggota sebagai syarat kenaikan level.</li>
+        <li>Halaman publik untuk agenda kajian mendatang.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer class="kaki">
+  <span>Cetak biru sistem — Kajian Al-I'jaz · Tafsir &amp; 'Ulum al-Quran</span>
+  <span class="mono">8 peran · 20 izin · 4 halaman · 14 section</span>
+</footer>
+
+</div>

@@ -1,0 +1,16 @@
+# Sistem
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Dependensi (prototipe ini tidak memerlukannya, jaga-jaga saja)
+node_modules/
+
+# Dokumen sumber — sengaja TIDAK diunggah ke repo publik.
+# Ini berkas internal yang Anda berikan; keputusan menerbitkannya
+# ke internet ada di tangan pengurus, bukan otomatis.
+# Hapus baris di bawah bila memang ingin ikut dipublikasikan.
+*.pdf
