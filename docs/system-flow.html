@@ -1,4 +1,12 @@
-<title>Cetak Biru Al-I'jaz</title>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cetak Biru Sistem — Kajian Al-I'jaz</title>
+<meta name="description" content="Cetak biru sistem website CMS dan ERP Kajian Al-I'jaz: alur kerja, pembagian wewenang antar jabatan, dan model data.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230E2E1C'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='%238CC63F' font-family='serif'>ا</text></svg>">
 
 <style>
 /* ============================================================
@@ -248,15 +256,51 @@ th.tegak {
 td.izin code { background: none; padding: 0; color: var(--ink); font-weight: 600; }
 td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-family: system-ui, sans-serif; }
 
-/* ---------------- diagram ---------------- */
+/* ---------------- diagram ----------------
+   Diagram digambar mermaid setelah halaman termuat. Sebelum itu
+   sumbernya disembunyikan supaya pembaca tidak melihat kode mentah;
+   bila pustakanya gagal dimuat, sumber ditampilkan sebagai blok kode
+   yang terbaca, bukan teks berantakan.                              */
 .diagram {
   overflow-x: auto;
   background: var(--panel);
   border: 1px solid var(--garis);
   border-radius: 10px;
   padding: 1.4rem 1rem;
+  min-height: 7rem;
+  display: grid;
+  align-content: center;
 }
-.diagram pre.mermaid { margin: 0; background: none; display: flex; justify-content: center; min-width: 30rem; }
+.diagram pre.mermaid {
+  margin: 0; background: none; border: 0; padding: 0;
+  display: flex; justify-content: center; min-width: min(30rem, 100%);
+  visibility: hidden;
+}
+.diagram pre.mermaid[data-siap] { visibility: visible; }
+.diagram pre.mermaid svg { max-width: 100%; height: auto; }
+
+.diagram.memuat::before {
+  content: 'Menggambar diagram…';
+  grid-area: 1 / 1;
+  text-align: center; font-size: .82rem; color: var(--ink-samar);
+  font-family: ui-monospace, Menlo, monospace;
+}
+.diagram.memuat pre.mermaid { grid-area: 1 / 1; }
+
+/* Pustaka gagal dimuat — tampilkan sumbernya apa adanya, terbaca. */
+.diagram.gagal { display: block; }
+.diagram.gagal pre.mermaid {
+  visibility: visible; display: block; min-width: 0;
+  white-space: pre; overflow-x: auto;
+  font-family: ui-monospace, Menlo, monospace; font-size: .78rem;
+  line-height: 1.7; color: var(--ink-lembut);
+}
+.diagram.gagal::before {
+  content: 'Diagram tidak dapat digambar — berikut sumbernya.';
+  display: block; margin-bottom: .8rem;
+  font-size: .78rem; color: var(--amber);
+  font-family: ui-monospace, Menlo, monospace;
+}
 .kap { font-size: .8rem; color: var(--ink-samar); text-align: center; margin-top: .25rem; }
 
 /* ---------------- peta berkas ---------------- */
@@ -264,6 +308,9 @@ td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-
   font-family: ui-monospace, Menlo, monospace; font-size: .815rem; line-height: 1.85;
   background: var(--panel); border: 1px solid var(--garis); border-radius: 10px;
   padding: 1.25rem 1.4rem; overflow-x: auto; color: var(--ink-lembut);
+  white-space: pre;          /* tanpa ini seluruh bagan menggumpal jadi satu baris */
+  margin: 0;
+  tab-size: 2;
 }
 .pohon b { color: var(--ink); font-weight: 650; }
 .pohon .note { color: var(--ink-samar); }
@@ -275,10 +322,38 @@ td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-
   display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; justify-content: space-between;
 }
 
+/* ---------------- pintasan ke prototipe ---------------- */
+.tautan-hidup { display: flex; flex-wrap: wrap; gap: .55rem; }
+.tautan-hidup a {
+  display: inline-flex; align-items: center; gap: .45rem;
+  padding: .42rem .85rem; border-radius: 6px;
+  border: 1px solid var(--garis-tegas); background: var(--panel);
+  color: var(--ink); text-decoration: none;
+  font-size: .82rem; font-weight: 600;
+  transition: border-color .15s, color .15s;
+}
+.tautan-hidup a:hover { border-color: var(--zaitun); color: var(--zaitun); }
+.tautan-hidup a::before {
+  content: '→'; color: var(--zaitun); font-family: ui-monospace, Menlo, monospace;
+}
+
+/* ---------------- daftar isi ---------------- */
+.daftar-isi {
+  display: flex; flex-wrap: wrap; gap: .3rem 1.15rem;
+  padding-top: 1.1rem; border-top: 1px dashed var(--garis);
+  font-size: .82rem;
+}
+.daftar-isi a { color: var(--ink-lembut); text-decoration: none; }
+.daftar-isi a:hover { color: var(--zaitun); text-decoration: underline; }
+
+html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
   * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 </style>
+</head>
+<body>
 
 <div class="laman">
 
@@ -292,6 +367,27 @@ td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-
     <span>Di bawah IKPM Kairo, Mesir</span>
     <span>Berdiri 23 November 2011</span>
   </div>
+
+  <div class="tautan-hidup">
+    <a href="../index.html">Buka website</a>
+    <a href="../erp.html">Buka panel ERP</a>
+    <a href="https://github.com/aarefenam/kajianijaz">Kode sumber</a>
+  </div>
+
+  <nav class="daftar-isi" aria-label="Daftar isi">
+    <a href="#gagasan">Gagasan pokok</a>
+    <a href="#arsitektur">Peta sistem</a>
+    <a href="#peran">Struktur organisasi</a>
+    <a href="#matriks">Matriks izin</a>
+    <a href="#alur-cms">Alur CMS</a>
+    <a href="#alur-artikel">Alur karya tulis</a>
+    <a href="#alur-kajian">Alur kajian</a>
+    <a href="#alur-sekretariat">Sekretariat &amp; keuangan</a>
+    <a href="#data">Model data</a>
+    <a href="#peta">Peta konten</a>
+    <a href="#berkas">Susunan berkas</a>
+    <a href="#produksi">Menuju produksi</a>
+  </nav>
 </header>
 
 <!-- ============================================================ -->
@@ -334,7 +430,6 @@ td.izin .ket { display: block; font-size: .78rem; color: var(--ink-samar); font-
 
   <div class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','secondaryColor':'#7A4E10','tertiaryColor':'#2A3D31','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
 flowchart TB
   subgraph PUB["WEBSITE PUBLIK — hanya baca"]
     direction LR
@@ -513,7 +608,6 @@ flowchart TB
 
   <div class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
 flowchart TD
   A["PJ Website membuka<br/>Editor Halaman"] --> B["Ubah teks / foto / warna<br/>urutan section"]
   B --> C[("Tersimpan ke cmsDraft<br/>publik belum melihat apa pun")]
@@ -557,7 +651,6 @@ flowchart TD
 
   <div class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
 stateDiagram-v2
   direction LR
   [*] --> Draft : Anggota menulis
@@ -606,7 +699,6 @@ stateDiagram-v2
 
   <div class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'13px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
 flowchart LR
   subgraph J["JENJANG ANGGOTA"]
     direction TB
@@ -676,7 +768,6 @@ flowchart LR
 
   <div class="diagram">
 <pre class="mermaid">
-%%{init: {'theme':'base','themeVariables':{'primaryColor':'#1E4B2E','primaryTextColor':'#ECF3E6','primaryBorderColor':'#6E9E2E','lineColor':'#8A9A8E','fontSize':'12px','fontFamily':'ui-monospace, Menlo, monospace'}}}%%
 erDiagram
   USER ||--o{ ARTIKEL : menulis
   USER ||--o{ ARTIKEL : meninjau
@@ -788,7 +879,7 @@ erDiagram
   </div>
   <p class="prosa">Prototipe berjalan penuh tanpa server, tanpa pemasangan apa pun, dan tanpa koneksi internet. Cukup buka <code>index.html</code> di peramban.</p>
 
-  <div class="pohon">
+  <pre class="pohon">
 <b>index.html</b>      <span class="note">— Beranda (5 section)</span>
 <b>tentang.html</b>    <span class="note">— Tentang Kajian: visi, misi, keluarga besar</span>
 <b>artikel.html</b>    <span class="note">— Artikel: pencarian, kategori, paginasi</span>
@@ -808,11 +899,16 @@ assets/css/
 
 docs/
   <b>system-flow.html</b> <span class="note">— dokumen ini</span>
-  </div>
+  </pre>
 
   <div class="catatan prosa">
     <span class="label">Cara Mencoba Alurnya</span>
-    <p>Buka <code>erp.html</code>, masuk sebagai <b>PJ Website</b> (<code>web@alijaz.id</code> / <code>123456</code>), ubah judul hero atau warna aksen, lalu ajukan. Buka <code>index.html</code> — belum berubah. Kembali ke ERP, keluar, masuk sebagai <b>Ketua Umum</b> (<code>ketua@alijaz.id</code>), setujui. Muat ulang <code>index.html</code> — barulah berubah. Bila kedua tab terbuka bersamaan, halaman publik memperbarui dirinya sendiri.</p>
+    <p>Buka <a href="../erp.html">panel ERP</a>, masuk sebagai <b>PJ Website</b> (<code>web@alijaz.id</code> / <code>123456</code>), ubah judul hero atau warna aksen, lalu ajukan. Buka <a href="../index.html">website</a> — belum berubah. Kembali ke ERP, keluar, masuk sebagai <b>Ketua Umum</b> (<code>ketua@alijaz.id</code>), setujui. Muat ulang website — barulah berubah. Bila kedua tab terbuka bersamaan, halaman publik memperbarui dirinya sendiri.</p>
+  </div>
+
+  <div class="catatan prosa">
+    <span class="label">Batas Prototipe yang Perlu Disadari</span>
+    <p>Data tersimpan di <code>localStorage</code> peramban masing-masing pengunjung. Artinya dua orang yang membuka tautan yang sama <b>tidak</b> saling melihat perubahan — alur persetujuan hanya dapat diperagakan di satu perangkat, lewat dua tab atau dengan berganti peran. Untuk dipakai bersama sungguhan, penyimpanannya harus pindah ke basis data terpusat.</p>
   </div>
 </section>
 
@@ -867,3 +963,104 @@ docs/
 </footer>
 
 </div>
+
+<script type="module">
+/* ============================================================
+   Perender diagram.
+   Warna diambil dari token tema halaman, dan diagram digambar
+   ulang saat pembaca berganti antara tema terang dan gelap —
+   sebab mermaid membakar warna ke dalam SVG saat menggambar.
+   ============================================================ */
+
+const wadah = [...document.querySelectorAll('.diagram')];
+const sumber = new Map(
+  wadah.map((w) => [w, w.querySelector('pre.mermaid').textContent])
+);
+wadah.forEach((w) => w.classList.add('memuat'));
+
+/* Bila pustaka tak kunjung termuat (luring, CDN diblokir), tampilkan
+   sumber diagram apa adanya daripada membiarkan kotak kosong. */
+const menyerah = setTimeout(() => {
+  wadah.forEach((w) => { w.classList.remove('memuat'); w.classList.add('gagal'); });
+}, 12000);
+
+const gelap = () => matchMedia('(prefers-color-scheme: dark)').matches;
+
+const palet = (isGelap) => isGelap ? {
+  background:      'transparent',
+  primaryColor:    '#24382B',
+  primaryTextColor:'#E3EADF',
+  primaryBorderColor:'#9CC85C',
+  lineColor:       '#7C8C80',
+  secondaryColor:  '#3A2E18',
+  tertiaryColor:   '#1C2A21',
+  textColor:       '#E3EADF',
+  noteBkgColor:    '#1C2A21',
+  noteTextColor:   '#A9B8AC',
+  noteBorderColor: '#37493D',
+  mainBkg:         '#24382B',
+  clusterBkg:      'transparent',
+  clusterBorder:   '#37493D',
+} : {
+  background:      'transparent',
+  primaryColor:    '#1E4B2E',
+  primaryTextColor:'#ECF3E6',
+  primaryBorderColor:'#5F8F28',
+  lineColor:       '#7A8A7F',
+  secondaryColor:  '#F0E4CE',
+  tertiaryColor:   '#EFEFE7',
+  textColor:       '#16241B',
+  noteBkgColor:    '#EFEFE7',
+  noteTextColor:   '#4B5B50',
+  noteBorderColor: '#C3C7B9',
+  mainBkg:         '#1E4B2E',
+  clusterBkg:      'transparent',
+  clusterBorder:   '#C3C7B9',
+};
+
+let mermaid, seri = 0;
+
+async function gambar() {
+  const isGelap = gelap();
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
+    themeVariables: { ...palet(isGelap), fontSize: '13px' },
+    flowchart: { curve: 'basis', padding: 14, useMaxWidth: true },
+    er: { useMaxWidth: true },
+  });
+
+  seri += 1;
+  for (const [i, w] of wadah.entries()) {
+    const pre = w.querySelector('pre.mermaid');
+    try {
+      const { svg } = await mermaid.render(`diagram-${seri}-${i}`, sumber.get(w));
+      pre.innerHTML = svg;
+      pre.setAttribute('data-siap', '');
+      w.classList.remove('memuat', 'gagal');
+    } catch (e) {
+      console.error('Diagram gagal digambar:', e);
+      pre.textContent = sumber.get(w);
+      w.classList.remove('memuat');
+      w.classList.add('gagal');
+    }
+  }
+}
+
+try {
+  mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default;
+  clearTimeout(menyerah);
+  await gambar();
+  /* Gambar ulang saat pembaca berpindah tema. */
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', gambar);
+} catch (e) {
+  clearTimeout(menyerah);
+  console.error('Pustaka diagram tidak dapat dimuat:', e);
+  wadah.forEach((w) => { w.classList.remove('memuat'); w.classList.add('gagal'); });
+}
+</script>
+
+</body>
+</html>
