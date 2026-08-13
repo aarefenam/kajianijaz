@@ -8,13 +8,16 @@ Cukup buka `index.html` di peramban.
 
 ## Cara mencoba
 
-Secara daring lewat GitHub Pages (isi setelah repo didorong):
+Secara daring lewat GitHub Pages:
 
-```
-Website publik  →  https://<username>.github.io/kajian-al-ijaz/
-Panel ERP       →  https://<username>.github.io/kajian-al-ijaz/erp.html
-Cetak biru      →  https://<username>.github.io/kajian-al-ijaz/docs/system-flow.html
-```
+| Halaman | Tautan |
+|---|---|
+| Beranda | https://aarefenam.github.io/kajianijaz/ |
+| Tentang Kajian | https://aarefenam.github.io/kajianijaz/tentang.html |
+| Artikel | https://aarefenam.github.io/kajianijaz/artikel.html |
+| Kontak | https://aarefenam.github.io/kajianijaz/kontak.html |
+| Panel ERP | https://aarefenam.github.io/kajianijaz/erp.html |
+| Cetak biru sistem | https://aarefenam.github.io/kajianijaz/docs/system-flow.html |
 
 Atau langsung dari berkas lokal — buka saja di peramban, tanpa server:
 
