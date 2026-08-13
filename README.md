@@ -8,6 +8,16 @@ Cukup buka `index.html` di peramban.
 
 ## Cara mencoba
 
+Secara daring lewat GitHub Pages (isi setelah repo didorong):
+
+```
+Website publik  →  https://<username>.github.io/kajian-al-ijaz/
+Panel ERP       →  https://<username>.github.io/kajian-al-ijaz/erp.html
+Cetak biru      →  https://<username>.github.io/kajian-al-ijaz/docs/system-flow.html
+```
+
+Atau langsung dari berkas lokal — buka saja di peramban, tanpa server:
+
 ```
 Website publik  →  index.html
 Panel ERP       →  erp.html
