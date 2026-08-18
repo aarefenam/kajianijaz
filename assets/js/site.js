@@ -596,6 +596,15 @@ function tutupArtikel() {
    ============================================================ */
 function render(namaHalaman, fileAktif) {
   terapkanTema();
+
+  /* Catat kunjungan sekali per pemuatan halaman, bukan tiap kali render
+     dipanggil ulang — sebab render() juga berjalan lagi ketika ERP
+     menyetujui perubahan di tab lain, dan itu bukan kunjungan baru. */
+  if (!window.__tercatat) {
+    window.__tercatat = true;
+    try { Store.catatKunjungan(namaHalaman); } catch (_) {}
+  }
+
   const app = document.getElementById('app');
   app.innerHTML = '';
   app.appendChild(renderHeader(fileAktif));

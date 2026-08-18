@@ -22,20 +22,49 @@ const PERMISSIONS = {
   'artikel.review'     : 'Meninjau, meminta revisi, menyetujui artikel',
   'artikel.publish'    : 'Menerbitkan artikel ke halaman publik',
   'artikel.assign'     : 'Menugaskan penulis & menentukan tema',
+  'redaksi.manage'     : 'Ruang kerja redaksi: target, penugasan, dan rekap artikel',
+  'cms.kategori.edit'  : 'Mengubah daftar kategori artikel (masuk draft)',
+
+  // --- Media & Website -------------------------------------------------
+  'mediaweb.manage'    : 'Ruang kerja media & website: konten, agenda, galeri, desain, video',
+  'analitik.view'      : 'Melihat statistik kunjungan & performa website',
+  'seo.manage'         : 'Mengatur SEO, kata kunci, dan metadata halaman',
+  'artikel.view'       : 'Menelusuri naskah artikel tanpa menyuntingnya',
+  'user.view'          : 'Melihat daftar akun & perannya tanpa mengubahnya',
+
+  // --- Penerbitan Buku -------------------------------------------------
+  'buku.manage'        : 'Ruang kerja buku: perencanaan, tugas, produksi, distribusi',
+  'buku.anggaran'      : 'Menyusun kasaran modal & anggaran penerbitan',
+  'buku.arsip'         : 'Mengelola dokumen & arsip proyek buku',
 
   // --- Operasional Kajian --------------------------------------------
   'kajian.manage'      : 'Membuat & mengatur jadwal kajian, silabus, pemakalah',
   'kajian.attendance'  : 'Mengisi & mengunci absensi peserta',
   'kajian.notulensi'   : 'Menulis notulensi / risalah kajian',
 
+  'koordinator.manage' : 'Ruang kerja koordinator: jadwal, presensi, tugas, materi kajian',
+  'kajian.materi'      : 'Mengunggah materi, PPT, dan catatan revisi kajian',
+  'anggota.kelompok'   : 'Mengatur jenjang, kelompok, dan keaktifan anggota angkatannya',
+
+  // --- Kepengurusan Organisasi ----------------------------------------
+  'organisasi.manage'  : 'Mengelola pengurus, koordinator, kaleidoskop, pencapaian, evaluasi',
+  'organisasi.report'  : 'Melihat laporan & ringkasan organisasi',
+
   // --- Keanggotaan & Sekretariat --------------------------------------
   'anggota.manage'     : 'Menambah, mengubah, menonaktifkan data anggota',
-  'surat.manage'       : 'Mengelola surat masuk/keluar & arsip',
+  'surat.manage'       : 'Mengelola surat internal, eksternal, keputusan, masuk & keluar',
   'pesan.read'         : 'Membaca pesan masuk dari form kontak',
+  'sekretariat.manage' : 'Ruang kerja sekretariat: persuratan, dokumen, keanggotaan',
+  'sertifikat.manage'  : 'Mengelola sertifikat anggota, pemateri, dan kegiatan',
+  'ttd.manage'         : 'Mengelola kumpulan tanda tangan divisi kepengurusan',
+  'arsip.view'         : 'Menelusuri arsip kepenulisan & dokumentasi kajian',
 
   // --- Keuangan --------------------------------------------------------
   'keuangan.manage'    : 'Mencatat kas masuk/keluar & iuran',
   'keuangan.report'    : 'Melihat laporan & rekapitulasi keuangan',
+
+  'bendahara.manage'   : 'Ruang kerja bendahara: pemasukan, pengeluaran, saldo, laporan',
+  'keuangan.akun'      : 'Mengelola kategori transaksi & tempat penyimpanan uang',
 
   // --- Sistem -----------------------------------------------------------
   'user.manage'        : 'Mengelola akun & menetapkan role',
@@ -58,9 +87,10 @@ const ROLES = {
     ringkas: 'Penanggung jawab tertinggi. Pemegang kunci publish & approval.',
     permissions: [
       'cms.page.edit', 'cms.theme.edit', 'cms.media.upload', 'cms.section.toggle',
-      'cms.submit', 'cms.approve', 'cms.rollback',
+      'cms.submit', 'cms.approve', 'cms.rollback', 'cms.kategori.edit',
       'artikel.review', 'artikel.publish', 'artikel.assign',
       'kajian.manage', 'kajian.attendance', 'kajian.notulensi',
+      'organisasi.manage', 'organisasi.report',
       'anggota.manage', 'surat.manage', 'pesan.read',
       'keuangan.report',
       'user.manage', 'audit.view',
@@ -71,10 +101,11 @@ const ROLES = {
     label: 'Sekretaris Umum',
     badge: 'BPH',
     warna: '#4FA3D1',
-    ringkas: 'Administrasi, keanggotaan, notulensi, dan arsip surat.',
+    ringkas: 'Persuratan, dokumen, keanggotaan, dan arsip organisasi.',
     permissions: [
       'cms.page.edit', 'cms.submit',
       'kajian.notulensi', 'kajian.attendance',
+      'sekretariat.manage', 'sertifikat.manage', 'ttd.manage', 'arsip.view',
       'anggota.manage', 'surat.manage', 'pesan.read',
       'audit.view',
     ],
@@ -84,41 +115,54 @@ const ROLES = {
     label: 'Bendahara',
     badge: 'BPH',
     warna: '#E8A33D',
-    ringkas: 'Kas organisasi, iuran anggota, dan laporan keuangan.',
+    ringkas: 'Pemasukan, pengeluaran, saldo, dan laporan keuangan.',
     permissions: [
       'keuangan.manage', 'keuangan.report',
+      'bendahara.manage', 'keuangan.akun',
     ],
   },
 
-  pj_website: {
-    label: 'PJ Website',
+  /* PJ Website dan PJ Media dulu dua peran terpisah, kini melebur.
+     Kunci lamanya dipetakan ke sini saat memuat DB tersimpan, sehingga
+     akun yang sudah ada tidak kehilangan ruang kerjanya. */
+  pj_mediaweb: {
+    label: 'PJ Media & Website',
     badge: 'Divisi',
     warna: '#7C5CD6',
-    ringkas: 'Mengubah foto, warna, dan teks CMS. Publish tetap butuh Ketua.',
+    ringkas: 'Konten, media, agenda, dan performa website. Publish tetap butuh Ketua.',
     permissions: [
       'cms.page.edit', 'cms.theme.edit', 'cms.media.upload',
       'cms.section.toggle', 'cms.submit',
-    ],
-  },
-
-  pj_media: {
-    label: 'PJ Media',
-    badge: 'Divisi',
-    warna: '#D9536F',
-    ringkas: 'Dokumentasi kegiatan, galeri, dan aset publikasi.',
-    permissions: [
-      'cms.media.upload', 'cms.page.edit', 'cms.submit',
+      'mediaweb.manage', 'analitik.view', 'seo.manage',
+      /* Jendela baca-saja: naskah tetap milik PJ Artikel, akun tetap
+         milik Ketua. Melihat boleh, mengubah tidak. */
+      'artikel.view', 'user.view',
       'pesan.read',
     ],
   },
 
   pj_kti: {
-    label: 'PJ Karya Tulis Ilmiah',
+    label: 'PJ Artikel',
     badge: 'Divisi',
     warna: '#2FA98C',
-    ringkas: 'Koordinator penulis. Meninjau dan menerbitkan artikel.',
+    ringkas: 'Target penulisan, penugasan, tinjauan, dan penerbitan artikel.',
     permissions: [
       'artikel.write', 'artikel.review', 'artikel.publish', 'artikel.assign',
+      'redaksi.manage',
+      /* Kategori artikel hidup di CMS halaman Artikel dan dibaca halaman
+         publik dari versi TAYANG. PJ Artikel boleh menyuntingnya, tetapi
+         hanya ke draft — penayangannya tetap menunggu Ketua. */
+      'cms.kategori.edit', 'cms.submit',
+    ],
+  },
+
+  pj_buku: {
+    label: 'PJ Buku',
+    badge: 'Divisi',
+    warna: '#8B6F47',
+    ringkas: 'Proyek penerbitan buku, dari perencanaan hingga distribusi.',
+    permissions: [
+      'buku.manage', 'buku.anggaran', 'buku.arsip',
     ],
   },
 
@@ -126,9 +170,13 @@ const ROLES = {
     label: 'PJ Koordinator Kajian',
     badge: 'Divisi',
     warna: '#C77A2B',
-    ringkas: 'Jadwal kajian, silabus berjenjang, pemakalah, dan absensi.',
+    ringkas: 'Jadwal, presensi, pembagian tugas, materi, dan rekap kajian.',
     permissions: [
       'kajian.manage', 'kajian.attendance', 'kajian.notulensi',
+      'koordinator.manage', 'kajian.materi',
+      /* Terbatas pada angkatan yang sedang aktif, dan hanya kolom yang
+         memang urusannya — menambah akun tetap milik Sekretaris. */
+      'anggota.kelompok',
       'artikel.assign',
     ],
   },
@@ -144,11 +192,17 @@ const ROLES = {
   },
 };
 
+/* Peran yang sudah dipensiunkan tetap dikenali. DB tersimpan, isi CMS,
+   dan catatan audit lama masih menyebut kunci lamanya; tanpa peta ini
+   mereka akan kehilangan wewenang dan tampil sebagai kunci mentah. */
+const ROLE_LAMA = { pj_website: 'pj_mediaweb', pj_media: 'pj_mediaweb' };
+const kunciRole = (k) => (ROLES[k] ? k : ROLE_LAMA[k] || k);
+
 /* ---------------------- API ---------------------- */
 
 function can(user, permission) {
   if (!user) return false;
-  const role = ROLES[user.role];
+  const role = ROLES[kunciRole(user.role)];
   if (!role) return false;
   return role.permissions.includes(permission);
 }
@@ -159,11 +213,11 @@ function canAny(user, permissions) {
 }
 
 function roleLabel(roleKey) {
-  return ROLES[roleKey]?.label || roleKey;
+  return ROLES[kunciRole(roleKey)]?.label || roleKey;
 }
 
 function roleColor(roleKey) {
-  return ROLES[roleKey]?.warna || '#7A8B7F';
+  return ROLES[kunciRole(roleKey)]?.warna || '#7A8B7F';
 }
 
 /** Dipakai untuk melempar error yang seragam saat aksi ditolak. */
@@ -176,4 +230,4 @@ function assertCan(user, permission) {
   return true;
 }
 
-window.RBAC = { PERMISSIONS, ROLES, can, canAny, roleLabel, roleColor, assertCan };
+window.RBAC = { PERMISSIONS, ROLES, ROLE_LAMA, kunciRole, can, canAny, roleLabel, roleColor, assertCan };

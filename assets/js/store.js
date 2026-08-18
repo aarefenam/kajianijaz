@@ -48,12 +48,147 @@ function dbAwal() {
     keuangan : clone(s.keuangan),
     pesan    : clone(s.pesan),
     surat    : clone(s.surat),
-    audit    : [],
+    /* Keuangan — ruang kerja Bendahara */
+    akunKas         : clone(s.akunKas),
+    kategoriKeuangan: clone(s.kategoriKeuangan),
+    /* Media & Website — ruang kerja PJ Media & Website */
+    event      : clone(s.event),
+    sosmed     : clone(s.sosmed),
+    video      : clone(s.video),
+    media      : clone(s.media),
+    desain     : clone(s.desain),
+    tugas      : clone(s.tugas),
+    seo        : clone(s.seo),
+    kunjungan  : clone(s.kunjungan),
+    /* Penerbitan — ruang kerja PJ Buku */
+    buku       : clone(s.buku),
+    /* Redaksi — ruang kerja PJ Artikel */
+    penugasan  : clone(s.penugasan),
+    redaksi    : clone(s.redaksi),
+    /* Sekretariat — ruang kerja Sekretaris */
+    sertifikat : clone(s.sertifikat),
+    tandaTangan: clone(s.tandaTangan),
+    /* Kepengurusan — ruang kerja Ketua Umum */
+    pengurus   : clone(s.pengurus),
+    koordinator: clone(s.koordinator),
+    kaleidoskop: clone(s.kaleidoskop),
+    pencapaian : clone(s.pencapaian),
+    evaluasi   : clone(s.evaluasi),
+    audit    : clone(s.audit),
     langganan: [],
   };
 }
 
-let db = bacaDB() || dbAwal();
+/* DB yang sudah tersimpan di peramban tidak mengenal koleksi yang baru
+   ditambahkan kemudian. Tanpa penambalan ini, ERP yang pernah dibuka
+   sebelumnya akan menemukan `undefined` dan gagal menggambar halaman —
+   sementara memaksa reset akan membuang seluruh kerja pengguna. */
+function lengkapiDB(tersimpan) {
+  if (!tersimpan) return dbAwal();
+  const awal = dbAwal();
+  let kurang = false;
+  Object.keys(awal).forEach((k) => {
+    if (tersimpan[k] === undefined) { tersimpan[k] = awal[k]; kurang = true; }
+  });
+
+  /* Arsip surat dahulu hanya mengenal `jenis: masuk|keluar`. Sekarang ia
+     terbagi lima kategori. Petakan bentuk lamanya alih-alih membuangnya —
+     nomor surat yang sudah terarsip tidak boleh hilang. */
+  (tersimpan.surat || []).forEach((x) => {
+    if (x.kategori === undefined) { x.kategori = x.jenis === 'masuk' ? 'masuk' : 'keluar'; kurang = true; }
+  });
+
+  /* Absensi dahulu hanya larik id — kehadiran cuma punya dua keadaan.
+     Sekarang ia berstatus dan berjam. Yang sudah tercatat dipetakan
+     sebagai 'hadir', bukan dibuang. */
+  (tersimpan.kajian || []).forEach((k) => {
+    if (Array.isArray(k.presensi)) return;
+    k.presensi = (k.absensi || []).map((id) => ({ userId: id, status: 'hadir', jam: '' }));
+    delete k.absensi;
+    k.angkatan = k.angkatan || 'Angkatan X';
+    k.notulenId = k.notulenId || '';
+    if (k.ppt === undefined) k.ppt = false;
+    if (k.revisi === undefined) k.revisi = false;
+    kurang = true;
+  });
+
+  /* Kas dahulu hanya mengenal satu `nominal`. Sekarang rupiah dan pound
+     dicatat terpisah, sebab keduanya benar-benar dipegang dan tak boleh
+     dijumlahkan. Nominal lama menjadi rupiah; pound dimulai dari nol. */
+  (tersimpan.keuangan || []).forEach((x) => {
+    if (x.rp !== undefined) return;
+    x.rp = Number(x.nominal || 0);
+    x.egp = 0;
+    x.arus = x.jenis === 'masuk' ? (x.kategori === 'Iuran Anggota' ? 'internal' : 'eksternal') : null;
+    x.sumber = x.sumber || x.kategori || '';
+    x.akunId = x.akunId || 'ak1';
+    delete x.nominal;
+    kurang = true;
+  });
+
+  if (selaraskanAkunSeed(tersimpan)) kurang = true;
+  if (petakanRoleLama(tersimpan)) kurang = true;
+
+  if (kurang) { try { localStorage.setItem(DB_KEY, JSON.stringify(tersimpan)); } catch (_) {} }
+  return tersimpan;
+}
+
+/* Menambal koleksi yang hilang saja tidak cukup: `users` sudah ada sejak
+   awal, sehingga akun demo yang ditambahkan kemudian — atau jabatan yang
+   berpindah tangan — tidak pernah sampai ke peramban yang sudah menyimpan
+   DB. Akibatnya akun baru gagal masuk, dan penugasan yang menunjuk anggota
+   baru kehilangan namanya.
+
+   Daftar akun demo adalah bagian dari kontrak seed, bukan karangan
+   pengguna. Karena itu di sini diselaraskan dua hal saja: `email` dan
+   `role` — keduanya menentukan siapa bisa masuk dan ruang kerja mana yang
+   ia lihat. Nama, foto, kata sandi, dan status dibiarkan apa adanya supaya
+   suntingan pengguna tidak hilang, dan anggota yang ditambahkan sendiri
+   (id di luar seed) tidak disentuh sama sekali. */
+function selaraskanAkunSeed(tersimpan) {
+  if (!Array.isArray(tersimpan.users)) return false;
+  let berubah = false;
+  (window.SEED.users || []).forEach((s) => {
+    const ada = tersimpan.users.find((u) => u.id === s.id);
+    if (!ada) { tersimpan.users.push(clone(s)); berubah = true; return; }
+    if (ada.email !== s.email) { ada.email = s.email; berubah = true; }
+    if (ada.role !== s.role) { ada.role = s.role; berubah = true; }
+  });
+  return berubah;
+}
+
+/* PJ Website dan PJ Media melebur jadi satu peran. Kunci lamanya masih
+   tercatat pada anggota buatan pengguna dan pada daftar jabatan di dalam
+   CMS — RBAC sudah mengenali keduanya lewat ROLE_LAMA, tapi daftar jabatan
+   perlu dirapikan juga supaya halaman publik tidak memampangkan dua baris
+   dengan nama jabatan yang sama persis. */
+function petakanRoleLama(tersimpan) {
+  let berubah = false;
+  (tersimpan.users || []).forEach((u) => {
+    const baru = RBAC.ROLE_LAMA[u.role];
+    if (baru) { u.role = baru; berubah = true; }
+  });
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    Object.values(sisi?.halaman || {}).forEach((hal) => {
+      (hal.sections || []).forEach((sec) => {
+        const jab = sec.data?.jabatan;
+        if (!Array.isArray(jab)) return;
+        const dilihat = new Set();
+        const bersih = [];
+        jab.forEach((j) => {
+          const peran = RBAC.ROLE_LAMA[j.role] || j.role;
+          if (peran !== j.role) { j.role = peran; berubah = true; }
+          if (dilihat.has(peran)) { berubah = true; return; }   // buang kembarannya
+          dilihat.add(peran); bersih.push(j);
+        });
+        if (bersih.length !== jab.length) sec.data.jabatan = bersih;
+      });
+    });
+  });
+  return berubah;
+}
+
+let db = lengkapiDB(bacaDB());
 
 /* ---------- persistensi + pub/sub ---------- */
 const pendengar = new Set();
@@ -76,7 +211,7 @@ function berlangganan(fn) { pendengar.add(fn); return () => pendengar.delete(fn)
 window.addEventListener('storage', (e) => {
   if (e.key === DB_KEY || e.key === 'alijaz_ping') {
     const baru = bacaDB();
-    if (baru) { db = baru; pendengar.forEach((fn) => { try { fn(db); } catch (_) {} }); }
+    if (baru) { db = lengkapiDB(baru); pendengar.forEach((fn) => { try { fn(db); } catch (_) {} }); }
   }
 });
 
@@ -261,6 +396,7 @@ function rollback(user, idVersi) {
    ============================================================ */
 function simpanArtikel(user, data) {
   RBAC.assertCan(user, 'artikel.write');
+  let simpul;
   if (data.id) {
     const a = db.artikel.find((x) => x.id === data.id);
     if (!a) throw new Error('Artikel tidak ditemukan.');
@@ -268,8 +404,9 @@ function simpanArtikel(user, data) {
     if (!pemilik && !RBAC.can(user, 'artikel.review'))
       throw new Error('Anda hanya dapat menyunting artikel tulisan sendiri.');
     if (a.status === 'terbit' && !RBAC.can(user, 'artikel.publish'))
-      throw new Error('Artikel sudah terbit. Minta PJ KTI untuk menariknya kembali ke draft.');
+      throw new Error('Artikel sudah terbit. Minta PJ Artikel untuk menariknya kembali ke draft.');
     Object.assign(a, data);
+    simpul = a;
     catat(user, 'artikel.ubah', a.id, `Menyunting artikel "${a.judul}"`);
   } else {
     const baru = {
@@ -279,8 +416,10 @@ function simpanArtikel(user, data) {
       tag: [], isi: [], ...data,
     };
     db.artikel.unshift(baru);
+    simpul = baru;
     catat(user, 'artikel.buat', baru.id, `Membuat artikel "${baru.judul}"`);
   }
+  selaraskanPenugasan(simpul);
   simpan();
 }
 
@@ -305,6 +444,7 @@ function ubahStatusArtikel(user, id, status, catatanReview) {
   if (['terbit', 'revisi'].includes(status)) a.reviewerId = user.id;
   if (status === 'terbit') a.tanggal = nowISO().slice(0, 10);
 
+  selaraskanPenugasan(a);
   catat(user, 'artikel.status', id, `Artikel "${a.judul}" -> ${status}`);
   simpan();
 }
@@ -314,6 +454,7 @@ function hapusArtikel(user, id) {
   if (!a) return;
   if (a.penulisId !== user.id) RBAC.assertCan(user, 'artikel.review');
   db.artikel = db.artikel.filter((x) => x.id !== id);
+  lepasPenugasan(id);
   catat(user, 'artikel.hapus', id, `Menghapus artikel "${a.judul}"`);
   simpan();
 }
@@ -328,18 +469,66 @@ function simpanKajian(user, data) {
     Object.assign(k, data);
     catat(user, 'kajian.ubah', k.id, `Mengubah jadwal "${k.judul}"`);
   } else {
-    const baru = { id: uid('k'), status: 'terjadwal', absensi: [], notulensi: '', ...data };
+    const baru = { id: uid('k'), status: 'terjadwal', presensi: [], notulensi: '',
+      angkatan: 'Angkatan X', notulenId: '', ppt: false, revisi: false, ...data };
     db.kajian.push(baru);
     catat(user, 'kajian.buat', baru.id, `Menjadwalkan kajian "${baru.judul}"`);
   }
   simpan();
 }
 
-function setAbsensi(user, idKajian, daftarUserId) {
+const STATUS_PRESENSI = ['hadir', 'terlambat', 'tidak-hadir'];
+
+/** Kode QR anggota. Sengaja hanya membawa id, bukan nama atau surel:
+    QR ini dicetak dan ditempel, jadi ia tidak boleh membocorkan apa pun
+    kepada siapa saja yang kebetulan memindainya. */
+const kodeQr = (userId) => 'AIJZ-' + userId;
+
+function setPresensi(user, idKajian, userId, status, jam) {
+  RBAC.assertCan(user, 'kajian.attendance');
+  if (!STATUS_PRESENSI.includes(status)) throw new Error('Status presensi tidak dikenal.');
+  const k = db.kajian.find((x) => x.id === idKajian);
+  if (!k) throw new Error('Kajian tidak ditemukan.');
+  k.presensi = k.presensi || [];
+  const ada = k.presensi.find((p) => p.userId === userId);
+  const waktu = jam !== undefined ? jam
+    : (status === 'tidak-hadir' ? '' : new Date().toTimeString().slice(0, 5));
+  if (ada) { ada.status = status; ada.jam = waktu; }
+  else k.presensi.push({ userId, status, jam: waktu });
+  catat(user, 'kajian.presensi', idKajian, `${namaUser(userId)} → ${status} pada "${k.judul}"`);
+  simpan();
+  return k.presensi.find((p) => p.userId === userId);
+}
+
+/** Catat presensi dari kode hasil pindai. Terlambat ditentukan jam
+    sesungguhnya terhadap jam mulai kajian, bukan ditebak petugas. */
+function presensiDariKode(user, idKajian, kode) {
   RBAC.assertCan(user, 'kajian.attendance');
   const k = db.kajian.find((x) => x.id === idKajian);
-  k.absensi = daftarUserId;
-  catat(user, 'kajian.absensi', idKajian, `Absensi "${k.judul}": ${daftarUserId.length} hadir`);
+  if (!k) throw new Error('Kajian tidak ditemukan.');
+  const userId = String(kode || '').trim().replace(/^AIJZ-/i, '');
+  const u = db.users.find((x) => x.id === userId);
+  if (!u) throw new Error(`Kode "${kode}" tidak dikenali sebagai anggota.`);
+  if (u.angkatan !== k.angkatan)
+    throw new Error(`${u.nama} bukan peserta ${k.angkatan}.`);
+
+  const sekarang = new Date().toTimeString().slice(0, 5);
+  const menit = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const status = menit(sekarang) > menit(k.jam) + 10 ? 'terlambat' : 'hadir';
+  setPresensi(user, idKajian, userId, status, sekarang);
+  return { user: u, status, jam: sekarang };
+}
+
+/** Penyuntingan anggota versi koordinator: terbatas pada jenjang,
+    kelompok, dan keaktifan. Surel, peran, dan akun baru bukan urusannya. */
+function simpanAnggotaKajian(user, data) {
+  RBAC.assertCan(user, 'anggota.kelompok');
+  const u = db.users.find((x) => x.id === data.id);
+  if (!u) throw new Error('Anggota tidak ditemukan.');
+  ['level', 'kelompok', 'status'].forEach((k) => {
+    if (data[k] !== undefined) u[k] = data[k];
+  });
+  catat(user, 'anggota.kelompok', u.id, `Memperbarui jenjang/kelompok ${u.nama}`);
   simpan();
 }
 
@@ -378,24 +567,363 @@ function simpanAnggota(user, data) {
   simpan();
 }
 
+/** Pengguna menyunting akunnya sendiri. Sengaja terpisah dari
+    simpanAnggota(): di sini tidak ada izin 'anggota.manage' yang
+    dituntut, tetapi juga tidak ada jalan mengubah role, status,
+    atau akun orang lain. */
+function simpanProfil(user, data) {
+  const u = db.users.find((x) => x.id === user?.id);
+  if (!u) throw new Error('Sesi tidak dikenali. Masuk ulang untuk melanjutkan.');
+  const email = String(data.email || '').trim().toLowerCase();
+  if (!data.nama?.trim() || !email) throw new Error('Nama dan email wajib diisi.');
+  if (db.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email))
+    throw new Error('Email itu sudah dipakai akun lain.');
+  if (data.password !== undefined && String(data.password).length < 6)
+    throw new Error('Kata sandi minimal 6 karakter.');
+
+  u.nama = data.nama.trim();
+  u.email = data.email.trim();
+  if (data.foto) u.foto = data.foto;
+  if (data.password) u.password = data.password;
+  catat(u, 'akun.ubah', u.id, `${u.nama} memperbarui data akunnya`);
+  simpan();
+  return u;
+}
+
 function simpanTransaksi(user, data) {
   RBAC.assertCan(user, 'keuangan.manage');
-  if (data.id) {
-    Object.assign(db.keuangan.find((x) => x.id === data.id), data);
-    catat(user, 'keuangan.ubah', data.id, 'Mengubah transaksi');
+  const rapi = { ...data, rp: Number(data.rp || 0), egp: Number(data.egp || 0) };
+  if (!rapi.rp && !rapi.egp) throw new Error('Isi nominal rupiah atau pound, minimal salah satu.');
+  if (rapi.id) {
+    const t = db.keuangan.find((x) => x.id === rapi.id);
+    if (!t) throw new Error('Transaksi tidak ditemukan.');
+    Object.assign(t, rapi);
+    catat(user, 'keuangan.ubah', t.id, `Mengubah transaksi "${t.sumber || t.kategori}"`);
   } else {
-    const baru = { id: uid('f'), oleh: user.id, ...data, nominal: Number(data.nominal) };
+    const baru = { id: uid('f'), oleh: user.id, akunId: 'ak1', arus: null, ...rapi };
     db.keuangan.unshift(baru);
     catat(user, 'keuangan.catat', baru.id,
-      `${baru.jenis === 'masuk' ? 'Kas masuk' : 'Kas keluar'} Rp${Number(baru.nominal).toLocaleString('id-ID')} — ${baru.kategori}`);
+      `${baru.jenis === 'masuk' ? 'Kas masuk' : 'Kas keluar'} ${nominalGabung(baru)} — ${baru.kategori}`);
   }
   simpan();
+}
+
+const nominalGabung = (t) => [
+  t.rp ? 'Rp ' + Number(t.rp).toLocaleString('id-ID') : '',
+  t.egp ? 'EGP ' + Number(t.egp).toLocaleString('id-ID') : '',
+].filter(Boolean).join(' + ') || 'Rp 0';
+
+/** Saldo sebuah akun, dua mata uang sekaligus — tidak pernah dijumlahkan. */
+function saldoAkun(idAkun) {
+  const a = db.akunKas.find((x) => x.id === idAkun);
+  if (!a) return { rp: 0, egp: 0 };
+  let rp = a.saldoAwalRp || 0, egp = a.saldoAwalEgp || 0;
+  db.keuangan.filter((t) => t.akunId === idAkun).forEach((t) => {
+    const tanda = t.jenis === 'masuk' ? 1 : -1;
+    rp += tanda * Number(t.rp || 0);
+    egp += tanda * Number(t.egp || 0);
+  });
+  return { rp, egp };
 }
 
 function hapusTransaksi(user, id) {
   RBAC.assertCan(user, 'keuangan.manage');
   db.keuangan = db.keuangan.filter((x) => x.id !== id);
   catat(user, 'keuangan.hapus', id, 'Menghapus transaksi');
+  simpan();
+}
+
+/* ============================================================
+   KOLEKSI SEDERHANA — daftar ber-id di ruang kerja tiap peran
+   ------------------------------------------------------------
+   Bentuknya seragam (array objek ber-id), jadi satu pasang fungsi
+   melayani semuanya. Yang berbeda hanya izin penjaganya dan nama
+   kolom judulnya — keduanya disimpan di peta ini, dipakai untuk
+   menegakkan wewenang dan menyusun kalimat log audit yang enak
+   dibaca. Menambah modul baru cukup menambah satu baris di sini.
+   ============================================================ */
+const KOLEKSI = {
+  /* ruang kerja Ketua Umum */
+  pengurus   : { izin: 'organisasi.manage', tunggal: 'pengurus',     judul: (x) => x.nama       },
+  koordinator: { izin: 'organisasi.manage', tunggal: 'koordinator',  judul: (x) => x.nama       },
+  kaleidoskop: { izin: 'organisasi.manage', tunggal: 'kegiatan',     judul: (x) => x.kegiatan   },
+  pencapaian : { izin: 'organisasi.manage', tunggal: 'pencapaian',   judul: (x) => x.pencapaian },
+  evaluasi   : { izin: 'organisasi.manage', tunggal: 'evaluasi',     judul: (x) => x.evaluasi   },
+  /* ruang kerja Sekretaris */
+  surat      : { izin: 'surat.manage',      tunggal: 'surat',        judul: (x) => x.perihal    },
+  /* ruang kerja Bendahara */
+  akunKas         : { izin: 'keuangan.akun', tunggal: 'akun kas', judul: (x) => x.nama },
+  kategoriKeuangan: { izin: 'keuangan.akun', tunggal: 'kategori', judul: (x) => x.nama },
+  /* ruang kerja PJ Artikel */
+  penugasan  : { izin: 'redaksi.manage',    tunggal: 'penugasan',    judul: (x) => x.judul      },
+  sertifikat : { izin: 'sertifikat.manage', tunggal: 'sertifikat',   judul: (x) => x.judul      },
+  tandaTangan: { izin: 'ttd.manage',        tunggal: 'tanda tangan', judul: (x) => x.nama       },
+};
+
+function petaKoleksi(nama) {
+  const k = KOLEKSI[nama];
+  if (!k) throw new Error('Koleksi tidak dikenal: ' + nama);
+  return k;
+}
+
+function simpanKoleksi(user, koleksi, data) {
+  const k = petaKoleksi(koleksi);
+  RBAC.assertCan(user, k.izin);
+  if (data.id) {
+    const item = db[koleksi].find((x) => x.id === data.id);
+    if (!item) throw new Error('Data tidak ditemukan.');
+    Object.assign(item, data);
+    catat(user, koleksi + '.ubah', item.id, `Mengubah data ${k.tunggal} "${k.judul(item)}"`);
+  } else {
+    const baru = { id: uid(koleksi.slice(0, 2)), ...data };
+    db[koleksi].push(baru);
+    catat(user, koleksi + '.tambah', baru.id, `Menambah data ${k.tunggal} "${k.judul(baru)}"`);
+  }
+  simpan();
+}
+
+function hapusKoleksi(user, koleksi, id) {
+  const k = petaKoleksi(koleksi);
+  RBAC.assertCan(user, k.izin);
+  const item = db[koleksi].find((x) => x.id === id);
+  if (!item) return;
+  db[koleksi] = db[koleksi].filter((x) => x.id !== id);
+  catat(user, koleksi + '.hapus', id, `Menghapus data ${k.tunggal} "${k.judul(item)}"`);
+  simpan();
+}
+
+/** Centang "Selesai" pada kaleidoskop. Status ikut menyesuaikan supaya
+    lencana di tabel tidak pernah berlawanan dengan kotak centangnya. */
+function centangKegiatan(user, id, selesai) {
+  RBAC.assertCan(user, 'organisasi.manage');
+  const k = db.kaleidoskop.find((x) => x.id === id);
+  if (!k) throw new Error('Kegiatan tidak ditemukan.');
+  k.selesai = selesai;
+  if (selesai) k.status = 'selesai';
+  else if (k.status === 'selesai') k.status = 'proses';
+  catat(user, 'kaleidoskop.centang', id, `Kegiatan "${k.kegiatan}" ditandai ${selesai ? 'selesai' : 'belum selesai'}`);
+  simpan();
+}
+
+/* ============================================================
+   REDAKSI — target & penugasan artikel bulanan
+   ============================================================ */
+
+/** Sambungkan artikel ke penugasan penulisnya pada bulan yang sama,
+    lalu selaraskan progressnya. Dipanggil setiap kali artikel dibuat,
+    berubah status, atau dihapus — sehingga tabel progress PJ Artikel
+    tidak pernah mengaku sebuah naskah sudah siap padahal tidak ada. */
+function selaraskanPenugasan(artikel) {
+  const bulan = String(artikel.tanggal || nowISO().slice(0, 10)).slice(0, 7);
+  let t = db.penugasan.find((p) => p.artikelId === artikel.id);
+  if (!t) {
+    t = db.penugasan.find((p) => p.userId === artikel.penulisId && p.bulan === bulan && !p.artikelId);
+    if (t) t.artikelId = artikel.id;
+  }
+  if (!t) return;
+  t.progress = ['draft', 'revisi'].includes(artikel.status) ? 'proses' : 'siap';
+}
+
+function lepasPenugasan(idArtikel) {
+  db.penugasan.filter((p) => p.artikelId === idArtikel).forEach((p) => {
+    p.artikelId = ''; p.progress = 'belum';
+  });
+}
+
+function setTargetArtikel(user, jumlah) {
+  RBAC.assertCan(user, 'redaksi.manage');
+  const n = Math.max(1, Math.min(20, Math.round(Number(jumlah) || 0)));
+  db.redaksi.targetBulanan = n;
+  catat(user, 'redaksi.target', 'redaksi', `Target artikel per anggota diubah menjadi ${n} per bulan`);
+  simpan();
+  return n;
+}
+
+function simpanPanduan(user, panduan) {
+  RBAC.assertCan(user, 'redaksi.manage');
+  db.redaksi.panduan = panduan;
+  catat(user, 'redaksi.panduan', 'redaksi', 'Panduan penulis diperbarui');
+  simpan();
+}
+
+/* ============================================================
+   PENERBITAN BUKU — proyek beserta seluruh tahapnya
+   ------------------------------------------------------------
+   Setiap tahap adalah larik di dalam objek proyek, bukan koleksi
+   tersendiri. Satu pasang fungsi melayani semuanya, dengan nama
+   larik disebut pemanggil — sehingga menambah tahap baru tidak
+   menuntut fungsi simpan/hapus yang baru pula.
+   ============================================================ */
+const BAGIAN_BUKU = {
+  timeline  : { tunggal: 'tahapan',    judul: (x) => x.tahapan   },
+  naskah    : { tunggal: 'naskah',     judul: (x) => x.subJudul  },
+  desain    : { tunggal: 'desain',     judul: (x) => x.keterangan },
+  produksi  : { tunggal: 'kegiatan',   judul: (x) => x.kegiatan  },
+  distribusi: { tunggal: 'distribusi', judul: (x) => x.wilayah   },
+  modal     : { tunggal: 'pos modal',  judul: (x) => x.uraian, izin: 'buku.anggaran' },
+  dokumen   : { tunggal: 'dokumen',    judul: (x) => x.nama, izin: 'buku.arsip' },
+};
+
+/** Proyek yang sedang dikerjakan. Bila belum ada yang ditandai aktif,
+    ambil yang terbaru — supaya halaman tidak pernah kosong tanpa sebab. */
+function bukuAktif() {
+  return db.buku.find((b) => b.status === 'aktif') || db.buku[0] || null;
+}
+
+function cariBuku(id) {
+  const b = db.buku.find((x) => x.id === id);
+  if (!b) throw new Error('Proyek buku tidak ditemukan.');
+  return b;
+}
+
+function simpanBuku(user, data) {
+  RBAC.assertCan(user, 'buku.manage');
+  if (data.id) {
+    const b = cariBuku(data.id);
+    Object.assign(b, data);
+    catat(user, 'buku.ubah', b.id, `Memperbarui proyek buku "${b.judul}"`);
+  } else {
+    const baru = {
+      id: uid('bk'), status: 'rencana', tahap: 'perencanaan',
+      pjUtamaId: '', editorIds: [], layouterIds: [], desainerIds: [], pjProduksiId: '',
+      timeline: [], naskah: [], desain: [], produksi: [], distribusi: [], modal: [], dokumen: [],
+      ...data,
+    };
+    db.buku.unshift(baru);
+    catat(user, 'buku.buat', baru.id, `Membuat proyek buku "${baru.judul}"`);
+  }
+  simpan();
+}
+
+/** Hanya satu proyek boleh aktif; menandai yang baru otomatis
+    mengarsipkan yang lama, jadi dasbor tak pernah bercabang. */
+function aktifkanBuku(user, id) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = cariBuku(id);
+  db.buku.forEach((x) => { if (x.status === 'aktif') x.status = 'arsip'; });
+  b.status = 'aktif';
+  catat(user, 'buku.aktif', b.id, `Menjadikan "${b.judul}" proyek buku yang aktif`);
+  simpan();
+}
+
+function hapusBuku(user, id) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = cariBuku(id);
+  db.buku = db.buku.filter((x) => x.id !== id);
+  catat(user, 'buku.hapus', id, `Menghapus proyek buku "${b.judul}"`);
+  simpan();
+}
+
+function petaBagian(bagian) {
+  const k = BAGIAN_BUKU[bagian];
+  if (!k) throw new Error('Bagian buku tidak dikenal: ' + bagian);
+  return k;
+}
+
+function simpanBagianBuku(user, bagian, data, idBuku) {
+  const k = petaBagian(bagian);
+  RBAC.assertCan(user, k.izin || 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  if (!b) throw new Error('Belum ada proyek buku. Buat proyeknya lebih dulu.');
+  const arr = (b[bagian] ||= []);
+  if (data.id) {
+    const item = arr.find((x) => x.id === data.id);
+    if (!item) throw new Error('Data tidak ditemukan.');
+    Object.assign(item, data);
+    catat(user, `buku.${bagian}.ubah`, item.id, `Mengubah ${k.tunggal} "${k.judul(item)}" pada "${b.judul}"`);
+  } else {
+    const baru = { id: uid(bagian.slice(0, 2)), ...data };
+    arr.push(baru);
+    catat(user, `buku.${bagian}.tambah`, baru.id, `Menambah ${k.tunggal} "${k.judul(baru)}" pada "${b.judul}"`);
+  }
+  simpan();
+}
+
+function hapusBagianBuku(user, bagian, id, idBuku) {
+  const k = petaBagian(bagian);
+  RBAC.assertCan(user, k.izin || 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  if (!b) return;
+  const item = (b[bagian] || []).find((x) => x.id === id);
+  if (!item) return;
+  b[bagian] = b[bagian].filter((x) => x.id !== id);
+  catat(user, `buku.${bagian}.hapus`, id, `Menghapus ${k.tunggal} "${k.judul(item)}" dari "${b.judul}"`);
+  simpan();
+}
+
+/** Centang kegiatan produksi. Terpisah dari simpanBagianBuku agar
+    sekali klik tidak menuntut seluruh form dibuka lebih dulu. */
+function centangProduksi(user, id, selesai) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = bukuAktif();
+  const k = b?.produksi.find((x) => x.id === id);
+  if (!k) throw new Error('Kegiatan produksi tidak ditemukan.');
+  k.selesai = selesai;
+  catat(user, 'buku.produksi.centang', id, `Kegiatan "${k.kegiatan}" ditandai ${selesai ? 'selesai' : 'belum selesai'}`);
+  simpan();
+}
+
+/* ============================================================
+   MEDIA & WEBSITE
+   ============================================================ */
+const KOLEKSI_MW = {
+  event : { izin: 'mediaweb.manage', tunggal: 'agenda',     judul: (x) => x.judul },
+  sosmed: { izin: 'mediaweb.manage', tunggal: 'posting',    judul: (x) => x.judul },
+  video : { izin: 'mediaweb.manage', tunggal: 'video',      judul: (x) => x.judul },
+  media : { izin: 'mediaweb.manage', tunggal: 'berkas',     judul: (x) => x.nama  },
+  desain: { izin: 'mediaweb.manage', tunggal: 'desain',     judul: (x) => x.nama  },
+  tugas : { izin: 'mediaweb.manage', tunggal: 'tugas',      judul: (x) => x.judul },
+};
+Object.assign(KOLEKSI, KOLEKSI_MW);
+
+/** Dipanggil halaman publik pada tiap pemuatan. Inilah yang membuat
+    statistik di ERP berisi angka sungguhan, bukan karangan — walau
+    lingkupnya sebatas peramban ini, sebab prototipe tak punya server. */
+const KUNJUNG_SESI = '(sesi)';
+const KUNJUNG_BARU = '(baru)';
+
+function catatKunjungan(halaman) {
+  if (!halaman) return;
+  const tgl = nowISO().slice(0, 10);
+  const tambah = (h) => {
+    const baris = db.kunjungan.find((k) => k.tgl === tgl && k.halaman === h);
+    if (baris) baris.n += 1; else db.kunjungan.push({ tgl, halaman: h, n: 1 });
+  };
+  tambah(halaman);
+
+  /* Tayangan halaman dihitung tiap pemuatan; kunjungan sekali per sesi
+     peramban; pengunjung baru sekali seumur peramban. Ketiganya memang
+     hal yang berbeda, dan hanya dengan membedakannya angka "halaman per
+     kunjungan" dan "pengunjung baru" punya arti. */
+  try {
+    if (!sessionStorage.getItem('alijaz_sesi_kunjung')) {
+      sessionStorage.setItem('alijaz_sesi_kunjung', '1');
+      tambah(KUNJUNG_SESI);
+      if (!localStorage.getItem('alijaz_pernah')) {
+        localStorage.setItem('alijaz_pernah', '1');
+        tambah(KUNJUNG_BARU);
+      }
+    }
+  } catch (_) {}
+  /* Simpan tanpa membangunkan pendengar: halaman publik hanya membaca,
+     dan menggambar ulang dirinya sendiri saat mencatat kunjungan justru
+     membuat tampilan berkedip tiap kali dibuka. */
+  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (_) {}
+}
+
+function centangTugas(user, id, selesai) {
+  RBAC.assertCan(user, 'mediaweb.manage');
+  const t = db.tugas.find((x) => x.id === id);
+  if (!t) throw new Error('Tugas tidak ditemukan.');
+  t.selesai = selesai;
+  catat(user, 'tugas.centang', id, `Tugas "${t.judul}" ditandai ${selesai ? 'selesai' : 'belum selesai'}`);
+  simpan();
+}
+
+function simpanSeo(user, data) {
+  RBAC.assertCan(user, 'seo.manage');
+  Object.assign(db.seo, data);
+  catat(user, 'seo.ubah', 'seo', 'Pengaturan SEO diperbarui');
   simpan();
 }
 
@@ -493,8 +1021,15 @@ window.Store = {
   ubahDraft, toggleSection, geserSection, resetDraft,
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
-  simpanKajian, setAbsensi, setNotulensi, hapusKajian,
-  simpanAnggota, simpanTransaksi, hapusTransaksi,
+  simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  simpanAnggotaKajian, kodeQr, STATUS_PRESENSI,
+  simpanAnggota, simpanTransaksi, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanKoleksi, hapusKoleksi, centangKegiatan,
+  setTargetArtikel, simpanPanduan, simpanProfil,
+  bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
+  simpanBagianBuku, hapusBagianBuku, centangProduksi,
+  catatKunjungan, centangTugas, simpanSeo,
+  KUNJUNG_SESI, KUNJUNG_BARU,
   kirimPesan, tandaiDibaca, berlanggananNewsletter,
   unggahGambar, resetPabrik, catat,
   getUser, namaUser,
