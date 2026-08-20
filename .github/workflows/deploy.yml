@@ -1,17 +1,23 @@
 # ============================================================
-# Kirim otomatis ke hosting Hostinger setiap kali main diperbarui.
+# Kirim ke hosting Hostinger lewat FTPS — JALUR CADANGAN.
 #
 # Tujuan: public_html/alijazqurancenter.com/
+#
+# Jalur yang dipakai sehari-hari adalah kebalikannya: hPanel yang
+# MENARIK dari GitHub (hPanel → Tingkat lanjut → GIT). Menjalankan
+# keduanya sekaligus membuat dua sumber kebenaran berebut menulis ke
+# folder yang sama — karena itu alur ini sengaja TIDAK berjalan
+# otomatis. Jalankan manual dari tab Actions bila memang diperlukan.
 #
 # Sebelum dipakai, tambahkan tiga secret di GitHub:
 #   Settings → Secrets and variables → Actions → New repository secret
 #
-#   FTP_SERVER    147.93.80.88
-#   FTP_USERNAME  u191793547
-#   FTP_PASSWORD  (kata sandi FTP dari hPanel → File → Akun FTP)
+#   FTP_SERVER    alamat server — lihat hPanel → File → Akun FTP
+#   FTP_USERNAME  nama pengguna — dari halaman yang sama
+#   FTP_PASSWORD  kata sandi FTP — dari halaman yang sama
 #
-# Kata sandi TIDAK boleh ditulis di berkas ini. Secret hanya terbaca
-# oleh Actions dan tidak tampil di log.
+# Nilainya sengaja tidak ditulis di sini: repo ini publik, dan
+# alamat server beserta nama pengguna adalah separuh kredensial.
 #
 # Memakai FTPS (FTP terenkripsi) di port 21 — bukan FTP polos.
 # ============================================================
@@ -19,9 +25,7 @@
 name: Kirim ke Hostinger
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:        # bisa juga dijalankan manual dari tab Actions
+  workflow_dispatch:        # hanya manual, dari tab Actions
 
 concurrency:
   group: kirim-hosting      # cegah dua pengiriman berbarengan

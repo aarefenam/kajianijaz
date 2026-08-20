@@ -13,6 +13,11 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Setelan alat bantu lokal. Di mesin ini ia sudah tertutup gitignore
+# global, tetapi itu tidak ikut saat repo dikloning orang lain —
+# jadi dikunci di sini agar perlindungannya terbawa proyek.
+.claude/
+
 # Dependensi (prototipe ini tidak memerlukannya, jaga-jaga saja)
 node_modules/
 

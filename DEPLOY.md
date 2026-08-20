@@ -222,10 +222,15 @@ Hostinger — di sana Anda memang dapat root.
 
 Ada dua jalur. Pilih salah satu, jangan keduanya sekaligus.
 
-### Pilihan A — GitHub Actions (mendorong lewat FTPS)
+### Pilihan A — GitHub Actions (mendorong lewat FTPS) — cadangan
 
-Berkas alurnya sudah tersedia di `.github/workflows/deploy.yml`.
-Setiap dorongan ke `main` akan memeriksa sintaks JavaScript lalu
+Berkas alurnya tersedia di `.github/workflows/deploy.yml`, tetapi sengaja
+**tidak berjalan otomatis** — hanya bisa dijalankan manual dari tab
+Actions. Alasannya: jalur yang dipakai sehari-hari adalah kebalikannya
+(hPanel menarik dari GitHub), dan menjalankan keduanya sekaligus membuat
+dua sumber kebenaran berebut menulis ke folder yang sama.
+
+Bila dijalankan, ia memeriksa sintaks JavaScript lalu
 mengunggah isi repo ke `public_html/alijazqurancenter.com` lewat FTPS.
 
 Tambahkan tiga secret di
