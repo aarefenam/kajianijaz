@@ -4511,6 +4511,11 @@ HAL.seo = () => {
         <div class="grup"><label>Kata Kunci</label>
           <input id="sk" value="${esc((s.kataKunci || []).join(', '))}" placeholder="kajian tafsir, ulum al-quran">
           <div class="bantu">Pisahkan dengan koma.</div></div>
+        <div class="grup"><label>Alamat Domain</label>
+          <input id="sm" value="${esc(s.domain || '')}" placeholder="alijazqurancenter.com">
+          <div class="bantu">Dipakai pada pratinjau hasil pencarian dan tautan berbagi.</div></div>
+      </div>
+      <div class="grid-form">
         <div class="grup"><label>Instruksi Robot Pencari</label>
           <select id="sr">${['index, follow', 'index, nofollow', 'noindex, follow', 'noindex, nofollow']
             .map((v) => `<option ${s.robots === v ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -4537,7 +4542,7 @@ HAL.seo = () => {
     const g = (id) => kartu.querySelector('#' + id).value;
     if (!g('sj').trim()) return toast('Judul beranda wajib diisi.', true);
     aman(() => {
-      Store.simpanSeo(U, { judulBeranda: g('sj').trim(), deskripsi: g('sd').trim(),
+      Store.simpanSeo(U, { judulBeranda: g('sj').trim(), deskripsi: g('sd').trim(), domain: g('sm').trim(),
         kataKunci: g('sk').split(',').map((x) => x.trim()).filter(Boolean),
         robots: g('sr'), ogGambar });
       toast('Pengaturan SEO tersimpan.'); gambar();
@@ -4549,7 +4554,7 @@ HAL.seo = () => {
   box.appendChild(el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala">
     <h3>Pratinjau Hasil Pencarian</h3><span class="hitung">perkiraan tampilan di Google</span></div>
     <div class="panel-isi"><div class="seo-pratinjau">
-      <div class="tautan">kajianalijaz.id</div>
+      <div class="tautan">${esc(s.domain || Store.cms.situs.nama)}</div>
       <div class="judul">${esc(s.judulBeranda)}</div>
       <div class="ket">${esc(s.deskripsi)}</div>
     </div></div></div>`));

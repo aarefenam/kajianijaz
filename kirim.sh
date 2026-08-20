@@ -11,7 +11,9 @@
 set -euo pipefail
 
 TUJUAN="alijaz"                 # nama Host di ~/.ssh/config
-FOLDER="public_html"
+# Akar dokumen domain ini di server. Domain tambahan Hostinger tinggal
+# di folder senama di dalam public_html, bukan di public_html langsung.
+FOLDER="public_html/alijazqurancenter.com"
 ASAL="$(cd "$(dirname "$0")" && pwd)/"
 
 COBA=""
@@ -42,6 +44,7 @@ if ssh "$TUJUAN" 'command -v rsync >/dev/null 2>&1'; then
   echo "Mengirim dengan rsync…"
   # --delete membuang berkas di server yang sudah tidak ada di sini,
   # sehingga isi server persis mengikuti repo.
+  ssh "$TUJUAN" "mkdir -p $FOLDER"
   rsync -az --delete --human-readable --itemize-changes $COBA \
     "${ABAIKAN[@]}" \
     -e "ssh" "$ASAL" "$TUJUAN:$FOLDER/"

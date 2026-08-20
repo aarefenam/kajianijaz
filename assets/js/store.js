@@ -126,6 +126,12 @@ function lengkapiDB(tersimpan) {
     kurang = true;
   });
 
+  /* Domain baru ditambahkan belakangan; DB lama belum mengenalnya. */
+  if (tersimpan.seo && !tersimpan.seo.domain) {
+    tersimpan.seo.domain = 'alijazqurancenter.com';
+    kurang = true;
+  }
+
   if (selaraskanAkunSeed(tersimpan)) kurang = true;
   if (petakanRoleLama(tersimpan)) kurang = true;
 

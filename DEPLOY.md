@@ -1,6 +1,9 @@
 # Menyambungkan Hosting Hostinger ke GitHub & VS Code
 
-Catatan lapangan untuk `alijazquranstudies.com` di server `147.93.80.88`.
+Catatan lapangan untuk `alijazqurancenter.com` di server `147.93.80.88`.
+
+Domainnya dibeli di **Spaceship**, servernya di **Hostinger** — jadi ada dua
+tempat yang harus disetel, dan urutannya penting. Lihat bagian 0.
 
 Hasil pemeriksaan port pada server tersebut:
 
@@ -13,6 +16,77 @@ Hasil pemeriksaan port pada server tersebut:
 Paket ini hosting terkelola, jadi Anda masuk sebagai `u191793547`,
 **bukan root**, dan terkunci di direktori rumah sendiri. Itu normal dan
 cukup untuk semua yang ada di dokumen ini.
+
+---
+
+## 0. Domain Spaceship → server Hostinger
+
+Domain dan hosting berada di dua perusahaan berbeda. Yang menyambungkan
+keduanya adalah **nameserver**: Spaceship memegang pendaftaran namanya,
+Hostinger yang melayani berkasnya.
+
+### a. Daftarkan domainnya di hPanel lebih dulu
+
+**hPanel → Situs Web → Tambah Situs Web / Domain** → masukkan
+`alijazqurancenter.com`.
+
+Hostinger akan membuatkan akar dokumennya sendiri di:
+
+```
+public_html/alijazqurancenter.com/
+```
+
+Biarkan hPanel yang membuat folder itu. Membuatnya manual lebih dulu
+membuat hPanel menolak, atau menciptakan folder kedua yang tidak dipakai.
+
+### b. Arahkan nameserver di Spaceship
+
+Di Spaceship: **Domains → alijazqurancenter.com → Nameservers → Custom DNS**
+
+```
+ns1.dns-parking.com
+ns2.dns-parking.com
+```
+
+Perambatannya biasanya 15 menit sampai beberapa jam. Periksa dengan:
+
+```bash
+dig +short NS alijazqurancenter.com
+dig +short A  alijazqurancenter.com      # semestinya 147.93.80.88
+```
+
+Selama masih menunjuk nameserver Spaceship, apa pun yang diunggah tidak
+akan terlihat dari domain itu — bukan karena berkasnya salah.
+
+### c. Baru pindahkan berkasnya
+
+Setelah folder domainnya ada, pindahkan isi lama:
+
+```bash
+ssh alijaz
+cd ~/public_html
+
+# Cadangkan dulu — murah, dan menyelamatkan bila keliru
+tar -czf ~/cadangan-public_html-$(date +%F).tar.gz .
+
+# Pindahkan semua isi ke folder domain, kecuali folder domain itu sendiri
+mkdir -p alijazqurancenter.com
+find . -maxdepth 1 -mindepth 1 ! -name 'alijazqurancenter.com' -exec mv {} alijazqurancenter.com/ \;
+
+ls -la alijazqurancenter.com          # periksa hasilnya
+```
+
+> **Perhatikan.** `public_html` adalah akar dokumen domain **utama**
+> akun ini. Memindahkan seluruh isinya ke subfolder membuat domain utama
+> berhenti menyajikan situs — sampai domain utamanya diganti menjadi
+> `alijazqurancenter.com` di hPanel, atau isinya dikembalikan. Kalau
+> `alijazqurancenter.com` memang dimaksudkan sebagai domain utama, berkasnya justru
+> harus tetap di `public_html` langsung, tanpa subfolder.
+
+### d. Aktifkan HTTPS
+
+**hPanel → Keamanan → SSL** → terbitkan sertifikat gratis untuk domain itu.
+Sertifikat baru bisa diterbitkan setelah DNS-nya benar-benar menunjuk ke sini.
 
 ---
 
@@ -63,7 +137,7 @@ Sesampainya di sana:
 
 ```bash
 pwd            # /home/u191793547
-ls public_html # isi website yang sekarang
+ls public_html/alijazqurancenter.com # isi website yang sekarang
 df -h .        # sisa kuota disk
 ```
 
@@ -121,7 +195,7 @@ Ada dua jalur. Pilih salah satu, jangan keduanya sekaligus.
 
 Berkas alurnya sudah tersedia di `.github/workflows/deploy.yml`.
 Setiap dorongan ke `main` akan memeriksa sintaks JavaScript lalu
-mengunggah isi repo ke `public_html` lewat FTPS.
+mengunggah isi repo ke `public_html/alijazqurancenter.com` lewat FTPS.
 
 Tambahkan tiga secret di
 **GitHub → Settings → Secrets and variables → Actions**:
@@ -144,7 +218,7 @@ disisipi pemeriksaan sebelum berkas menyentuh server.
 
 1. Repository: `https://github.com/aarefenam/kajianijaz.git`
 2. Branch: `main`
-3. Directory: `public_html` — harus **kosong** saat pertama kali dikloning
+3. Directory: `public_html/alijazqurancenter.com` — harus **kosong** saat pertama kali dikloning
 4. Setelah tercipta, salin **Webhook URL** yang diberikan
 5. Di GitHub: **Settings → Webhooks → Add webhook**, tempel URL tersebut,
    content type `application/json`, event: `push`

@@ -1,6 +1,8 @@
 # ============================================================
 # Kirim otomatis ke hosting Hostinger setiap kali main diperbarui.
 #
+# Tujuan: public_html/alijazqurancenter.com/
+#
 # Sebelum dipakai, tambahkan tiga secret di GitHub:
 #   Settings → Secrets and variables → Actions → New repository secret
 #
@@ -27,7 +29,7 @@ concurrency:
 
 jobs:
   kirim:
-    name: Unggah ke public_html
+    name: Unggah ke public_html/alijazqurancenter.com
     runs-on: ubuntu-latest
 
     steps:
@@ -50,7 +52,10 @@ jobs:
           protocol: ftps
           port: 21
           local-dir: ./
-          server-dir: public_html/
+          # Domain tambahan di Hostinger berakar di folder senama, bukan
+          # langsung di public_html. Folder ini dibuat sendiri oleh aksi
+          # bila belum ada.
+          server-dir: public_html/alijazqurancenter.com/
           # Berkas yang tidak perlu ikut ke server publik
           exclude: |
             **/.git*

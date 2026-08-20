@@ -996,6 +996,9 @@ SEED.tugas = [
 ];
 
 SEED.seo = {
+  /* Alamat situs disimpan sebagai data supaya pindah domain cukup
+     disunting dari ERP — bukan dengan menyentuh kode. */
+  domain      : 'alijazqurancenter.com',
   judulBeranda: "Kajian Al-I'jaz — Forum Kajian Tafsir & 'Ulum al-Quran",
   deskripsi   : "Forum keilmuan mahasiswa Indonesia di Kairo yang berfokus pada studi tafsir al-Quran dan 'ulum al-Quran, di bawah naungan IKPM Kairo.",
   kataKunci   : ['kajian tafsir', "ulum al-quran", 'tafsir al-quran', 'IKPM Kairo', 'mahasiswa Al-Azhar'],
