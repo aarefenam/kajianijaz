@@ -11,9 +11,9 @@
 set -euo pipefail
 
 TUJUAN="alijaz"                 # nama Host di ~/.ssh/config
-# Akar dokumen domain ini di server. Domain tambahan Hostinger tinggal
-# di folder senama di dalam public_html, bukan di public_html langsung.
-FOLDER="public_html/alijazqurancenter.com"
+# Akar dokumen domain ini. alijazqurancenter.com adalah domain utama
+# akun, jadi ia berakar di public_html langsung.
+FOLDER="public_html"
 ASAL="$(cd "$(dirname "$0")" && pwd)/"
 
 COBA=""

@@ -1,7 +1,7 @@
 # ============================================================
 # Kirim ke hosting Hostinger lewat FTPS — JALUR CADANGAN.
 #
-# Tujuan: public_html/alijazqurancenter.com/
+# Tujuan: public_html/
 #
 # Jalur yang dipakai sehari-hari adalah kebalikannya: hPanel yang
 # MENARIK dari GitHub (hPanel → Tingkat lanjut → GIT). Menjalankan
@@ -33,7 +33,7 @@ concurrency:
 
 jobs:
   kirim:
-    name: Unggah ke public_html/alijazqurancenter.com
+    name: Unggah ke public_html
     runs-on: ubuntu-latest
 
     steps:
@@ -56,10 +56,10 @@ jobs:
           protocol: ftps
           port: 21
           local-dir: ./
-          # Domain tambahan di Hostinger berakar di folder senama, bukan
-          # langsung di public_html. Folder ini dibuat sendiri oleh aksi
-          # bila belum ada.
-          server-dir: public_html/alijazqurancenter.com/
+          # alijazqurancenter.com adalah domain UTAMA akun ini, sehingga
+          # akar dokumennya public_html langsung — bukan subfolder senama.
+          # Subfolder hanya berlaku bagi domain tambahan.
+          server-dir: public_html/
           # Berkas yang tidak perlu ikut ke server publik
           exclude: |
             **/.git*

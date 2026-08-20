@@ -168,7 +168,7 @@ Sesampainya di sana:
 
 ```bash
 pwd            # /home/`USER_HOSTING`
-ls public_html/alijazqurancenter.com # isi website yang sekarang
+ls public_html # isi website yang sekarang
 df -h .        # sisa kuota disk
 ```
 
@@ -231,7 +231,7 @@ Actions. Alasannya: jalur yang dipakai sehari-hari adalah kebalikannya
 dua sumber kebenaran berebut menulis ke folder yang sama.
 
 Bila dijalankan, ia memeriksa sintaks JavaScript lalu
-mengunggah isi repo ke `public_html/alijazqurancenter.com` lewat FTPS.
+mengunggah isi repo ke `public_html` lewat FTPS.
 
 Tambahkan tiga secret di
 **GitHub → Settings → Secrets and variables → Actions**:
@@ -257,8 +257,7 @@ bukan GitHub yang mendorong ke server.
 
 1. Repository: `https://github.com/aarefenam/kajianijaz.git`
 2. Branch: `main`
-3. Directory: `public_html/alijazqurancenter.com` — harus **kosong** saat
-   pertama kali dikloning
+3. Directory: `public_html` — akar dokumen domain utama
 4. Setelah tercipta, salin **Webhook URL** yang diberikan
 5. Di GitHub: **Settings → Webhooks → Add webhook**, tempel URL tersebut,
    content type `application/json`, event: `push`
