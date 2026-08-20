@@ -1,21 +1,26 @@
 # Menyambungkan Hosting Hostinger ke GitHub & VS Code
 
-Catatan lapangan untuk `alijazqurancenter.com` di server `147.93.80.88`.
+Catatan lapangan untuk `alijazqurancenter.com`.
 
-Domainnya dibeli di **Spaceship**, servernya di **Hostinger** — jadi ada dua
-tempat yang harus disetel, dan urutannya penting. Lihat bagian 0.
+> **Repo ini publik.** Alamat IP server, nama pengguna hosting, dan port
+> SSH sengaja **tidak** ditulis di sini. Ketiganya dapat dilihat kapan
+> saja di **hPanel → Tingkat lanjut → Akses SSH**. Menuliskannya di repo
+> publik sama saja mengumumkan separuh kredensial: yang tersisa bagi
+> penyerang hanya menebak kata sandi, dan Hostinger masih menerima
+> autentikasi kata sandi di SSH.
+>
+> Di seluruh dokumen ini dipakai penanda:
+> `SERVER_IP`, `USER_HOSTING`, dan `PORT_SSH`.
 
-Hasil pemeriksaan port pada server tersebut:
+Beberapa hal yang berlaku pada paket hosting terkelola:
 
-| Port | Status | Keterangan |
-|------|--------|------------|
-| 65002 | terbuka (OpenSSH 9.9) | Port SSH Hostinger — **bukan** 22 |
-| 21 | terbuka | FTP/FTPS |
-| 22 | tersaring | Wajar, Hostinger memindahkannya ke 65002 |
+| Hal | Keterangan |
+|---|---|
+| Port SSH | Bukan 22 — Hostinger memindahkannya. Lihat hPanel. |
+| Port 21 | Terbuka untuk FTP/FTPS |
+| Hak akses | Masuk sebagai pengguna biasa, **bukan** root, terkunci di direktori rumah sendiri |
 
-Paket ini hosting terkelola, jadi Anda masuk sebagai `u191793547`,
-**bukan root**, dan terkunci di direktori rumah sendiri. Itu normal dan
-cukup untuk semua yang ada di dokumen ini.
+Itu normal dan cukup untuk semua yang ada di dokumen ini.
 
 ---
 
@@ -39,24 +44,50 @@ public_html/alijazqurancenter.com/
 Biarkan hPanel yang membuat folder itu. Membuatnya manual lebih dulu
 membuat hPanel menolak, atau menciptakan folder kedua yang tidak dipakai.
 
-### b. Arahkan nameserver di Spaceship
+### b. DNS lewat Cloudflare
 
-Di Spaceship: **Domains → alijazqurancenter.com → Nameservers → Custom DNS**
+Domain ini memakai **Cloudflare** sebagai DNS-nya, bukan nameserver
+Hostinger. Susunannya:
 
 ```
-ns1.dns-parking.com
-ns2.dns-parking.com
+Spaceship  →  nameserver Cloudflare  →  A record  →  server Hostinger
+(pendaftar)    (pengelola DNS)                        (penyaji berkas)
 ```
 
-Perambatannya biasanya 15 menit sampai beberapa jam. Periksa dengan:
+Di Spaceship, nameserver sudah diarahkan ke Cloudflare. Di Cloudflare,
+yang menentukan adalah satu **A record**:
+
+| Tipe | Nama | Isi | Proxy |
+|---|---|---|---|
+| A | `@` | `SERVER_IP` (lihat hPanel) | lihat catatan di bawah |
+| CNAME | `www` | `alijazqurancenter.com` | ikut yang di atas |
+
+Periksa hasilnya:
 
 ```bash
-dig +short NS alijazqurancenter.com
-dig +short A  alijazqurancenter.com      # semestinya 147.93.80.88
+dig +short NS alijazqurancenter.com     # harus nameserver Cloudflare
+dig +short A  alijazqurancenter.com     # harus IP Hostinger
 ```
 
-Selama masih menunjuk nameserver Spaceship, apa pun yang diunggah tidak
-akan terlihat dari domain itu — bukan karena berkasnya salah.
+#### Awan abu-abu atau awan oranye?
+
+Cloudflare punya dua mode, dan pilihannya berdampak nyata:
+
+| Mode | Artinya | Akibatnya di sini |
+|---|---|---|
+| **DNS only** (awan abu-abu) | Cloudflare hanya menerjemahkan nama; lalu lintas langsung ke Hostinger | Paling sederhana. SSL sepenuhnya diurus Hostinger. |
+| **Proxied** (awan oranye) | Lalu lintas melewati Cloudflare | Dapat singgahan dan perisai, tetapi **mode SSL wajib "Full (strict)"** |
+
+Bila memakai awan oranye dengan mode SSL **Flexible**, Cloudflare
+menyambung ke Hostinger lewat HTTP polos sementara Hostinger memaksa
+HTTPS — hasilnya pengalihan berputar tanpa henti. Setel di
+**Cloudflare → SSL/TLS → Overview → Full (strict)**, dan pastikan
+sertifikat Hostinger sudah terbit lebih dulu.
+
+Satu lagi yang mudah terlupa: dengan awan oranye, Cloudflare
+menyinggahkan berkas. Setelah menerapkan pembaruan, bersihkan
+singgahannya lewat **Caching → Configuration → Purge Everything**,
+atau perubahan tidak akan terlihat meski berkas di server sudah baru.
 
 ### c. Baru pindahkan berkasnya
 
@@ -117,9 +148,9 @@ Tambahkan ke `~/.ssh/config`:
 
 ```
 Host alijaz
-  HostName 147.93.80.88
-  User u191793547
-  Port 65002
+  HostName `SERVER_IP`
+  User `USER_HOSTING`
+  Port `PORT_SSH`
   IdentityFile ~/.ssh/id_ed25519_hostinger
   ServerAliveInterval 30
   ServerAliveCountMax 4
@@ -136,7 +167,7 @@ ssh alijaz
 Sesampainya di sana:
 
 ```bash
-pwd            # /home/u191793547
+pwd            # /home/`USER_HOSTING`
 ls public_html/alijazqurancenter.com # isi website yang sekarang
 df -h .        # sisa kuota disk
 ```
@@ -178,7 +209,7 @@ Yang bekerja andal:
 | Kebutuhan | Cara |
 |---|---|
 | Terminal di server | `ssh alijaz` langsung di terminal VS Code |
-| Sunting berkas remote | Ekstensi **SFTP** (Natizyskunk) — port 65002 |
+| Sunting berkas remote | Ekstensi **SFTP** (Natizyskunk) — port `PORT_SSH` |
 | Kirim perubahan | GitHub Actions (bagian 3) atau `./kirim.sh` |
 | Lihat log | `ssh alijaz 'tail -f ~/logs/error_log'` |
 
@@ -191,7 +222,7 @@ Hostinger — di sana Anda memang dapat root.
 
 Ada dua jalur. Pilih salah satu, jangan keduanya sekaligus.
 
-### Pilihan A — GitHub Actions (disarankan)
+### Pilihan A — GitHub Actions (mendorong lewat FTPS)
 
 Berkas alurnya sudah tersedia di `.github/workflows/deploy.yml`.
 Setiap dorongan ke `main` akan memeriksa sintaks JavaScript lalu
@@ -202,8 +233,8 @@ Tambahkan tiga secret di
 
 | Nama | Isi |
 |---|---|
-| `FTP_SERVER` | `147.93.80.88` |
-| `FTP_USERNAME` | `u191793547` |
+| `FTP_SERVER` | ``SERVER_IP`` |
+| `FTP_USERNAME` | ``USER_HOSTING`` |
 | `FTP_PASSWORD` | kata sandi FTP dari hPanel → File → Akun FTP |
 
 Kata sandi hanya hidup di GitHub Secrets — tidak pernah masuk ke kode,
@@ -212,19 +243,39 @@ tidak tampil di log, dan tidak perlu dikirimkan ke siapa pun.
 Kelebihannya: riwayat pengiriman tercatat, bisa diulang, dan bisa
 disisipi pemeriksaan sebelum berkas menyentuh server.
 
-### Pilihan B — fitur Git bawaan hPanel
+### Pilihan B — fitur Git bawaan hPanel (tarik dari GitHub)
+
+Inilah jalur yang dipakai sekarang: server yang **menarik** dari GitHub,
+bukan GitHub yang mendorong ke server.
 
 **hPanel → Tingkat lanjut → GIT**
 
 1. Repository: `https://github.com/aarefenam/kajianijaz.git`
 2. Branch: `main`
-3. Directory: `public_html/alijazqurancenter.com` — harus **kosong** saat pertama kali dikloning
+3. Directory: `public_html/alijazqurancenter.com` — harus **kosong** saat
+   pertama kali dikloning
 4. Setelah tercipta, salin **Webhook URL** yang diberikan
 5. Di GitHub: **Settings → Webhooks → Add webhook**, tempel URL tersebut,
    content type `application/json`, event: `push`
 
-Lebih sederhana, tetapi tidak ada tahap pemeriksaan dan galatnya lebih
-sulit dilacak ketika gagal.
+Sejak itu, tiap dorongan ke `main` membuat hPanel menarik versi terbaru
+sendiri.
+
+> **Kenapa `.htaccess` di repo ini penting.** Menarik repo Git ke akar web
+> berarti seluruh isinya mendarat di tempat yang dapat diakses publik —
+> termasuk folder `.git`. Tanpa penjagaan, siapa pun dapat mengunduh
+> `/.git/` dan merekonstruksi seluruh riwayat proyek. Berkas `.htaccess`
+> di akar repo menutup `.git`, `.github`, serta berkas `.md`, `.sh`,
+> `.yml`, dan `.json`. Jangan menghapusnya.
+>
+> Sesudah kloning pertama, buktikan penjagaannya bekerja:
+>
+> ```bash
+> curl -s -o /dev/null -w "%{http_code}\n" https://alijazqurancenter.com/.git/config
+> ```
+>
+> Jawaban yang benar **404** atau **403**. Bila yang keluar **200**,
+> `.htaccess` tidak terbaca — periksa apakah ia ikut terkloning.
 
 ### Pengiriman manual dari terminal
 
@@ -236,12 +287,12 @@ Untuk sekadar mengirim cepat tanpa menunggu Actions, gunakan
 ## 4. Melihat hasilnya selagi domain masih kedaluwarsa
 
 Server memakai *name-based virtual hosting*, jadi membuka
-`http://147.93.80.88` hanya menghasilkan **403** — server tidak tahu
+`http://`SERVER_IP`` hanya menghasilkan **403** — server tidak tahu
 website mana yang diminta. Selama domain belum aktif, arahkan namanya
 secara lokal di komputer Anda sendiri:
 
 ```bash
-sudo sh -c 'echo "147.93.80.88 alijazquranstudies.com www.alijazquranstudies.com" >> /etc/hosts'
+sudo sh -c 'echo "`SERVER_IP` alijazquranstudies.com www.alijazquranstudies.com" >> /etc/hosts'
 ```
 
 Setelah itu `http://alijazquranstudies.com` di peramban Anda akan menuju

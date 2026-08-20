@@ -1,0 +1,81 @@
+# ============================================================
+# Aturan server untuk Hostinger (Apache/LiteSpeed)
+# ------------------------------------------------------------
+# Berkas ini penting justru karena situs ini dipasang dengan cara
+# MENARIK repo Git ke akar web. Artinya seluruh isi repo — termasuk
+# folder .git, catatan penerapan, dan skrip kirim — ikut mendarat di
+# tempat yang dapat diakses publik. Tanpa aturan di bawah, siapa pun
+# bisa mengunduh .git/ dan merekonstruksi seluruh riwayat proyek.
+# ============================================================
+
+# ---------- 1. Tutup berkas yang bukan urusan pengunjung ----------
+# Folder .git adalah yang paling penting: sekali terbuka, seluruh
+# riwayat dan isi repo dapat diunduh utuh, bahkan bila daftar
+# direktori dimatikan.
+RedirectMatch 404 /\.git(/|$)
+RedirectMatch 404 /\.github(/|$)
+
+<FilesMatch "(^\.|\.(md|sh|yml|yaml|json|log|bak|sql|tar|gz)$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+# ---------- 2. Jangan pamerkan isi folder ----------
+Options -Indexes
+
+# ---------- 3. Jenis berkas & pengodean ----------
+AddDefaultCharset UTF-8
+<IfModule mod_mime.c>
+  AddType text/javascript            .js
+  AddType text/css                   .css
+  AddType image/svg+xml              .svg
+  AddType application/json           .webmanifest
+</IfModule>
+
+# ---------- 4. Pemampatan ----------
+# erp.js sendiri lebih dari 300 KB; dimampatkan ia tinggal sepersekian.
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ---------- 5. Umur singgahan ----------
+# Nama berkas di sini TIDAK bersidik jari (tidak ada erp.a1b2c3.js),
+# sehingga menyinggahkannya lama berarti pengunjung terus melihat versi
+# usang setelah pembaruan. HTML tidak disinggahkan sama sekali; aset
+# disinggahkan sebentar dan tetap wajib ditanyakan ulang.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html)$">
+    Header set Cache-Control "no-store, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(js|css|svg|png|jpg|jpeg|webp|ico)$">
+    Header set Cache-Control "public, max-age=3600, must-revalidate"
+  </FilesMatch>
+
+  # ---------- 6. Kepala keamanan secukupnya ----------
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ---------- 7. Halaman masuk tanpa .html ----------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # /tentang  ->  /tentang.html
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME}.html -f
+  RewriteRule ^(.+)$ $1.html [L]
+</IfModule>
+
+# Sengaja TIDAK ada ErrorDocument yang mengalihkan 404 ke beranda:
+# alamat keliru sebaiknya menjawab 404 apa adanya. Mengembalikan beranda
+# dengan status 200 membuat pranala rusak tampak sehat, dan mesin pencari
+# ikut mengindeks halaman hantu.
