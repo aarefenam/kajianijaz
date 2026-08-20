@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>Uji aturan dua kunci</title></head>
+<body>
+<pre id="hasil">belum jalan</pre>
+
+<script src="assets/js/rbac.js"></script>
+<script src="assets/js/qr.js"></script>
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/store.js"></script>
+<script>
+(async () => {
+  const baris = [];
+  const catat = (s) => baris.push(s);
+  const sandi = new URLSearchParams(location.search).get('sandi') || 'ujicoba-2026';
+  const tunggu = () => new Promise((r) => setTimeout(r, 900));
+  const dariServer = () => fetch('api/muat.php', { credentials: 'same-origin' }).then((r) => r.json());
+
+  try {
+    await Store.siap;
+
+    /* ---------- 1. PJ Media & Website menyunting draft ---------- */
+    const web = await Store.login('web@alijaz.id', sandi);
+    const taglineBaru = 'Tagline uji ' + Date.now();
+    Store.ubahDraft(web, 'situs.tagline', taglineBaru, 'cms.page.edit');
+    await tunggu();
+    let srv = await dariServer();
+    catat(`1 DRAFT   draft di server berubah : ${srv.isi.cmsDraft.situs.tagline === taglineBaru}`);
+    catat(`1 TAYANG  tayang MASIH lama       : ${srv.isi.cms.situs.tagline !== taglineBaru}`);
+
+    /* PJ Media & Website tidak boleh menayangkan sendiri. */
+    let ditolak = false;
+    try { Store.setujui(web, 'apa-saja', ''); } catch (e) { ditolak = /izin|ditemukan/i.test(e.message); }
+    const paksa = await fetch('api/simpan.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ koleksi: { cms: { isi: srv.isi.cmsDraft, versi: srv.versi.cms } } }),
+    });
+    catat(`1 KUNCI   server menolak PJ menayangkan langsung: HTTP ${paksa.status} (harus 403)`);
+
+    Store.ajukan(web, 'Uji aturan dua kunci');
+    await tunggu();
+    await Store.logout();
+
+    /* ---------- 2. Ketua menyetujui ---------- */
+    const ketua = await Store.login('ketua@alijaz.id', sandi);
+    const antre = Store.db.pengajuan.filter((p) => p.status === 'menunggu');
+    catat(`2 ANTRE   pengajuan terlihat Ketua  : ${antre.length}`);
+    Store.setujui(ketua, antre[antre.length - 1].id, 'Disetujui lewat penyisiran');
+    await tunggu();
+    srv = await dariServer();
+    catat(`2 TAYANG  tayang kini berubah      : ${srv.isi.cms.situs.tagline === taglineBaru}`);
+    catat(`2 ARSIP   versi tersimpan          : ${srv.isi.versi.length}`);
+    await Store.logout();
+
+    /* ---------- 3. Pengunjung melihatnya ---------- */
+    const publik = await fetch('api/muat.php').then((r) => r.json());
+    catat(`3 PUBLIK  pengunjung melihat perubahan: ${publik.isi.cms.situs.tagline === taglineBaru}`);
+    catat(`3 PUBLIK  draft tak ikut terbaca      : ${!('cmsDraft' in publik.isi)}`);
+  } catch (e) {
+    catat('GAGAL: ' + e.message + '\n' + e.stack);
+  }
+  document.getElementById('hasil').textContent = baris.join('\n');
+})();
+</script>
+</body>
+</html>

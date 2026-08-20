@@ -2,9 +2,10 @@
    SITE.JS — Perender website publik
    ------------------------------------------------------------
    Halaman publik TIDAK menyimpan konten di HTML. Setiap section
-   dirender dari Store.cms (versi tayang). Karena itu perubahan
-   yang disetujui di ERP langsung terlihat di sini setelah reload
-   — bahkan otomatis, lewat Store.berlangganan (sinkron antar-tab).
+   dirender dari Store.cms (versi tayang), yang kini datang dari
+   server. Karena itu perubahan yang disetujui Ketua di ERP benar-benar
+   terlihat oleh pengunjung — dulu ia hanya berlaku di peramban Ketua
+   sendiri, dan aturan dua kunci bekerja di ruang hampa.
    ============================================================ */
 
 /* ---------------- ikon (inline SVG) ---------------- */
@@ -352,7 +353,7 @@ const RENDER = {
           <div class="ang-sosmed">
             <a href="#" aria-label="Facebook">${IK.facebook}</a>
             <a href="#" aria-label="Instagram">${IK.instagram}</a>
-            <a href="mailto:${esc(u.email)}" aria-label="Email">${IK.email}</a>
+            ${u.email ? `<a href="mailto:${esc(u.email)}" aria-label="Email">${IK.email}</a>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -481,12 +482,18 @@ const RENDER = {
         </div>
       </div>
     </div></section>`);
-    sec.querySelector('.nl-form').onsubmit = (e) => {
+    sec.querySelector('.nl-form').onsubmit = async (e) => {
       e.preventDefault();
       const inp = e.target.querySelector('input');
-      const baru = Store.berlanggananNewsletter(inp.value);
-      toast(baru ? 'Terima kasih! Email Anda berhasil didaftarkan.' : 'Email ini sudah terdaftar sebelumnya.');
-      inp.value = '';
+      const tbl = e.target.querySelector('button');
+      tbl.disabled = true;
+      try {
+        const baru = await Store.berlanggananNewsletter(inp.value);
+        toast(baru ? 'Terima kasih! Email Anda berhasil didaftarkan.' : 'Email ini sudah terdaftar sebelumnya.');
+        inp.value = '';
+      } catch (err) {
+        toast(err.message || 'Pendaftaran gagal. Coba lagi sebentar lagi.');
+      } finally { tbl.disabled = false; }
     };
     return sec;
   },
@@ -521,15 +528,23 @@ const RENDER = {
       </div>
     </div></section>`);
 
-    sec.querySelector('#formKontak').onsubmit = (e) => {
+    sec.querySelector('#formKontak').onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
-      Store.kirimPesan({
-        nama: f.get('nama'), email: f.get('email'),
-        subjek: f.get('subjek'), isi: f.get('isi'),
-      });
-      e.target.reset();
-      toast('Pesan terkirim. Masuk ke kotak masuk Sekretaris di ERP.');
+      const tbl = e.target.querySelector('button[type=submit]') || e.target.querySelector('button');
+      if (tbl) tbl.disabled = true;
+      try {
+        await Store.kirimPesan({
+          nama: f.get('nama'), email: f.get('email'),
+          subjek: f.get('subjek'), isi: f.get('isi'),
+        });
+        e.target.reset();
+        toast('Pesan terkirim. Masuk ke kotak masuk Sekretaris di ERP.');
+      } catch (err) {
+        /* Jangan kosongkan formulirnya bila gagal — yang sudah diketik
+           pengunjung tidak boleh hilang hanya karena jaringan tersendat. */
+        toast(err.message || 'Pesan gagal terkirim. Coba lagi sebentar lagi.');
+      } finally { if (tbl) tbl.disabled = false; }
     };
     return sec;
   },
@@ -558,8 +573,11 @@ let tirai;
 function bukaArtikel(id) {
   const a = Store.db.artikel.find((x) => x.id === id);
   if (!a) return;
+  /* Naikkan di layar seketika, catat di server menyusul. Pembacanya
+     pengunjung yang belum masuk, jadi ia tidak menulis koleksi sendiri —
+     api/lihat.php hanya boleh menambah kolom `dilihat`. */
   a.dilihat = (a.dilihat || 0) + 1;
-  Store.simpan();
+  Store.catatBaca(id);
 
   if (!tirai) {
     tirai = el('<div class="tirai"><div class="modal-baca"></div></div>');
@@ -627,15 +645,48 @@ function render(namaHalaman, fileAktif) {
   }
 }
 
-/* Auto-render ulang bila ERP menyetujui perubahan di tab lain. */
-let terakhir = JSON.stringify(Store.cms);
+/* ============================================================
+   MULAI — dipanggil tiap halaman, menggantikan render() langsung
+   ------------------------------------------------------------
+   Isinya kini datang dari server, jadi ada jeda sebelum apa pun dapat
+   digambar. Jeda itu diakui terang-terangan lewat layar tunggu, bukan
+   disembunyikan di balik halaman kosong.
+   ============================================================ */
+async function mulai(nama, file) {
+  window.__halamanAktif = { nama, file };
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="layar-tunggu"><div class="putar"></div><p>Memuat…</p></div>`;
+
+  await Store.siap;
+
+  if (!Store.cms) {
+    app.innerHTML = `<div class="layar-tunggu">
+      <p><b>Website belum dapat ditampilkan.</b></p>
+      <p>${Store.perluPasang()
+        ? 'Data awal belum dipasang. Buka ERP untuk memasangnya sekali.'
+        : 'Sambungan ke server sedang bermasalah. Coba muat ulang sebentar lagi.'}</p>
+      ${Store.perluPasang() ? '<p><a href="erp.html">Buka ERP →</a></p>' : ''}
+    </div>`;
+    return;
+  }
+
+  render(nama, file);
+  terakhir = JSON.stringify(Store.cms);
+  sudahGambar = true;
+}
+
+/* Auto-render ulang bila ERP menyetujui perubahan. Sejak isinya dijajaki
+   dari server, ini berlaku antar-PENGGUNA — bukan sekadar antar-tab. */
+let terakhir = null;
+let sudahGambar = false;
 Store.berlangganan(() => {
+  if (!sudahGambar || !window.__halamanAktif) return;
   const kini = JSON.stringify(Store.cms);
-  if (kini !== terakhir && window.__halamanAktif) {
+  if (kini !== terakhir) {
     terakhir = kini;
     render(window.__halamanAktif.nama, window.__halamanAktif.file);
     toast('Website diperbarui dari ERP.');
   }
 });
 
-window.Situs = { render, toast, IK, el, esc, tglID, terapkanTema };
+window.Situs = { mulai, render, toast, IK, el, esc, tglID, terapkanTema };

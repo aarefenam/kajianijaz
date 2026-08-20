@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Penyisiran ERP — pasca pindah ke database</title>
+<link rel="stylesheet" href="assets/css/erp.css">
+</head>
+<body>
+<div id="erp"></div>
+<pre id="hasil">belum jalan</pre>
+
+<script src="assets/js/rbac.js"></script>
+<script src="assets/js/qr.js"></script>
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/erp.js"></script>
+<script>
+(async () => {
+  const baris = [];
+  const galatRuntime = [];
+  const catat = (s) => baris.push(s);
+  window.addEventListener('error', (e) => galatRuntime.push(`${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e) => galatRuntime.push('promise: ' + (e.reason?.message || e.reason)));
+
+  const tulis = () => { document.getElementById('hasil').textContent = baris.join('\n'); };
+
+  try {
+    await Store.siap;
+
+    /* ---------- 1. pemasangan ---------- */
+    if (!Store.perluPasang()) { catat('LEWAT pemasangan — database sudah berisi'); }
+    const sandiAwal = Store.perluPasang() ? await Store.pasang() : [];
+    catat(`PASANG  akun terbit: ${sandiAwal.length}`);
+    if (sandiAwal.length) {
+      const polos = sandiAwal.filter((x) => x.sandi === '123456');
+      catat(`PASANG  sandi seed '123456' terbawa: ${polos.length} (harus 0)`);
+    }
+
+    /* ---------- 2. sandi lama harus ditolak ---------- */
+    let ditolak = false;
+    try { await Store.login('ketua@alijaz.id', '123456'); }
+    catch (e) { ditolak = true; }
+    catat(`SANDI   '123456' ditolak: ${ditolak}`);
+
+    /* ---------- 3. sapu tiap akun ---------- */
+    const peta = {};
+    sandiAwal.forEach((x) => { peta[x.email] = x.sandi; });
+    const akun = sandiAwal.filter((x) => x.role !== 'anggota' || x.email === 'fadhlur@alijaz.id');
+
+    let totalRute = 0;
+    for (const a of akun) {
+      const u = await Store.login(a.email, peta[a.email]);
+      U = u;
+      catat(`\n=== ${a.email}  (${u.role}) ===`);
+      catat(`  wajib ganti sandi: ${Store.perluGantiSandi()}`);
+
+      /* ganti sandi seperti pengurus sungguhan, lalu lanjut */
+      await Store.gantiSandi('', 'ujicoba-2026');
+      catat(`  setelah ganti  : ${Store.perluGantiSandi()}`);
+
+      const rute2 = Object.keys(HAL).filter((r) => {
+        const m = MENU.find((x) => x.id === r);
+        return !m || bolehMenu(m);
+      });
+      let ok = 0, gagal = [];
+      for (const r of rute2) {
+        try {
+          const wadah = document.createElement('div');
+          const n = HAL[r]();
+          wadah.appendChild(n);
+          HAL[r].judul();
+          ok++;
+        } catch (e) { gagal.push(`${r}: ${e.message}`); }
+      }
+      totalRute += ok;
+      catat(`  rute tergambar : ${ok}${gagal.length ? '  GAGAL: ' + gagal.join(' | ') : ''}`);
+      await Store.logout();
+    }
+    catat(`\nTOTAL RUTE TERGAMBAR: ${totalRute}`);
+
+    /* ---------- 4. benar-benar tersimpan di server ---------- */
+    await Store.login('sekretaris@alijaz.id', 'ujicoba-2026');
+    U = Store.userAktif();
+    const jml = Store.db.surat.length;
+    Store.simpanKoleksi(U, 'surat', { nomor: 'UJI/001', kategori: 'keluar', perihal: 'Surat uji', tanggal: '2026-08-20', tujuan: 'Uji' });
+    await new Promise((r) => setTimeout(r, 900));
+    const cek = await fetch('api/muat.php', { credentials: 'same-origin' }).then((r) => r.json());
+    catat(`SIMPAN  surat di memori ${jml} -> ${Store.db.surat.length}, di server: ${cek.isi.surat.length}`);
+
+    /* ---------- 5. wewenang ditegakkan server ---------- */
+    const tolakan = await fetch('api/simpan.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ koleksi: { keuangan: { isi: [], versi: null } } }),
+    });
+    catat(`SERVER  Sekretaris menulis keuangan: HTTP ${tolakan.status} (harus 403)`);
+
+    const tolakan2 = await fetch('api/simpan.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ koleksi: { cms: { isi: {}, versi: null } } }),
+    });
+    catat(`SERVER  Sekretaris menayangkan CMS : HTTP ${tolakan2.status} (harus 403)`);
+
+    /* ---------- 6. kunci optimistis ---------- */
+    const v = cek.versi.surat;
+    const bentrok = await fetch('api/simpan.php', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ koleksi: { surat: { isi: [], versi: v - 1 } } }),
+    });
+    catat(`BENTROK versi usang ditolak    : HTTP ${bentrok.status} (harus 409)`);
+
+    /* ---------- 7. kata sandi tak pernah keluar ---------- */
+    const adaSandi = (cek.isi.users || []).some((u) => 'password' in u);
+    catat(`RAHASIA kolom password terkirim: ${adaSandi} (harus false)`);
+
+    /* ---------- 8. tulisan publik ---------- */
+    await Store.logout();
+    const publik = await fetch('api/muat.php').then((r) => r.json());
+    catat(`PUBLIK  koleksi terbaca: ${Object.keys(publik.isi).join(', ')}`);
+    catat(`PUBLIK  surel anggota bocor: ${(publik.isi.users || []).some((u) => 'email' in u)} (harus false)`);
+
+    await Store.kirimPesan({ nama: 'Pengunjung Uji', email: 'uji@contoh.id', subjek: 'Halo', isi: 'Pesan dari penyisiran.' });
+    const baru = await Store.berlanggananNewsletter('langganan-uji@contoh.id');
+    const ulang = await Store.berlanggananNewsletter('langganan-uji@contoh.id');
+    Store.catatKunjungan('beranda');
+    await new Promise((r) => setTimeout(r, 500));
+    catat(`PUBLIK  newsletter baru=${baru} ulang=${ulang} (harus true / false)`);
+
+    await Store.login('sekretaris@alijaz.id', 'ujicoba-2026');
+    const pesanUji = Store.db.pesan.filter((p) => p.nama === 'Pengunjung Uji').length;
+    const kunjungUji = Store.db.kunjungan.filter((k) => k.tgl === new Date().toISOString().slice(0, 10)).length;
+    catat(`PUBLIK  pesan masuk tersimpan: ${pesanUji}, kunjungan hari ini: ${kunjungUji}`);
+    catat(`PUBLIK  jejak audit pesan     : ${Store.db.audit.some((a) => a.aksi === 'pesan.masuk')}`);
+
+  } catch (e) {
+    catat('\nGAGAL TOTAL: ' + e.message + '\n' + e.stack);
+  }
+
+  catat(`\nGALAT RUNTIME: ${galatRuntime.length}`);
+  galatRuntime.slice(0, 12).forEach((g) => catat('  ' + g));
+  tulis();
+  document.title = 'selesai';
+})();
+</script>
+</body>
+</html>

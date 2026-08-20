@@ -1236,3 +1236,36 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
    barisnya rata dan tabelnya terbaca sebagai daftar, bukan paragraf. */
 .bd-baris .t-rapat th, .bd-baris .t-rapat td { padding-left: 10px; padding-right: 10px; }
 .bd-baris .t-rapat td:nth-child(2), .bd-baris .t-rapat td:nth-child(5) { white-space: nowrap; }
+
+/* ---------------- kartu kata sandi awal ----------------
+   Dipakai layar pemasangan dan saat anggota baru ditambahkan. Sandinya
+   hanya tampil sekali, jadi tampilannya sengaja menonjol dan mudah
+   dibaca ulang — termasuk di layar sempit. */
+.kartu-sandi {
+  border: 1px solid var(--e-garis, #DDE5DE);
+  border-radius: 12px;
+  background: #F6FAF6;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.ks-judul { font-size: 12.6px; font-weight: 800; color: #1B5E20; margin-bottom: 10px; letter-spacing: .2px; }
+.tbl-sandi { width: 100%; border-collapse: collapse; font-size: 12.8px; }
+.tbl-sandi th {
+  text-align: left; font-weight: 700; color: #55645A;
+  padding: 6px 8px; border-bottom: 1px solid #E2EAE3;
+}
+.tbl-sandi td { padding: 6px 8px; border-bottom: 1px solid #EDF3EE; }
+.tbl-sandi tr:last-child td { border-bottom: 0; }
+.tbl-sandi code, .kartu-sandi code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #fff; border: 1px solid #DDE5DE; border-radius: 6px;
+  padding: 2px 7px; letter-spacing: .6px; color: #1B5E20; font-weight: 700;
+}
+.ks-aksi { display: flex; gap: 8px; margin-top: 12px; }
+
+/* Tabelnya lebih lebar daripada kotak masuk di ponsel — biarkan ia
+   bergulir sendiri, jangan memaksa seluruh halaman ikut bergeser. */
+@media (max-width: 560px) {
+  .kartu-sandi { overflow-x: auto; }
+  .tbl-sandi { min-width: 420px; }
+}

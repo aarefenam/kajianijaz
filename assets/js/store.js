@@ -1,6 +1,21 @@
 /* ============================================================
-   STORE — Sumber data tunggal (localStorage)
+   STORE — Sumber data tunggal
    ------------------------------------------------------------
+   Data hidup di MySQL pada server, bukan lagi di localStorage.
+
+   Yang TIDAK berubah: objek `db` tetap utuh di memori, dan seluruh
+   kode lain membacanya secara sinkron seperti sebelumnya. Hanya dua
+   fungsi di berkas ini yang tahu-menahu soal jaringan — `muat()` dan
+   `kirimPerubahan()`. Itulah sebabnya perpindahan ini tidak menyentuh
+   satu pun dari 97 pembacaan `Store.db.*` di erp.js.
+
+   Cara menulisnya optimistis: perubahan langsung berlaku di memori
+   dan tergambar seketika, lalu didorong ke server sesaat kemudian.
+   Yang dikirim hanya koleksi yang benar-benar berubah — dibandingkan
+   dengan bayangan salinan terakhir yang diketahui server — masing-
+   masing beserta versinya. Bila versi di server sudah bergerak,
+   tulisan ditolak (409) dan koleksi itu dimuat ulang, bukan ditimpa.
+
    KONSEP KUNCI — pemisahan DRAFT vs LIVE:
 
      db.cms       -> versi TAYANG. Hanya ini yang dibaca website publik.
@@ -13,23 +28,14 @@
    / 'cms.rollback'. Inilah pengaman utama sistem.
    ============================================================ */
 
-const DB_KEY = 'alijaz_db_v1';
-const SESSION_KEY = 'alijaz_sesi_v1';
+/* Semua permintaan relatif, sehingga situs tetap bekerja apa adanya
+   entah di akar domain atau di subfolder. */
+const API = 'api/';
 
 /* ---------- util ---------- */
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const uid = (p = 'x') => p + Math.random().toString(36).slice(2, 9);
 const nowISO = () => new Date().toISOString();
-
-function bacaDB() {
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn('DB rusak, memuat ulang dari seed.', e);
-  }
-  return null;
-}
 
 function dbAwal() {
   const s = window.SEED;
@@ -79,23 +85,26 @@ function dbAwal() {
   };
 }
 
-/* DB yang sudah tersimpan di peramban tidak mengenal koleksi yang baru
-   ditambahkan kemudian. Tanpa penambalan ini, ERP yang pernah dibuka
-   sebelumnya akan menemukan `undefined` dan gagal menggambar halaman —
-   sementara memaksa reset akan membuang seluruh kerja pengguna. */
+/* Data yang tersimpan di server tidak mengenal koleksi yang baru
+   ditambahkan kemudian. Tanpa penambalan ini, ERP akan menemukan
+   `undefined` dan gagal menggambar halaman — sementara memaksa
+   pengisian ulang akan membuang seluruh kerja pengguna.
+
+   Yang ditambal di sini ikut terkirim ke server pada penyimpanan
+   berikutnya: muat() membandingkan bentuk sebelum dan sesudah, lalu
+   menjadwalkan pengiriman bila ada yang berubah. */
 function lengkapiDB(tersimpan) {
   if (!tersimpan) return dbAwal();
   const awal = dbAwal();
-  let kurang = false;
   Object.keys(awal).forEach((k) => {
-    if (tersimpan[k] === undefined) { tersimpan[k] = awal[k]; kurang = true; }
+    if (tersimpan[k] === undefined) tersimpan[k] = awal[k];
   });
 
   /* Arsip surat dahulu hanya mengenal `jenis: masuk|keluar`. Sekarang ia
      terbagi lima kategori. Petakan bentuk lamanya alih-alih membuangnya —
      nomor surat yang sudah terarsip tidak boleh hilang. */
   (tersimpan.surat || []).forEach((x) => {
-    if (x.kategori === undefined) { x.kategori = x.jenis === 'masuk' ? 'masuk' : 'keluar'; kurang = true; }
+    if (x.kategori === undefined) x.kategori = x.jenis === 'masuk' ? 'masuk' : 'keluar';
   });
 
   /* Absensi dahulu hanya larik id — kehadiran cuma punya dua keadaan.
@@ -109,7 +118,6 @@ function lengkapiDB(tersimpan) {
     k.notulenId = k.notulenId || '';
     if (k.ppt === undefined) k.ppt = false;
     if (k.revisi === undefined) k.revisi = false;
-    kurang = true;
   });
 
   /* Kas dahulu hanya mengenal satu `nominal`. Sekarang rupiah dan pound
@@ -123,44 +131,21 @@ function lengkapiDB(tersimpan) {
     x.sumber = x.sumber || x.kategori || '';
     x.akunId = x.akunId || 'ak1';
     delete x.nominal;
-    kurang = true;
   });
 
   /* Domain baru ditambahkan belakangan; DB lama belum mengenalnya. */
-  if (tersimpan.seo && !tersimpan.seo.domain) {
-    tersimpan.seo.domain = 'alijazqurancenter.com';
-    kurang = true;
-  }
+  if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
-  if (selaraskanAkunSeed(tersimpan)) kurang = true;
-  if (petakanRoleLama(tersimpan)) kurang = true;
+  petakanRoleLama(tersimpan);
 
-  if (kurang) { try { localStorage.setItem(DB_KEY, JSON.stringify(tersimpan)); } catch (_) {} }
+  /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
+     pengurus dari seed.js yang belum ada di DB. Itu masuk akal selagi
+     tiap peramban memegang salinannya sendiri dan bisa tertinggal versi.
+     Dengan satu database bersama ia justru berbahaya — anggota yang
+     sengaja dihapus Sekretaris akan hidup lagi pada pemuatan berikutnya.
+     Daftar akun kini urusan `api/pasang.php`, sekali di awal saja. */
+
   return tersimpan;
-}
-
-/* Menambal koleksi yang hilang saja tidak cukup: `users` sudah ada sejak
-   awal, sehingga akun demo yang ditambahkan kemudian — atau jabatan yang
-   berpindah tangan — tidak pernah sampai ke peramban yang sudah menyimpan
-   DB. Akibatnya akun baru gagal masuk, dan penugasan yang menunjuk anggota
-   baru kehilangan namanya.
-
-   Daftar akun demo adalah bagian dari kontrak seed, bukan karangan
-   pengguna. Karena itu di sini diselaraskan dua hal saja: `email` dan
-   `role` — keduanya menentukan siapa bisa masuk dan ruang kerja mana yang
-   ia lihat. Nama, foto, kata sandi, dan status dibiarkan apa adanya supaya
-   suntingan pengguna tidak hilang, dan anggota yang ditambahkan sendiri
-   (id di luar seed) tidak disentuh sama sekali. */
-function selaraskanAkunSeed(tersimpan) {
-  if (!Array.isArray(tersimpan.users)) return false;
-  let berubah = false;
-  (window.SEED.users || []).forEach((s) => {
-    const ada = tersimpan.users.find((u) => u.id === s.id);
-    if (!ada) { tersimpan.users.push(clone(s)); berubah = true; return; }
-    if (ada.email !== s.email) { ada.email = s.email; berubah = true; }
-    if (ada.role !== s.role) { ada.role = s.role; berubah = true; }
-  });
-  return berubah;
 }
 
 /* PJ Website dan PJ Media melebur jadi satu peran. Kunci lamanya masih
@@ -194,54 +179,265 @@ function petakanRoleLama(tersimpan) {
   return berubah;
 }
 
-let db = lengkapiDB(bacaDB());
+/* ============================================================
+   LAPISAN JARINGAN
+   ============================================================ */
+let db = {};                 // isi di memori — dibaca seluruh aplikasi
+let versiKoleksi = {};       // versi tiap koleksi menurut server
+let bayangan = {};           // JSON terakhir yang diketahui server
+let penggunaSesi = null;     // hasil pemeriksaan sesi di server
+let wajibGantiSandi = false;
+let antre = null;            // penunda pengiriman
+let sedangKirim = false;
+let perluKirimLagi = false;
 
-/* ---------- persistensi + pub/sub ---------- */
 const pendengar = new Set();
+const pendengarStatus = new Set();
 
-function simpan() {
-  try {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-  } catch (e) {
-    alert('Penyimpanan penuh. Kecilkan ukuran gambar yang diunggah.\n\n' + e.message);
+function beritahu() { pendengar.forEach((fn) => { try { fn(db); } catch (_) {} }); }
+function status(keadaan, pesan) {
+  pendengarStatus.forEach((fn) => { try { fn(keadaan, pesan); } catch (_) {} });
+}
+
+async function panggil(jalur, opsi = {}) {
+  const r = await fetch(API + jalur, {
+    credentials: 'same-origin',
+    headers: opsi.body ? { 'Content-Type': 'application/json' } : {},
+    ...opsi,
+  });
+  let d = {};
+  try { d = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const e = new Error(d.galat || `Server menjawab ${r.status}.`);
+    e.kode = r.status;
+    e.rinci = d;
     throw e;
   }
-  pendengar.forEach((fn) => { try { fn(db); } catch (_) {} });
-  // Sinkron antar-tab: ERP di tab A, website publik di tab B.
-  try { localStorage.setItem('alijaz_ping', String(Date.now())); } catch (_) {}
+  return d;
+}
+
+/** Potret tiap koleksi, dasar pembanding untuk mencari yang berubah. */
+function ambilBayangan(sumber) {
+  const b = {};
+  Object.keys(sumber).forEach((k) => { b[k] = JSON.stringify(sumber[k]); });
+  return b;
+}
+
+function koleksiKotor() {
+  const kotor = {};
+  Object.keys(db).forEach((k) => {
+    const kini = JSON.stringify(db[k]);
+    if (kini !== bayangan[k]) kotor[k] = kini;
+  });
+  return kotor;
+}
+
+/* ---------- memuat ---------- */
+async function muat() {
+  const d = await panggil('muat.php');
+  db = d.isi || {};
+  versiKoleksi = d.versi || {};
+  penggunaSesi = d.pengguna || null;
+  wajibGantiSandi = !!d.sandiAwal;
+
+  /* Migrasi bentuk lama tetap berlaku: data yang sudah tersimpan di
+     server pun bisa lebih tua daripada kode yang membacanya. */
+  if (penggunaSesi) {
+    const sebelum = JSON.stringify(db);
+    lengkapiDB(db);
+    bayangan = ambilBayangan(db);
+    if (JSON.stringify(db) !== sebelum) jadwalkanKirim();
+  } else {
+    bayangan = ambilBayangan(db);
+  }
+  beritahu();
+  return db;
+}
+
+/** Promise yang selesai ketika data siap dipakai. Ditunggu erp.js & site.js. */
+const siap = muat().catch((e) => {
+  if (e.rinci && e.rinci.perluPasang) { belumTerpasang = true; db = {}; return; }
+  console.error('Gagal memuat data:', e);
+  status('galat', e.message);
+  db = {};
+});
+
+/* ---------- menyimpan ---------- */
+/**
+ * Dipanggil setiap kali data berubah. Sengaja tetap sinkron supaya
+ * ~40 fungsi pengubah di bawah tidak perlu diubah satu per satu:
+ * perubahan berlaku seketika di memori, pengirimannya menyusul.
+ */
+function simpan() {
+  beritahu();
+  jadwalkanKirim();
+}
+
+function jadwalkanKirim() {
+  if (antre) clearTimeout(antre);
+  antre = setTimeout(kirimPerubahan, 250);
+}
+
+async function kirimPerubahan() {
+  antre = null;
+  if (sedangKirim) { perluKirimLagi = true; return; }
+
+  const kotor = koleksiKotor();
+  const nama = Object.keys(kotor);
+  if (!nama.length) return;
+
+  sedangKirim = true;
+  status('mengirim');
+  const muatan = {};
+  nama.forEach((k) => { muatan[k] = { isi: db[k], versi: versiKoleksi[k] ?? null }; });
+
+  try {
+    const d = await panggil('simpan.php', { method: 'POST', body: JSON.stringify({ koleksi: muatan }) });
+    Object.entries(d.versi || {}).forEach(([k, v]) => { versiKoleksi[k] = v; });
+    nama.forEach((k) => { bayangan[k] = kotor[k]; });
+    status('tersimpan');
+    if (d.sandiBaru) status('sandiBaru', d.sandiBaru);
+  } catch (e) {
+    if (e.kode === 409) {
+      /* Orang lain menulis koleksi yang sama lebih dulu. Muat ulang
+         seluruhnya lalu beri tahu — jangan menimpa pekerjaannya. */
+      status('bentrok', e.rinci?.koleksi || '');
+      await muat().catch(() => {});
+    } else if (e.kode === 401) {
+      penggunaSesi = null;
+      status('sesiHabis');
+    } else {
+      status('galat', e.message);
+      setTimeout(jadwalkanKirim, 4000);        // coba lagi
+    }
+  } finally {
+    sedangKirim = false;
+    if (perluKirimLagi) { perluKirimLagi = false; jadwalkanKirim(); }
+  }
+}
+
+/* Penundaan 250 ms itu murah bagi server, tetapi ada satu saat ia
+   berbahaya: bila tab ditutup atau ditinggalkan tepat di dalam jendela
+   itu, perubahan terakhir tak pernah terkirim — dan pengguna sudah
+   melihatnya tergambar di layar, jadi ia yakin tersimpan.
+
+   `visibilitychange` dipakai, bukan `beforeunload`: pada peramban
+   ponsel, tab yang ditinggalkan sering langsung dibekukan tanpa pernah
+   memicu beforeunload. `keepalive` menjaga permintaannya tetap berjalan
+   meski halamannya sudah pergi. */
+function paksaKirim() {
+  if (!antre || sedangKirim) return;
+  clearTimeout(antre); antre = null;
+
+  const kotor = koleksiKotor();
+  const nama = Object.keys(kotor);
+  if (!nama.length) return;
+
+  const muatan = {};
+  nama.forEach((k) => { muatan[k] = { isi: db[k], versi: versiKoleksi[k] ?? null }; });
+  try {
+    fetch(API + 'simpan.php', {
+      method: 'POST', credentials: 'same-origin', keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ koleksi: muatan }),
+    }).catch(() => {});
+    /* Bayangannya sengaja TIDAK ikut dimajukan: kalau permintaan ini
+       gagal diam-diam, koleksinya masih terhitung kotor dan akan
+       terkirim ulang saat halaman dibuka lagi. */
+  } catch (_) {}
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (document.hidden) paksaKirim(); });
+  window.addEventListener('pagehide', paksaKirim);
 }
 
 function berlangganan(fn) { pendengar.add(fn); return () => pendengar.delete(fn); }
+function berlanggananStatus(fn) { pendengarStatus.add(fn); return () => pendengarStatus.delete(fn); }
 
-// Perubahan dari tab lain -> muat ulang lalu beri tahu.
-window.addEventListener('storage', (e) => {
-  if (e.key === DB_KEY || e.key === 'alijaz_ping') {
-    const baru = bacaDB();
-    if (baru) { db = lengkapiDB(baru); pendengar.forEach((fn) => { try { fn(db); } catch (_) {} }); }
-  }
-});
+/* ---------- mengendus perubahan orang lain ----------
+   Dulu ini memakai peristiwa `storage` yang hanya menjangkau antar-tab
+   pada satu peramban. Sekarang versinya dijajaki berkala, sehingga
+   perubahan terlihat antar PENGGUNA — dan hanya selagi tab terlihat,
+   supaya tab yang menganggur tidak terus menyapa server. */
+let jajak = null;
+function mulaiJajak() {
+  if (jajak || typeof document === 'undefined') return;
+  jajak = setInterval(async () => {
+    if (document.hidden || !penggunaSesi || sedangKirim || antre) return;
+    try {
+      const d = await panggil('versi.php');
+      const berubah = Object.entries(d.versi || {})
+        .some(([k, v]) => (versiKoleksi[k] ?? 0) !== v);
+      if (berubah && !Object.keys(koleksiKotor()).length) await muat();
+    } catch (_) { /* jaringan sedang tidak bersahabat; coba lagi nanti */ }
+  }, 20000);
+}
+if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', mulaiJajak);
 
-/* ---------- sesi / autentikasi ---------- */
-function login(email, password) {
-  const u = db.users.find(
-    (x) => x.email.toLowerCase() === String(email).toLowerCase().trim() && x.password === password
-  );
-  if (!u) throw new Error('Email atau kata sandi tidak sesuai.');
-  if (u.status === 'nonaktif') throw new Error('Akun Anda dinonaktifkan. Hubungi Sekretaris.');
-  sessionStorage.setItem(SESSION_KEY, u.id);
-  catat(u, 'login', 'sesi', `${u.nama} masuk ke ERP`);
+/* ============================================================
+   SESI / AUTENTIKASI
+   ------------------------------------------------------------
+   Kata sandi tidak pernah lagi dibandingkan di peramban. Yang di sini
+   hanya bertanya dan menyimpan jawabannya; keputusannya di server,
+   pada api/masuk.php, dan penandanya sebuah cookie sesi HttpOnly yang
+   tidak dapat dibaca JavaScript.
+   ============================================================ */
+async function login(email, password) {
+  await panggil('masuk.php', { method: 'POST', body: JSON.stringify({ email, password }) });
+  await muat();                       // sekarang berhak melihat seluruh data
+  const u = userAktif();
+  if (u) { catat(u, 'login', 'sesi', `${u.nama} masuk ke ERP`); simpan(); }
   return u;
 }
 
-function logout() {
+async function logout() {
   const u = userAktif();
-  if (u) catat(u, 'logout', 'sesi', `${u.nama} keluar dari ERP`);
-  sessionStorage.removeItem(SESSION_KEY);
+  if (u) { catat(u, 'logout', 'sesi', `${u.nama} keluar dari ERP`); await kirimPerubahan(); }
+  try { await panggil('keluar.php', { method: 'POST' }); } catch (_) {}
+  penggunaSesi = null;
+  wajibGantiSandi = false;
+  await muat().catch(() => {});
 }
 
+/** Diambil dari `db` supaya suntingan profil langsung terlihat. */
 function userAktif() {
-  const id = sessionStorage.getItem(SESSION_KEY);
-  return db.users.find((u) => u.id === id) || null;
+  if (!penggunaSesi) return null;
+  return (db.users || []).find((u) => u.id === penggunaSesi.id) || penggunaSesi;
+}
+
+/** Benarkah pengguna ini masih memakai kata sandi bawaan? */
+function perluGantiSandi() { return wajibGantiSandi; }
+
+async function gantiSandi(lama, baru) {
+  const d = await panggil('sandi.php', { method: 'POST', body: JSON.stringify({ lama, baru }) });
+  if (d.versi) Object.assign(versiKoleksi, d.versi);
+  wajibGantiSandi = false;
+  const u = userAktif();
+  if (u) { catat(u, 'sandi.ganti', u.id, `${u.nama} mengganti kata sandi`); simpan(); }
+  return true;
+}
+
+/* ---------- pemasangan pertama ----------
+   Data awalnya dikirim dari seed.js, bukan disalin ke PHP: dengan begitu
+   tidak ada dua salinan data contoh yang bisa menyimpang diam-diam.
+   Server menolak bila database sudah berisi. */
+let belumTerpasang = false;
+function perluPasang() { return belumTerpasang; }
+
+async function pasang() {
+  const awal = dbAwal();
+  const d = await panggil('pasang.php', { method: 'POST', body: JSON.stringify({ isi: awal }) });
+  belumTerpasang = false;
+  await muat();
+  return d.sandiAwal || [];           // dikembalikan sekali, untuk dibagikan
+}
+
+async function kosongkanSemua(penegasan) {
+  await panggil('kosongkan.php', { method: 'POST', body: JSON.stringify({ penegasan }) });
+  penggunaSesi = null;
+  belumTerpasang = true;
+  db = {}; bayangan = {}; versiKoleksi = {};
+  beritahu();
 }
 
 /* ---------- audit log ---------- */
@@ -563,8 +759,12 @@ function simpanAnggota(user, data) {
     Object.assign(u, data);
     catat(user, 'anggota.ubah', u.id, `Memperbarui data ${u.nama}`);
   } else {
+    /* Tanpa kata sandi: server membuatkannya sendiri, sekali, dan
+       mengembalikannya untuk disampaikan kepada yang bersangkutan.
+       Sandi bawaan yang sama untuk semua orang — dulu '123456' —
+       sama saja dengan tidak punya kata sandi. */
     const baru = {
-      id: uid('u'), status: 'aktif', role: 'anggota', password: '123456',
+      id: uid('u'), status: 'aktif', role: 'anggota',
       kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'), ...data,
     };
     db.users.push(baru);
@@ -576,7 +776,12 @@ function simpanAnggota(user, data) {
 /** Pengguna menyunting akunnya sendiri. Sengaja terpisah dari
     simpanAnggota(): di sini tidak ada izin 'anggota.manage' yang
     dituntut, tetapi juga tidak ada jalan mengubah role, status,
-    atau akun orang lain. */
+    atau akun orang lain — dan api/inti.php memeriksa ulang hal itu,
+    sebab yang dikirim peramban adalah seluruh koleksi `users`.
+
+    Kata sandi TIDAK di sini. Ia satu-satunya kolom yang tak pernah
+    turun ke peramban, jadi ia juga tidak boleh naik lewat jalur ini;
+    tempatnya di gantiSandi(), yang bicara langsung ke api/sandi.php. */
 function simpanProfil(user, data) {
   const u = db.users.find((x) => x.id === user?.id);
   if (!u) throw new Error('Sesi tidak dikenali. Masuk ulang untuk melanjutkan.');
@@ -584,13 +789,10 @@ function simpanProfil(user, data) {
   if (!data.nama?.trim() || !email) throw new Error('Nama dan email wajib diisi.');
   if (db.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email))
     throw new Error('Email itu sudah dipakai akun lain.');
-  if (data.password !== undefined && String(data.password).length < 6)
-    throw new Error('Kata sandi minimal 6 karakter.');
 
   u.nama = data.nama.trim();
   u.email = data.email.trim();
   if (data.foto) u.foto = data.foto;
-  if (data.password) u.password = data.password;
   catat(u, 'akun.ubah', u.id, `${u.nama} memperbarui data akunnya`);
   simpan();
   return u;
@@ -882,39 +1084,48 @@ const KOLEKSI_MW = {
 };
 Object.assign(KOLEKSI, KOLEKSI_MW);
 
-/** Dipanggil halaman publik pada tiap pemuatan. Inilah yang membuat
-    statistik di ERP berisi angka sungguhan, bukan karangan — walau
-    lingkupnya sebatas peramban ini, sebab prototipe tak punya server. */
+/** Dipanggil halaman publik pada tiap pemuatan. Dicatat di server, jadi
+    yang terhitung kini pengunjung sungguhan — bukan sekadar berapa kali
+    satu peramban membuka halamannya sendiri. */
 const KUNJUNG_SESI = '(sesi)';
 const KUNJUNG_BARU = '(baru)';
 
 function catatKunjungan(halaman) {
   if (!halaman) return;
-  const tgl = nowISO().slice(0, 10);
-  const tambah = (h) => {
-    const baris = db.kunjungan.find((k) => k.tgl === tgl && k.halaman === h);
-    if (baris) baris.n += 1; else db.kunjungan.push({ tgl, halaman: h, n: 1 });
-  };
-  tambah(halaman);
+  const penanda = [halaman];
 
   /* Tayangan halaman dihitung tiap pemuatan; kunjungan sekali per sesi
      peramban; pengunjung baru sekali seumur peramban. Ketiganya memang
      hal yang berbeda, dan hanya dengan membedakannya angka "halaman per
-     kunjungan" dan "pengunjung baru" punya arti. */
+     kunjungan" dan "pengunjung baru" punya arti.
+
+     Penandanya masih disimpan di peramban — memang di situlah tempatnya:
+     yang perlu diingat adalah "peramban ini sudah pernah datang", dan
+     hanya peramban itu sendiri yang tahu. */
   try {
     if (!sessionStorage.getItem('alijaz_sesi_kunjung')) {
       sessionStorage.setItem('alijaz_sesi_kunjung', '1');
-      tambah(KUNJUNG_SESI);
+      penanda.push(KUNJUNG_SESI);
       if (!localStorage.getItem('alijaz_pernah')) {
         localStorage.setItem('alijaz_pernah', '1');
-        tambah(KUNJUNG_BARU);
+        penanda.push(KUNJUNG_BARU);
       }
     }
   } catch (_) {}
-  /* Simpan tanpa membangunkan pendengar: halaman publik hanya membaca,
-     dan menggambar ulang dirinya sendiri saat mencatat kunjungan justru
-     membuat tampilan berkedip tiap kali dibuka. */
-  try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch (_) {}
+
+  /* Ketiganya dikirim sekaligus: sebagai tiga permintaan terpisah mereka
+     akan saling menimpa di koleksi yang sama dan hitungannya hilang.
+
+     Kegagalannya sengaja didiamkan — statistik yang meleset satu angka
+     jauh lebih baik daripada halaman publik yang menampilkan galat. */
+  panggil('kunjung.php', { method: 'POST', body: JSON.stringify({ halaman: penanda }) })
+    .catch(() => {});
+}
+
+/** Satu hitungan baca untuk sebuah artikel, dari pengunjung publik. */
+function catatBaca(id) {
+  return panggil('lihat.php', { method: 'POST', body: JSON.stringify({ id }) })
+    .catch(() => {});
 }
 
 function centangTugas(user, id, selesai) {
@@ -933,13 +1144,10 @@ function simpanSeo(user, data) {
   simpan();
 }
 
-/** Dipanggil dari halaman publik (tanpa login) — satu-satunya tulis publik. */
-function kirimPesan(data) {
-  db.pesan.unshift({
-    id: uid('p'), tanggal: nowISO().slice(0, 10), dibaca: false, ...data,
-  });
-  catat(null, 'pesan.masuk', 'kontak', `Pesan baru dari ${data.nama} — ${data.subjek}`);
-  simpan();
+/** Dipanggil dari halaman publik (tanpa login). Pesannya disusun server
+    — pengunjung tidak menulis koleksi, ia hanya menitipkan satu pesan. */
+async function kirimPesan(data) {
+  await panggil('pesan.php', { method: 'POST', body: JSON.stringify(data) });
 }
 
 function tandaiDibaca(user, id) {
@@ -948,15 +1156,17 @@ function tandaiDibaca(user, id) {
   if (p) { p.dibaca = true; simpan(); }
 }
 
-function berlanggananNewsletter(email) {
-  if (db.langganan.includes(email)) return false;
-  db.langganan.push(email);
-  simpan();
-  return true;
+async function berlanggananNewsletter(email) {
+  const d = await panggil('langgan.php', { method: 'POST', body: JSON.stringify({ email }) });
+  return d.baru;                      // false bila alamatnya sudah terdaftar
 }
 
-/* ---------- kompresi gambar untuk unggahan ----------
-   localStorage hanya ~5MB, jadi foto dikecilkan dulu lewat canvas.
+/* ---------- unggahan gambar ----------
+   Gambar dikecilkan lebih dulu lewat canvas, lalu dikirim ke server dan
+   disimpan sebagai BERKAS — yang tersimpan di database hanya URL-nya.
+   Sebelumnya data-URI-nya ikut masuk ke dalam JSON dan menyita 44% dari
+   seluruh data; sebagai berkas, JSON tetap ramping dan gambarnya dapat
+   disinggahkan peramban.
 
    Format keluaran mengikuti format masukan, bukan selalu JPEG:
    - SVG   diteruskan apa adanya. Ia sudah ringan dan bebas skala;
@@ -965,7 +1175,7 @@ function berlanggananNewsletter(email) {
            Logo tanpa transparansi akan tampil sebagai kotak putih
            di atas header hijau.
    - Selebihnya menjadi JPEG, yang jauh lebih hemat untuk foto.        */
-function unggahGambar(file, lebarMaks = 1400, mutu = 0.82) {
+function kecilkanGambar(file, lebarMaks, mutu) {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) return reject(new Error('Berkas harus berupa gambar.'));
 
@@ -1006,11 +1216,10 @@ function unggahGambar(file, lebarMaks = 1400, mutu = 0.82) {
   });
 }
 
-function resetPabrik() {
-  localStorage.removeItem(DB_KEY);
-  sessionStorage.removeItem(SESSION_KEY);
-  db = dbAwal();
-  simpan();
+async function unggahGambar(file, lebarMaks = 1400, mutu = 0.82) {
+  const dataUri = await kecilkanGambar(file, lebarMaks, mutu);
+  const d = await panggil('unggah.php', { method: 'POST', body: JSON.stringify({ data: dataUri }) });
+  return d.url;
 }
 
 /* ---------- pembantu baca ---------- */
@@ -1022,8 +1231,10 @@ window.Store = {
   get cms() { return db.cms; },           // versi TAYANG — dibaca website publik
   get draft() { return db.cmsDraft; },    // ruang kerja — dibaca ERP
 
-  berlangganan, simpan, clone, uid,
-  login, logout, userAktif,
+  berlangganan, berlanggananStatus, simpan, kirimPerubahan, clone, uid,
+  siap, login, logout, userAktif,
+  perluGantiSandi, gantiSandi,
+  perluPasang, pasang, kosongkanSemua,
   ubahDraft, toggleSection, geserSection, resetDraft,
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
@@ -1034,9 +1245,9 @@ window.Store = {
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
-  catatKunjungan, centangTugas, simpanSeo,
+  catatKunjungan, catatBaca, centangTugas, simpanSeo,
   KUNJUNG_SESI, KUNJUNG_BARU,
   kirimPesan, tandaiDibaca, berlanggananNewsletter,
-  unggahGambar, resetPabrik, catat,
+  unggahGambar, catat,
   getUser, namaUser,
 };

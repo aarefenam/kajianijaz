@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>Uji berbagi & unggah</title></head>
+<body>
+<div id="erp"></div>
+<pre id="hasil">belum jalan</pre>
+
+<script src="assets/js/rbac.js"></script>
+<script src="assets/js/qr.js"></script>
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/store.js"></script>
+<script>
+(async () => {
+  const baris = [];
+  const catat = (s) => baris.push(s);
+  const par = new URLSearchParams(location.search);
+  const peran = par.get('sebagai') || 'ketua';
+  const sandi = par.get('sandi') || 'ujicoba-2026';
+
+  try {
+    await Store.siap;
+    const u = await Store.login(`${peran}@alijaz.id`, sandi);
+    catat(`MASUK   ${u.nama} (${u.role})`);
+    catat(`PROFIL  koleksi terbaca: ${Object.keys(Store.db).length}`);
+
+    if (par.get('tulis')) {
+      /* Sekretaris menulis; peramban lain harus melihatnya. */
+      Store.simpanKoleksi(u, 'surat', {
+        nomor: par.get('tulis'), kategori: 'keluar',
+        perihal: 'Uji berbagi antar-peramban', tanggal: '2026-08-20', tujuan: 'Uji',
+      });
+      await new Promise((r) => setTimeout(r, 900));
+      catat(`TULIS   surat ${par.get('tulis')} tersimpan (total ${Store.db.surat.length})`);
+    }
+
+    if (par.get('cari')) {
+      const ada = Store.db.surat.some((s) => s.nomor === par.get('cari'));
+      catat(`BACA    surat ${par.get('cari')} terlihat: ${ada}`);
+    }
+
+    if (par.get('unggah')) {
+      /* Gambar 4x4 piksel, cukup untuk membuktikan jalurnya. */
+      const c = document.createElement('canvas');
+      c.width = c.height = 4;
+      const cx = c.getContext('2d');
+      cx.fillStyle = '#1B5E20'; cx.fillRect(0, 0, 4, 4);
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      const file = new File([blob], 'uji.png', { type: 'image/png' });
+      const url = await Store.unggahGambar(file, 400);
+      catat(`UNGGAH  url: ${url}`);
+      const r = await fetch(url);
+      catat(`UNGGAH  berkas terbaca: HTTP ${r.status}, ${r.headers.get('content-type')}`);
+      catat(`UNGGAH  bukan data-URI: ${!url.startsWith('data:')}`);
+    }
+
+    if (par.get('sandiBaru')) {
+      /* Anggota baru: server yang membuatkan kata sandinya. */
+      let diterima = null;
+      Store.berlanggananStatus((k, m) => { if (k === 'sandiBaru') diterima = m; });
+      Store.simpanAnggota(u, {
+        nama: 'Anggota Uji Baru', email: `uji${Date.now()}@alijaz.id`, role: 'anggota',
+        status: 'aktif', angkatan: 'Angkatan XII', level: 'Tatsqif',
+        pendidikan: 'Uji', kategori: 'anggota', foto: '',
+      });
+      await new Promise((r) => setTimeout(r, 900));
+      catat(`SANDI   anggota baru menerima sandi: ${diterima ? Object.values(diterima)[0].length + ' karakter' : 'TIDAK'}`);
+    }
+  } catch (e) {
+    catat('GAGAL: ' + e.message);
+  }
+
+  document.getElementById('hasil').textContent = baris.join('\n');
+})();
+</script>
+</body>
+</html>

@@ -288,50 +288,148 @@ Untuk sekadar mengirim cepat tanpa menunggu Actions, gunakan
 
 ---
 
-## 4. Melihat hasilnya selagi domain masih kedaluwarsa
+## 4. Database MySQL — sekali pasang
 
-Server memakai *name-based virtual hosting*, jadi membuka
-`http://`SERVER_IP`` hanya menghasilkan **403** — server tidak tahu
-website mana yang diminta. Selama domain belum aktif, arahkan namanya
-secara lokal di komputer Anda sendiri:
+Sejak ERP berpindah dari `localStorage` ke database, situs ini butuh
+**MySQL dan PHP** di server. Tanpa keduanya, halaman publik hanya akan
+menampilkan "Sambungan ke server sedang bermasalah". Hostinger sudah
+menyediakan PHP 8.3; yang perlu Anda buat hanya databasenya.
 
-```bash
-sudo sh -c 'echo "`SERVER_IP` alijazquranstudies.com www.alijazquranstudies.com" >> /etc/hosts'
+### a. Buat database di hPanel
+
+**hPanel → Database → Manajemen Database MySQL → Buat Database Baru**
+
+Isi tiga hal, lalu **catat ketiganya** — halaman ini tidak akan
+menampilkan kata sandinya lagi:
+
+| Kolom | Contoh |
+|---|---|
+| Nama database | `u123456789_alijaz` |
+| Nama pengguna | `u123456789_alijaz` |
+| Kata sandi | dibuatkan otomatis — pakai tombol *Generate* |
+
+> Database di `.env.local` **tidak dipakai** — itu peninggalan server
+> lama. Buat yang baru.
+
+### b. Buat `api/config.php` di server
+
+Berkas ini **sengaja tidak ada di repo**, sebab isinya kata sandi.
+Karena Git tidak mengenalnya, `git pull` juga tidak akan menghapusnya —
+ia bertahan melewati tiap penerapan otomatis.
+
+**hPanel → File Manager → `public_html/alijazqurancenter.com/api/`**
+
+Salin `config.contoh.php` menjadi `config.php`, lalu isi:
+
+```php
+return [
+  'driver'   => 'mysql',
+  'host'     => 'localhost',
+  'database' => 'u123456789_alijaz',      // dari langkah a
+  'user'     => 'u123456789_alijaz',
+  'password' => 'KATA_SANDI_DARI_LANGKAH_A',
+  'berkas'   => __DIR__ . '/../data/uji.sqlite',   // tak dipakai di server
+  'rahasia'  => 'deretan-acak-panjang-apa-saja-32-karakter-atau-lebih',
+];
 ```
 
-Setelah itu `http://alijazquranstudies.com` di peramban Anda akan menuju
-server Hostinger, sementara pengunjung lain belum. Hapus lagi barisnya
-setelah domain benar-benar aktif:
+Tabelnya tidak perlu Anda buat sendiri — dibuat otomatis pada sambungan
+pertama.
 
-```bash
-sudo sed -i '' '/alijazquranstudies.com/d' /etc/hosts
-```
+### c. Beri izin tulis pada folder `berkas/`
 
-Catatan: HTTPS akan memunculkan peringatan sertifikat sampai domainnya
-resmi mengarah ke server dan SSL diterbitkan.
+Gambar unggahan disimpan sebagai berkas, bukan di dalam database.
+
+**File Manager → klik kanan folder `berkas` → Permissions → `755`**
+
+Bila foldernya belum ada, buat dengan nama persis `berkas`.
+
+### d. Pasang data awal — satu kali klik
+
+Buka `https://alijazqurancenter.com/erp.html`. Karena databasenya masih
+kosong, yang muncul bukan layar masuk melainkan **"Pasang data awal"**.
+
+Klik **Pasang sekarang**. Seluruh struktur website, daftar pengurus, dan
+data contoh terisi — lalu muncul **daftar kata sandi awal**.
+
+> ### Ini bagian yang paling mudah menyesal
+>
+> Kata sandi itu **hanya tampil sekali**. Setelahnya ia tersimpan dalam
+> bentuk teracak (bcrypt) dan tidak dapat dibaca lagi oleh siapa pun,
+> termasuk oleh Anda dan oleh saya.
+>
+> Klik **Unduh .csv** sebelum menutup halaman. Bagikan tiap barisnya
+> hanya kepada yang bersangkutan.
+
+Bila sandinya terlanjur hilang: masuk sebagai Ketua Umum, buka
+**Anggota**, hapus akun itu dan buat ulang — server akan menerbitkan
+kata sandi baru.
+
+### e. Tiap pengurus mengganti sandinya sendiri
+
+Saat pertama masuk, ERP tidak membuka halaman apa pun sebelum kata
+sandinya diganti. Ini disengaja: sandi awal sempat berpindah tangan
+lewat pesan, dan yang sempat terbaca orang lain tidak boleh terus
+menjadi kunci.
 
 ---
 
-## 5. Yang tetap harus dibereskan lebih dulu
+## 5. Memeriksa hasilnya
 
-Hasil pemeriksaan DNS:
+```bash
+# 1. Database tersambung? (harus menjawab JSON, bukan galat PHP)
+curl -s https://alijazqurancenter.com/api/muat.php | head -c 200
 
+# 2. Kredensial tertutup? (harus 403 atau 404 — JANGAN sampai isinya terbaca)
+curl -s -o /dev/null -w '%{http_code}\n' https://alijazqurancenter.com/api/config.php
+
+# 3. Riwayat Git tertutup? (harus 404)
+curl -s -o /dev/null -w '%{http_code}\n' https://alijazqurancenter.com/.git/config
+
+# 4. Perkakas penyisiran tertutup? (harus 404)
+curl -s -o /dev/null -w '%{http_code}\n' https://alijazqurancenter.com/uji-sapu.html
 ```
-Registrar   : GoDaddy
-Nameserver  : ns1.dns-expired.com / ns2.dns-expired.com
-A record    : 2.57.91.92          ← IP parkir, bukan server Anda
-Status      : clientRenewProhibited, clientDeleteProhibited
+
+Lalu di peramban:
+
+- Buka beranda — isinya harus tampil, bukan "Sambungan bermasalah"
+- Masuk ERP di **dua peramban berbeda** dengan dua akun berbeda; yang
+  disimpan satu orang harus terlihat oleh yang lain dalam ±20 detik
+- Ubah sesuatu di CMS, ajukan, setujui sebagai Ketua — lalu buka
+  beranda di peramban lain. Sejak pindah ke database, persetujuan itu
+  benar-benar sampai ke pengunjung.
+
+### Bila muncul "Sambungan ke server sedang bermasalah"
+
+Urutan yang paling sering menjadi sebabnya:
+
+1. `api/config.php` belum dibuat, atau kata sandinya salah ketik
+2. Nama database/pengguna kurang awalan `u123456789_`
+3. PHP mati di hPanel — **hPanel → Lanjutan → Konfigurasi PHP**
+4. Folder `berkas/` belum dapat ditulis (ini hanya menggagalkan unggah
+   gambar, bukan seluruh situs)
+
+Pesan galat aslinya ada di **hPanel → Lanjutan → Log Galat**; ia sengaja
+tidak dikirim ke peramban, sebab memuat nama database dan pengguna.
+
+---
+
+## 6. Menguji di komputer sendiri sebelum menyentuh yang hidup
+
+Tidak perlu MySQL. PHP membawa SQLite:
+
+```bash
+cp api/config.contoh.php api/config.php   # lalu ubah driver menjadi 'sqlite'
+php -S 127.0.0.1:8000 -t .
 ```
 
-Domainnya kedaluwarsa dan sedang diparkir GoDaddy. Selama ini belum
-dibereskan, semua langkah di atas hanya berlaku untuk Anda sendiri lewat
-berkas `hosts`; pengunjung belum bisa mengaksesnya.
+Buka `http://127.0.0.1:8000/erp.html`, pasang data awal, dan pakailah
+seperti biasa. Berkas `api/config.php` dan `data/` sudah masuk
+`.gitignore`, jadi yang setempat tidak akan pernah ikut terkirim.
 
-Urutannya:
+Penyisiran otomatis:
 
-1. Perpanjang domain di GoDaddy — periksa apakah sudah masuk masa
-   *redemption*, sebab biayanya berbeda dan ada tenggatnya
-2. Ubah nameserver ke `ns1.dns-parking.com` dan `ns2.dns-parking.com`
-3. Tunggu propagasi (biasanya 1–24 jam), pantau dengan
-   `dig +short NS alijazquranstudies.com`
-4. Terbitkan SSL lewat **hPanel → Keamanan → SSL**
+```bash
+php uji/rbac-setara.php      # matriks wewenang server = peramban?
+open http://127.0.0.1:8000/uji-sapu.html
+```

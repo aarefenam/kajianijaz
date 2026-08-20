@@ -26,3 +26,7 @@ node_modules/
 # ke internet ada di tangan pengurus, bukan otomatis.
 # Hapus baris di bawah bila memang ingin ikut dipublikasikan.
 *.pdf
+data/
+api/config.php
+berkas/*
+!berkas/.gitkeep

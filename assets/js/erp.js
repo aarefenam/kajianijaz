@@ -163,6 +163,16 @@ function aman(fn) {
   catch (e) { toast(e.message, true); return false; }
 }
 
+/** Sama, untuk aksi yang menunggu server — masuk, ganti sandi, unggah.
+    Tombolnya dimatikan selama menunggu supaya tak terkirim dua kali. */
+async function amanTunggu(tombol, fn) {
+  const labelAsli = tombol?.textContent;
+  if (tombol) { tombol.disabled = true; tombol.textContent = 'Mohon tunggu…'; }
+  try { return await fn(); }
+  catch (e) { toast(e.message, true); return null; }
+  finally { if (tombol) { tombol.disabled = false; tombol.textContent = labelAsli; } }
+}
+
 /* ---------------- modal ---------------- */
 let tirai;
 function modal({ judul, isi, kaki, lebar }) {
@@ -375,12 +385,6 @@ const menuTerlipat = () => MENU.filter((m) =>
    LAYAR LOGIN
    ============================================================ */
 function layarLogin() {
-  /* Diturunkan dari matriks peran, bukan daftar tetap: peran yang kelak
-     ditambahkan di rbac.js langsung muncul di sini, sehingga akun demonya
-     tidak pernah lagi tertinggal tanpa pintu masuk. */
-  const akun = Object.keys(RBAC.ROLES)
-    .map((r) => Store.db.users.find((u) => u.role === r)).filter(Boolean);
-
   const n = el(`<div class="layar-login">
     <div class="login-kiri">
       <div class="login-merek">
@@ -390,12 +394,12 @@ function layarLogin() {
       <h1>Satu sistem untuk website<br>dan operasional kajian.</h1>
       <p>Kelola konten website, karya tulis ilmiah, jadwal kajian, keanggotaan, dan keuangan dalam satu tempat — dengan pembagian wewenang yang jelas.</p>
       <div class="demo-akun">
-        <div class="demo-judul">Akun demo — klik untuk mengisi otomatis</div>
-        ${akun.map((u) => `<button class="demo-baris" data-mail="${esc(u.email)}">
-          <span class="demo-titik" style="background:${RBAC.roleColor(u.role)}"></span>
-          <span><span class="demo-nama">${esc(RBAC.roleLabel(u.role))}</span></span>
-          <span class="demo-mail">${esc(u.email)}</span>
-        </button>`).join('')}
+        <div class="demo-judul">Wewenang per jabatan</div>
+        ${Object.keys(RBAC.ROLES).map((r) => `<div class="demo-baris" style="cursor:default">
+          <span class="demo-titik" style="background:${RBAC.roleColor(r)}"></span>
+          <span><span class="demo-nama">${esc(RBAC.roleLabel(r))}</span></span>
+          <span class="demo-mail">${RBAC.ROLES[r].length} wewenang</span>
+        </div>`).join('')}
       </div>
     </div>
     <div class="login-kanan"><div class="kotak-login">
@@ -403,28 +407,133 @@ function layarLogin() {
       <p class="sub">Gunakan akun yang diberikan Sekretaris.</p>
       <form id="formLogin">
         <div class="grup"><label>Alamat Email</label><input name="email" type="email" required placeholder="nama@alijaz.id" autocomplete="username"></div>
-        <div class="grup"><label>Kata Sandi</label><input name="password" type="password" required value="123456" autocomplete="current-password"></div>
+        <div class="grup"><label>Kata Sandi</label><input name="password" type="password" required autocomplete="current-password"></div>
         <button class="btn btn-lime" style="width:100%;padding:13px" type="submit">Masuk</button>
       </form>
       <p style="font-size:12.4px;color:var(--e-abu);margin-top:20px;text-align:center">
-        Kata sandi seluruh akun demo: <b>123456</b><br>
+        Lupa kata sandi? Hubungi Sekretaris untuk penyetelan ulang.<br>
         <a href="index.html" style="color:var(--e-hijau);font-weight:700">← Kembali ke website</a>
       </p>
     </div></div>
   </div>`);
 
-  n.querySelectorAll('.demo-baris').forEach((b) => {
-    b.onclick = () => { n.querySelector('[name=email]').value = b.dataset.mail; n.querySelector('[name=password]').value = '123456'; };
-  });
-  n.querySelector('#formLogin').onsubmit = (e) => {
+  n.querySelector('#formLogin').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
-    aman(() => {
-      U = Store.login(f.get('email'), f.get('password'));
-      rute = 'dasbor';
-      gambar();
-      toast(`Selamat datang, ${U.nama.split(' ').slice(-1)[0]}.`);
-    });
+    const u = await amanTunggu(e.target.querySelector('button[type=submit]'),
+      () => Store.login(f.get('email'), f.get('password')));
+    if (!u) return;
+    U = u;
+    rute = 'dasbor';
+    gambar();
+    toast(`Selamat datang, ${U.nama.split(' ').slice(-1)[0]}.`);
+  };
+  return n;
+}
+
+/* ============================================================
+   LAYAR PEMASANGAN
+   ------------------------------------------------------------
+   Muncul sekali saja: ketika database masih kosong. Data awalnya
+   dikirim dari seed.js, dan server menolak bila sudah berisi —
+   sehingga tombol ini tidak dapat menimpa data yang sudah dipakai.
+   ============================================================ */
+function layarPasang() {
+  const n = el(`<div class="layar-login">
+    <div class="login-kanan" style="grid-column:1/-1"><div class="kotak-login" style="max-width:560px">
+      <h2>Pasang data awal</h2>
+      <p class="sub">Database sudah tersambung, tetapi masih kosong. Sekali klik, seluruh
+        struktur website, daftar pengurus, dan data contoh akan diisikan.</p>
+      <div id="hasilPasang"></div>
+      <button class="btn btn-lime" style="width:100%;padding:13px" id="btnPasang">Pasang sekarang</button>
+      <p style="font-size:12.4px;color:var(--e-abu);margin-top:18px;line-height:1.7">
+        Tiap pengurus akan menerima <b>kata sandi awal sekali pakai</b>. Sandinya
+        ditampilkan satu kali di layar ini — salin dan bagikan sebelum menutup halaman,
+        sebab tersimpan dalam bentuk teracak dan tidak dapat dilihat lagi.
+      </p>
+    </div></div>
+  </div>`);
+
+  n.querySelector('#btnPasang').onclick = async (e) => {
+    const daftar = await amanTunggu(e.target, () => Store.pasang());
+    if (!daftar) return;
+    tampilkanSandiAwal(n.querySelector('#hasilPasang'), daftar, n.querySelector('#btnPasang'));
+  };
+  return n;
+}
+
+/** Kata sandi awal ditampilkan sekali — dengan jalan menyalin & mengunduh,
+    sebab menyalin dua belas baris satu per satu adalah undangan bagi salah
+    ketik, dan salah ketik di sini berarti akun yang tak dapat dibuka. */
+function tampilkanSandiAwal(wadah, daftar, tombol) {
+  const teks = daftar.map((x) => `${x.nama}\t${x.email}\t${x.sandi}`).join('\n');
+  wadah.innerHTML = `
+    <div class="kartu-sandi">
+      <div class="ks-judul">Kata sandi awal — ditampilkan sekali</div>
+      <table class="tbl-sandi">
+        <thead><tr><th>Nama</th><th>Email</th><th>Sandi awal</th></tr></thead>
+        <tbody>${daftar.map((x) => `<tr>
+          <td>${esc(x.nama)}</td><td>${esc(x.email)}</td><td><code>${esc(x.sandi)}</code></td>
+        </tr>`).join('')}</tbody>
+      </table>
+      <div class="ks-aksi">
+        <button class="btn btn-garis" data-salin>Salin semua</button>
+        <button class="btn btn-garis" data-unduh>Unduh .csv</button>
+      </div>
+    </div>`;
+  wadah.querySelector('[data-salin]').onclick = () => {
+    navigator.clipboard.writeText(teks).then(() => toast('Disalin ke papan klip.'),
+      () => toast('Peramban menolak menyalin. Salin manual dari tabel.', true));
+  };
+  wadah.querySelector('[data-unduh]').onclick = () => {
+    const csv = 'Nama,Email,Role,Sandi Awal\n' +
+      daftar.map((x) => [x.nama, x.email, x.role, x.sandi].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'sandi-awal-alijaz.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  tombol.textContent = 'Lanjut ke halaman masuk';
+  tombol.onclick = () => gambar();
+}
+
+/* ============================================================
+   GANTI SANDI WAJIB
+   ------------------------------------------------------------
+   Selama kata sandinya masih yang dibagikan Sekretaris, tak ada satu
+   pun halaman ERP yang terbuka. Bukan sekadar anjuran: sandi awal
+   sempat berpindah tangan lewat pesan, dan yang sempat terbaca orang
+   lain tidak boleh terus menjadi kunci.
+   ============================================================ */
+function layarGantiSandi() {
+  const n = el(`<div class="layar-login">
+    <div class="login-kanan" style="grid-column:1/-1"><div class="kotak-login">
+      <h2>Ganti kata sandi</h2>
+      <p class="sub">Anda masih memakai kata sandi awal. Tentukan sandi Anda sendiri
+        sebelum melanjutkan.</p>
+      <form id="formSandi">
+        <div class="grup"><label>Kata Sandi Baru</label>
+          <input name="baru" type="password" required minlength="8" autocomplete="new-password"></div>
+        <div class="grup"><label>Ulangi Kata Sandi Baru</label>
+          <input name="ulang" type="password" required minlength="8" autocomplete="new-password"></div>
+        <button class="btn btn-lime" style="width:100%;padding:13px" type="submit">Simpan &amp; lanjutkan</button>
+      </form>
+      <p style="font-size:12.4px;color:var(--e-abu);margin-top:18px;text-align:center">
+        Minimal 8 karakter.
+      </p>
+    </div></div>
+  </div>`);
+
+  n.querySelector('#formSandi').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    if (f.get('baru') !== f.get('ulang')) return toast('Kedua kata sandi belum sama.', true);
+    const ok = await amanTunggu(e.target.querySelector('button[type=submit]'),
+      () => Store.gantiSandi('', f.get('baru')));
+    if (!ok) return;
+    gambar();
+    toast('Kata sandi diperbarui.');
   };
   return n;
 }
@@ -559,7 +668,8 @@ function kerangka() {
     };
   });
   n.querySelectorAll('.sb-anak button').forEach((b) => { b.onclick = () => kunjungi(b.dataset.rute); });
-  n.querySelector('#btnKeluar').onclick = () => konfirmasi('Keluar dari ERP', 'Anda yakin ingin mengakhiri sesi?', () => { Store.logout(); U = null; gambar(); }, 'Keluar');
+  n.querySelector('#btnKeluar').onclick = () => konfirmasi('Keluar dari ERP', 'Anda yakin ingin mengakhiri sesi?',
+    async () => { await Store.logout(); U = null; rute = 'dasbor'; gambar(); }, 'Keluar');
   n.querySelector('#btnSidebar').onclick = () => n.querySelector('#sidebar').classList.toggle('buka');
   return n;
 }
@@ -3063,12 +3173,24 @@ HAL.akun = () => {
         <div class="grup"><label>Nama Lengkap</label><input id="an" value="${esc(U.nama)}"></div>
         <div class="grup"><label>Email</label><input id="ae" type="email" value="${esc(U.email)}"></div>
       </div>
-      <div class="grid-form">
-        <div class="grup"><label>Kata Sandi Baru</label><input id="ap" type="password" placeholder="Kosongkan bila tidak diubah">
-          <div class="bantu">Minimal 6 karakter.</div></div>
-        <div class="grup"><label>Ulangi Kata Sandi Baru</label><input id="ap2" type="password" placeholder="Ulangi kata sandi"></div>
-      </div>
       <button class="btn btn-lime" id="simpanAkun">${I.cek} Simpan Perubahan</button>
+    </div></div>`);
+
+  /* Kata sandi terpisah dari formulir profil, sebab jalurnya memang lain:
+     ia satu-satunya hal di halaman ini yang tidak pernah singgah di data
+     yang dikirim peramban. Yang lama ditanyakan supaya sesi yang tertinggal
+     terbuka di komputer bersama tidak dapat dipakai mengunci pemiliknya. */
+  const kartuSandi = el(`<div class="kartu" style="margin-top:16px">
+    <div class="kartu-kepala"><h3>Kata Sandi</h3></div>
+    <div class="panel-isi">
+      <div class="grup" style="max-width:340px"><label>Kata Sandi Saat Ini</label>
+        <input id="sl" type="password" autocomplete="current-password"></div>
+      <div class="grid-form">
+        <div class="grup"><label>Kata Sandi Baru</label><input id="ap" type="password" autocomplete="new-password">
+          <div class="bantu">Minimal 8 karakter.</div></div>
+        <div class="grup"><label>Ulangi Kata Sandi Baru</label><input id="ap2" type="password" autocomplete="new-password"></div>
+      </div>
+      <button class="btn btn-garis" id="simpanSandi">${I.cek} Ganti Kata Sandi</button>
     </div></div>`);
 
   const inp = kartu.querySelector('[data-file]');
@@ -3081,19 +3203,28 @@ HAL.akun = () => {
 
   kartu.querySelector('#simpanAkun').onclick = () => {
     const g = (id) => kartu.querySelector('#' + id).value;
-    const nama = g('an').trim(), email = g('ae').trim(), p1 = g('ap'), p2 = g('ap2');
+    const nama = g('an').trim(), email = g('ae').trim();
     if (!nama || !email) return toast('Nama dan email wajib diisi.', true);
-    if (p1 || p2) {
-      if (p1 !== p2) return toast('Kedua kata sandi tidak sama.', true);
-      if (p1.length < 6) return toast('Kata sandi minimal 6 karakter.', true);
-    }
     aman(() => {
-      Store.simpanProfil(U, { nama, email, foto, password: p1 || undefined });
+      Store.simpanProfil(U, { nama, email, foto });
       toast('Perubahan akun tersimpan.'); gambar();
     });
   };
 
+  kartuSandi.querySelector('#simpanSandi').onclick = async (e) => {
+    const g = (id) => kartuSandi.querySelector('#' + id).value;
+    const lama = g('sl'), p1 = g('ap'), p2 = g('ap2');
+    if (!lama) return toast('Isi kata sandi Anda saat ini.', true);
+    if (p1 !== p2) return toast('Kedua kata sandi tidak sama.', true);
+    if (p1.length < 8) return toast('Kata sandi minimal 8 karakter.', true);
+    const ok = await amanTunggu(e.target, () => Store.gantiSandi(lama, p1));
+    if (!ok) return;
+    toast('Kata sandi diperbarui.');
+    gambar();
+  };
+
   box.appendChild(kartu);
+  box.appendChild(kartuSandi);
   return box;
 };
 HAL.akun.judul = () => ['Pengaturan Akun', 'Identitas, foto, dan kata sandi Anda sendiri.'];
@@ -5951,9 +6082,15 @@ HAL.pengaturan.judul = () => {
 function gambar() {
   const app = document.getElementById('erp');
   app.innerHTML = '';
+
+  /* Sebelum data ada, tak ada logo maupun tema yang dapat dibaca. */
+  if (Store.perluPasang()) { app.appendChild(layarPasang()); return; }
+  if (!Store.cms) { app.appendChild(layarGagal()); return; }
+
   terapkanFaviconErp();
 
   if (!U) { app.appendChild(layarLogin()); return; }
+  if (Store.perluGantiSandi()) { app.appendChild(layarGantiSandi()); return; }
 
   const entri = MENU.find((m) => m.id === rute);
   if (entri && !bolehMenu(entri)) rute = 'dasbor';   // penjaga rute
@@ -5966,13 +6103,60 @@ function gambar() {
   app.querySelector('#isiHal').appendChild(HAL[rute]());
 }
 
-/* ---------------- mulai ---------------- */
-U = Store.userAktif();
-if (location.hash) rute = location.hash.slice(1);
-window.addEventListener('hashchange', () => { const r = location.hash.slice(1); if (r && r !== rute) { rute = r; gambar(); } });
-gambar();
+/* ---------------- layar gagal ---------------- */
+function layarGagal() {
+  return el(`<div class="layar-login">
+    <div class="login-kanan" style="grid-column:1/-1"><div class="kotak-login">
+      <h2>Tidak dapat memuat data</h2>
+      <p class="sub">Sambungan ke server sedang bermasalah, atau <code>api/config.php</code>
+        belum terpasang. Coba muat ulang halaman sebentar lagi.</p>
+      <button class="btn btn-lime" style="width:100%;padding:13px"
+        onclick="location.reload()">Muat ulang</button>
+    </div></div>
+  </div>`);
+}
 
-/* Segarkan lonceng bila ada perubahan dari tab lain. */
+/* ---------------- mulai ----------------
+   Data datang dari server, jadi tak ada yang dapat digambar sebelum ia
+   tiba. Menggambar lebih dulu hanya akan memampangkan panel kosong yang
+   sekejap kemudian berganti. */
+(async () => {
+  await Store.siap;
+  U = Store.userAktif();
+  if (location.hash) rute = location.hash.slice(1);
+  window.addEventListener('hashchange', () => { const r = location.hash.slice(1); if (r && r !== rute) { rute = r; gambar(); } });
+  gambar();
+})();
+
+/* ---------------- kabar dari lapisan penyimpanan ----------------
+   Penyimpanan kini berlangsung di latar. Diamnya penyimpanan yang gagal
+   adalah hal terburuk yang bisa terjadi pada sistem seperti ini —
+   pengguna mengira pekerjaannya tersimpan padahal tidak. */
+Store.berlanggananStatus((keadaan, muatan) => {
+  if (keadaan === 'bentrok') {
+    toast('Data ini baru saja diubah pengurus lain. Layar disegarkan — periksa kembali sebelum menyimpan ulang.', true);
+    gambar();
+  } else if (keadaan === 'sesiHabis') {
+    U = null;
+    toast('Sesi Anda berakhir. Silakan masuk kembali.', true);
+    gambar();
+  } else if (keadaan === 'galat') {
+    toast(`Perubahan belum tersimpan: ${muatan} Mencoba lagi…`, true);
+  } else if (keadaan === 'sandiBaru') {
+    /* Anggota baru memperoleh kata sandi dari server, sekali saja. */
+    Object.values(muatan).forEach((sandi) => {
+      modal({
+        judul: 'Kata sandi awal anggota baru',
+        isi: `<p style="margin:0 0 14px;font-size:14px;color:#44534A">Sampaikan kata sandi ini kepada
+              yang bersangkutan. Ia akan diminta menggantinya saat pertama masuk, dan sandi ini
+              <b>tidak dapat dilihat lagi</b> setelah jendela ini ditutup.</p>
+              <div class="kartu-sandi"><code style="font-size:19px;letter-spacing:1px">${esc(sandi)}</code></div>`,
+      });
+    });
+  }
+});
+
+/* Segarkan lonceng bila ada perubahan dari pengurus lain. */
 Store.berlangganan(() => {
   if (!U) return;
   document.querySelectorAll('.sb-item').forEach((b) => {

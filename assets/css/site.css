@@ -642,3 +642,29 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   .pita-kutipan { padding: 30px 24px; }
   .merek-nama { font-size: 25px; }
 }
+
+/* ---------------- layar tunggu ----------------
+   Isi halaman datang dari server, jadi ada jeda sebelum apa pun dapat
+   digambar. Jeda itu ditampilkan apa adanya — halaman yang kosong
+   beberapa saat lebih membingungkan daripada satu baris "Memuat". */
+.layar-tunggu {
+  min-height: 62vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px; padding: 40px 24px;
+  text-align: center; color: #55645A; font-size: 14.5px;
+}
+.layar-tunggu p { margin: 0; max-width: 420px; line-height: 1.65; }
+.layar-tunggu a { color: #1B5E20; font-weight: 700; }
+.layar-tunggu .putar {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 3px solid rgba(27,94,32,.16);
+  border-top-color: #1B5E20;
+  animation: berputar .8s linear infinite;
+}
+@keyframes berputar { to { transform: rotate(360deg); } }
+
+/* Yang tak tahan gerak tetap melihat penandanya, hanya tidak berputar. */
+@media (prefers-reduced-motion: reduce) {
+  .layar-tunggu .putar { animation: none; }
+}
