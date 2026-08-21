@@ -21,9 +21,56 @@ if (isset($semua['isi']['users']) && is_array($semua['isi']['users'])) {
 
    Keuangan, surat, pesan masuk, presensi, dan jejak audit tidak termasuk. */
 if (!$u) {
-  $publik = ['cms', 'artikel', 'seo', 'users'];
+  $publik = ['cms', 'artikel', 'seo', 'users', 'kajian', 'video', 'buku', 'event'];
   $semua['isi'] = array_intersect_key($semua['isi'], array_flip($publik));
   $semua['versi'] = array_intersect_key($semua['versi'], array_flip($publik));
+
+  /* Empat koleksi berikut adalah ruang kerja pengurus, bukan halaman
+     publik: di dalamnya ada presensi, notulensi, anggaran, dan nama
+     penanggung jawab tiap tahap. Yang boleh keluar hanya baris yang
+     memang sudah tayang, dan hanya kolom yang memang dipampangkan di
+     kartunya. Menyaring di sini, bukan di peramban — yang di peramban
+     hanya menyembunyikan, sedangkan datanya tetap terkirim. */
+  $saring = function (array $baris, array $kolom, ?callable $lolos) {
+    $hasil = [];
+    foreach ($baris as $x) {
+      if (!is_array($x)) continue;
+      if ($lolos && !$lolos($x)) continue;
+      $hasil[] = array_intersect_key($x, array_flip($kolom));
+    }
+    return $hasil;
+  };
+
+  $aturan = [
+    /* Jadwal kajian memang untuk diketahui umum — tetapi presensi,
+       notulensi, dan siapa notulennya jelas bukan. */
+    'kajian' => [
+      ['id', 'judul', 'jenis', 'angkatan', 'level', 'tanggal', 'jam',
+       'tempat', 'pemakalahId', 'moderatorId', 'status', 'materi'],
+      null,
+    ],
+    /* Hanya video yang benar-benar sudah tayang. Yang berstatus
+       'editing' atau 'dijadwalkan' belum tentu layak dilihat. */
+    'video' => [
+      ['id', 'judul', 'platform', 'tanggal', 'durasi', 'tautan', 'thumb'],
+      fn($x) => ($x['status'] ?? '') === 'terbit',
+    ],
+    /* Buku: judul dan ringkasannya saja. Modal, honor, timeline, dan
+       daftar penanggung jawab tiap tahap tidak ikut. */
+    'buku' => [
+      ['id', 'judul', 'ringkas', 'tahap', 'status', 'targetTerbit'],
+      fn($x) => ($x['status'] ?? '') !== 'arsip',
+    ],
+    'event' => [
+      ['id', 'judul', 'tanggal', 'jam', 'lokasi', 'ket'],
+      fn($x) => ($x['status'] ?? '') === 'terbit',
+    ],
+  ];
+
+  foreach ($aturan as $nama => [$kolom, $lolos]) {
+    if (!isset($semua['isi'][$nama]) || !is_array($semua['isi'][$nama])) continue;
+    $semua['isi'][$nama] = $saring($semua['isi'][$nama], $kolom, $lolos);
+  }
 
   /* Anggota tampil di halaman publik, tetapi hanya sebatas yang memang
      dipampangkan di kartunya. Alamat surel sengaja TIDAK ikut: surel

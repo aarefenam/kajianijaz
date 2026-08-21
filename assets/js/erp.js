@@ -796,13 +796,17 @@ const dasborUmum = () => {
    EDITOR CMS — generik berdasarkan bentuk data
    ============================================================ */
 const LABEL = {
-  arab: 'Teks Arab (kaligrafi)', skrip: 'Teks Skrip (tulisan tangan)', judul: 'Judul', subjudul: 'Sub Judul',
+  skrip: 'Teks Skrip (tulisan tangan)', judul: 'Judul', subjudul: 'Sub Judul',
+  cariPetunjuk: 'Teks Bayangan Kolom Cari',
+  tombol2Teks: 'Label Tombol Kedua', tombol2Link: 'Tautan Tombol Kedua',
+  lencana: 'Teks Lencana Melingkar',
+  sumber: 'Sumber Isi', tema: 'Tema Panel', jumlah: 'Jumlah Ditampilkan',
   tombolTeks: 'Label Tombol', tombolLink: 'Tautan Tombol', gambar: 'Gambar', nomor: 'Nomor Section',
   paragraf: 'Paragraf', intro: 'Paragraf Pembuka', visi: 'Isi Visi', misi: 'Poin Misi', butir: 'Butir',
   teks: 'Isi Teks', poin: 'Poin', level: 'Daftar Level', label: 'Label', penutup: 'Kalimat Penutup',
   subJudul: 'Sub Judul', subJudul2: 'Sub Judul Kedua', kutipan: 'Isi Kutipan', sumber: 'Sumber Kutipan',
   nlJudul: 'Judul Newsletter', nlTeks: 'Teks Newsletter', kategori: 'Daftar Kategori',
-  perHalaman: 'Artikel per Halaman', durasiAnimasi: 'Durasi Animasi (detik)', posisiGambar: 'Posisi Gambar',
+  perHalaman: 'Artikel per Halaman', posisiGambar: 'Posisi Gambar',
   nama: 'Nama', jabatan: 'Daftar Jabatan', t: 'Pertanyaan', j: 'Jawaban', subjek: 'Pilihan Subjek',
   tampilkanFilter: 'Tampilkan Filter', tema: 'Tema Warna', ikon: 'Ikon',
   logo: 'Lambang Organisasi', favicon: 'Ikon Tab — Website', faviconErp: 'Ikon Tab — ERP',
@@ -814,7 +818,7 @@ const BANTU = {
   logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
   favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
   faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
-  masjid    : 'Muncul dari bawah pada sisi kanan hero. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
+  masjid    : 'Sosok yang berdiri di tengah hero, di depan judul raksasa. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
 };
 
 /* Batas lebar unggahan per jenis medan. Logo dan ikon tidak perlu besar;
@@ -3067,9 +3071,11 @@ HAL['kategori-artikel'] = () => {
   const bisa = RBAC.can(U, 'cms.kategori.edit');
 
   const box = el(`<div><div class="notis notis-kuning">${I.perisai}<div>
-    <b>Kategori adalah bagian dari halaman publik</b>
-    Daftar ini menjadi filter di halaman Artikel, sehingga perubahannya masuk ke draft
-    dan baru tayang setelah disetujui Ketua Umum — sama seperti perubahan website lainnya.
+    <b>Kategori tampil di dua tempat sekaligus</b>
+    Daftar ini menjadi filter di halaman Artikel <i>dan</i> sidebar pada hero beranda —
+    menambah satu kategori di sini langsung menambahkannya di keduanya. Karena ia bagian
+    dari halaman publik, perubahannya masuk ke draft dan baru tayang setelah disetujui
+    Ketua Umum, sama seperti perubahan website lainnya.
   </div></div></div>`);
   box.appendChild(el('<div id="barDraft"></div>'));
   box.querySelector('#barDraft').appendChild(barDraft());
@@ -6142,6 +6148,16 @@ Store.berlanggananStatus((keadaan, muatan) => {
     gambar();
   } else if (keadaan === 'galat') {
     toast(`Perubahan belum tersimpan: ${muatan} Mencoba lagi…`, true);
+  } else if (keadaan === 'ditolak') {
+    /* Bukan gangguan sesaat: server menolak wewenangnya. Ditampilkan
+       sebagai modal, bukan toast, sebab perubahannya benar-benar hilang
+       dan itu terlalu penting untuk lewat begitu saja dalam empat detik. */
+    modal({
+      judul: 'Perubahan tidak tersimpan',
+      isi: `<p style="margin:0 0 12px;font-size:14px;color:#44534A">${esc(muatan)}</p>
+            <p style="margin:0;font-size:13px;color:var(--e-abu)">Muat ulang halaman untuk
+            kembali ke keadaan terakhir yang tersimpan di server.</p>`,
+    });
   } else if (keadaan === 'sandiBaru') {
     /* Anggota baru memperoleh kata sandi dari server, sekali saja. */
     Object.values(muatan).forEach((sandi) => {

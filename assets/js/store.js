@@ -99,6 +99,20 @@ function lengkapiDB(tersimpan) {
   Object.keys(awal).forEach((k) => {
     if (tersimpan[k] === undefined) tersimpan[k] = awal[k];
   });
+  return migrasiBentuk(tersimpan);
+}
+
+/* Bagian yang HANYA memetakan bentuk lama, tanpa menambah koleksi yang
+   hilang. Halaman publik memanggil yang ini: ia cuma menerima cms,
+   users, artikel, dan seo, jadi menambal sisanya dari seed hanya akan
+   menggendong data yang tak pernah dipakainya.
+
+   Pemisahan ini penting justru karena situsnya sudah tayang. Data yang
+   tersimpan masih berbentuk lama, dan migrasinya baru tersimpan ketika
+   ada pengurus yang masuk. Tanpa pemanggilan di sini, pengunjung akan
+   melihat menu dan kategori versi lama sampai kebetulan ada yang
+   membuka ERP — dan tidak akan ada yang menyadarinya. */
+function migrasiBentuk(tersimpan) {
 
   /* Arsip surat dahulu hanya mengenal `jenis: masuk|keluar`. Sekarang ia
      terbagi lima kategori. Petakan bentuk lamanya alih-alih membuangnya —
@@ -137,6 +151,9 @@ function lengkapiDB(tersimpan) {
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
   petakanRoleLama(tersimpan);
+  rombakHero(tersimpan);
+  rombakBeranda(tersimpan);
+  sisipkanPemisah(tersimpan);
 
   /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
      pengurus dari seed.js yang belum ada di DB. Itu masuk akal selagi
@@ -146,6 +163,140 @@ function lengkapiDB(tersimpan) {
      Daftar akun kini urusan `api/pasang.php`, sekali di awal saja. */
 
   return tersimpan;
+}
+
+/* Hero dirombak: kaligrafi Arab diganti sidebar kategori artikel, dan
+   menu "Artikel" di header pindah ke sidebar itu. Data yang sudah
+   tersimpan masih memakai bentuk lama, jadi dipetakan di sini.
+
+   Kategori ikut berganti nama. Yang dipetakan hanya nama bawaan yang
+   persis — kategori buatan pengurus sendiri tidak disentuh sama sekali. */
+const KATEGORI_LAMA = {
+  'Tafsir al-Quran'   : 'Seputar Tafsir',
+  "'Ulum al-Quran"    : 'Ulumul Quran',
+  'Ulum al-Quran'     : 'Ulumul Quran',
+  'Metodologi Tafsir' : 'Seputar Tafsir',
+  'Kajian Tematik'    : 'Wawasan Keislaman',
+  'Lainnya'           : 'Berita Acara',
+};
+
+function rombakHero(tersimpan) {
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    if (!sisi) return;
+
+    (sisi.halaman?.beranda?.sections || []).forEach((sec) => {
+      if (sec.tipe !== 'hero' || !sec.data) return;
+      /* Medan-medan dari rancangan hero terdahulu. Dibuang, bukan
+         dibiarkan: editor CMS menyusun formulirnya dari bentuk data,
+         jadi medan yang tak lagi dipakai akan tetap tampil dan disunting
+         orang tanpa pernah berpengaruh pada apa pun. */
+      ['arab', 'durasiAnimasi', 'katJudul', 'skrip', 'gambar'].forEach((k) => delete sec.data[k]);
+      if (sec.data.lencana === undefined) sec.data.lencana = "Kajian Al-I'jaz";
+      if (/^Hero — (Kaligrafi|Sambutan)/.test(sec.nama || '')) sec.nama = 'Hero — Sambutan Utama';
+    });
+
+    (sisi.halaman?.artikel?.sections || []).forEach((sec) => {
+      if (sec.tipe !== 'daftar-artikel' || !Array.isArray(sec.data?.kategori)) return;
+      const baru = [];
+      sec.data.kategori.forEach((k) => {
+        const nama = KATEGORI_LAMA[k] || k;
+        if (!baru.includes(nama)) baru.push(nama);      // 'Metodologi' & 'Tafsir' melebur
+      });
+      sec.data.kategori = baru;
+    });
+
+    /* Menghapus menu dijaga penanda sekali-jalan. Tanpa itu, Sekretaris
+       yang sengaja menambahkan kembali tautan Artikel akan mendapatinya
+       lenyap lagi pada pemuatan berikutnya — dan tidak akan pernah tahu
+       kenapa. */
+    if (sisi.situs && !sisi.situs.menuArtikelDipindah) {
+      sisi.situs.menuArtikelDipindah = 1;
+      if (Array.isArray(sisi.situs.menu)) {
+        sisi.situs.menu = sisi.situs.menu.filter((m) => m.href !== 'artikel.html');
+      }
+    }
+  });
+
+  (tersimpan.artikel || []).forEach((a) => {
+    if (KATEGORI_LAMA[a.kategori]) a.kategori = KATEGORI_LAMA[a.kategori];
+  });
+}
+
+/* Beranda disusun ulang: hero terpusat berkolom cari, lalu panel-panel
+   isi. Yang tersimpan di server masih berbentuk lama, dan di dalamnya
+   ada tulisan yang pernah disunting pengurus — About Us, Syarah,
+   Sistem & Metode, Struktur Organisasi.
+
+   Karena itu bagian-bagian itu DIPINDAHKAN ke halaman Tentang, bukan
+   dibuang. Menghapusnya berarti menghapus tulisan orang, dan tidak ada
+   satu pun jalan untuk mengembalikannya selain arsip versi. */
+function rombakBeranda(tersimpan) {
+  const seedSec = window.SEED?.halaman?.beranda?.sections || [];
+  if (!seedSec.length) return;
+
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    if (!sisi?.situs || sisi.situs.berandaDirombak) return;
+    const beranda = sisi.halaman?.beranda;
+    if (!beranda || !Array.isArray(beranda.sections)) return;
+    sisi.situs.berandaDirombak = 1;
+
+    /* Berandanya sudah berbentuk baru — pemasangan baru, atau penandanya
+       hilang entah bagaimana. Menjalankan perombakan di sini akan
+       menyalin keenam panel ke halaman Tentang. Bentuknya sendiri yang
+       memutuskan, bukan sekadar penanda: penanda bisa hilang, bentuk
+       tidak bisa berbohong. */
+    if (beranda.sections.some((x) => x.tipe === 'panel' || x.tipe === 'panel-kontak')) return;
+
+    const lama = beranda.sections;
+    const heroLama = lama.find((x) => x.tipe === 'hero');
+    const pindahan = lama.filter((x) => x.tipe !== 'hero');
+
+    /* Hero: tulisan yang sudah disunting dipertahankan, medan baru
+       diambil dari seed. Yang tidak ada lagi tempatnya dibuang. */
+    const heroBaru = clone(seedSec.find((x) => x.tipe === 'hero'));
+    if (heroLama && heroBaru) {
+      ['judul', 'subjudul', 'masjid'].forEach((k) => {
+        if (heroLama.data?.[k] !== undefined) heroBaru.data[k] = heroLama.data[k];
+      });
+    }
+
+    beranda.sections = [
+      ...(heroBaru ? [heroBaru] : []),
+      ...seedSec.filter((x) => x.tipe !== 'hero').map(clone),
+    ];
+
+    /* Bagian pindahan menyusul di halaman Tentang, dengan isinya apa
+       adanya. Yang idnya sudah ada di sana tidak digandakan. */
+    const tentang = sisi.halaman?.tentang;
+    if (tentang && Array.isArray(tentang.sections) && pindahan.length) {
+      const sudahAda = new Set(tentang.sections.map((x) => x.id));
+      pindahan.forEach((sec) => { if (!sudahAda.has(sec.id)) tentang.sections.push(sec); });
+    }
+  });
+}
+
+/* Pemisah berkata ditambahkan belakangan, sesudah beranda dirombak.
+   Database yang sudah memakai bentuk baru tidak akan tersentuh
+   rombakBeranda() lagi — ia berhenti begitu melihat panel di sana —
+   jadi penyisipannya perlu jalan sendiri.
+
+   Dijaga penanda sekali-jalan: pemisah yang sengaja dihapus pengurus
+   tidak boleh muncul kembali pada pemuatan berikutnya. */
+function sisipkanPemisah(tersimpan) {
+  const contoh = (window.SEED?.halaman?.beranda?.sections || [])
+    .find((x) => x.tipe === 'pemisah');
+  if (!contoh) return;
+
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    if (!sisi?.situs || sisi.situs.pemisahDitambah) return;
+    const sec = sisi.halaman?.beranda?.sections;
+    if (!Array.isArray(sec)) return;
+    sisi.situs.pemisahDitambah = 1;
+    if (sec.some((x) => x.tipe === 'pemisah')) return;
+
+    const i = sec.findIndex((x) => x.tipe === 'hero');
+    sec.splice(i < 0 ? 0 : i + 1, 0, clone(contoh));
+  });
 }
 
 /* PJ Website dan PJ Media melebur jadi satu peran. Kunci lamanya masih
@@ -223,9 +374,23 @@ function ambilBayangan(sumber) {
   return b;
 }
 
+/* api/simpan.php menolak SELURUH kiriman bila satu saja koleksinya tak
+   berwenang ditulis. Itu benar — penyimpanan setengah jadi lebih buruk
+   daripada yang gagal seluruhnya — tetapi berarti satu koleksi yang
+   terbawa tanpa sengaja ikut menjatuhkan simpanan orang itu.
+
+   Dan koleksi memang bisa terbawa tanpa sengaja: migrasi bentuk berjalan
+   untuk siapa pun yang masuk, sehingga Sekretaris yang menyimpan surat
+   bisa ikut membawa `cms` hasil perombakan beranda — koleksi yang jelas
+   bukan wewenangnya. Karena itu yang tak berwenang disaring di sini,
+   dan akan tersimpan sendiri ketika yang berhak membukanya.
+
+   Ini sopan santun, bukan penjagaan: yang menolak tetap server. */
 function koleksiKotor() {
   const kotor = {};
+  const u = userAktif();
   Object.keys(db).forEach((k) => {
+    if (!RBAC.bolehTulisKoleksi(u, k)) return;
     const kini = JSON.stringify(db[k]);
     if (kini !== bayangan[k]) kotor[k] = kini;
   });
@@ -240,15 +405,22 @@ async function muat() {
   penggunaSesi = d.pengguna || null;
   wajibGantiSandi = !!d.sandiAwal;
 
-  /* Migrasi bentuk lama tetap berlaku: data yang sudah tersimpan di
-     server pun bisa lebih tua daripada kode yang membacanya. */
+  /* Migrasi bentuk selalu dijalankan — data yang tersimpan di server pun
+     bisa lebih tua daripada kode yang membacanya. Yang membedakan hanya
+     apakah hasilnya ikut disimpan: pengunjung tidak berwenang menulis,
+     jadi baginya perbaikan itu berlaku di layar saja.
+
+     Bayangan diambil SEBELUM menambal, sebab ia mewakili apa yang ada di
+     server. Bila diambil sesudahnya, hasil migrasi tidak akan pernah
+     terhitung sebagai perubahan — dan tak satu pun penambalan lama
+     tersimpan, diam-diam, selamanya. */
+  bayangan = ambilBayangan(db);
   if (penggunaSesi) {
-    const sebelum = JSON.stringify(db);
     lengkapiDB(db);
-    bayangan = ambilBayangan(db);
-    if (JSON.stringify(db) !== sebelum) jadwalkanKirim();
+    jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
-    bayangan = ambilBayangan(db);
+    migrasiBentuk(db);
+    bayangan = ambilBayangan(db);     // pengunjung tak pernah menulis
   }
   beritahu();
   return db;
@@ -306,9 +478,14 @@ async function kirimPerubahan() {
     } else if (e.kode === 401) {
       penggunaSesi = null;
       status('sesiHabis');
+    } else if (e.kode === 403) {
+      /* Wewenang tidak akan berubah dengan menunggu. Mencoba lagi tiap
+         empat detik hanya menghasilkan permintaan gagal tanpa henti,
+         dan menyembunyikan sebabnya di balik banjir pesan yang sama. */
+      status('ditolak', e.message);
     } else {
       status('galat', e.message);
-      setTimeout(jadwalkanKirim, 4000);        // coba lagi
+      setTimeout(jadwalkanKirim, 4000);        // jaringan; coba lagi
     }
   } finally {
     sedangKirim = false;

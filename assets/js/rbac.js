@@ -200,6 +200,78 @@ const kunciRole = (k) => (ROLES[k] ? k : ROLE_LAMA[k] || k);
 
 /* ---------------------- API ---------------------- */
 
+/* ------------------------------------------------------------
+   Izin yang menjaga tiap koleksi — salinan dari api/rbac.php.
+
+   Di server, daftar ini yang MENOLAK permintaan. Di sini gunanya lain:
+   supaya peramban tidak pernah mengirim koleksi yang sudah pasti
+   ditolak. Itu penting karena api/simpan.php menolak SELURUH kiriman
+   bila satu saja koleksinya tak berwenang — jadi satu koleksi yang
+   terbawa tanpa sengaja, misalnya hasil migrasi bentuk yang berjalan
+   saat siapa pun masuk, akan ikut menjatuhkan simpanan orang itu.
+
+   Yang menegakkan wewenang tetap server; ini hanya sopan santun.
+   uji/rbac-setara.php gagal bila kedua salinan berbeda.
+   ------------------------------------------------------------ */
+const IZIN_KOLEKSI = {
+  cms             : ['cms.approve', 'cms.rollback'],
+  cmsDraft        : ['cms.page.edit', 'cms.theme.edit', 'cms.media.upload',
+                     'cms.section.toggle', 'cms.kategori.edit'],
+  versi           : ['cms.approve', 'cms.rollback'],
+  pengajuan       : ['cms.submit', 'cms.approve'],
+  users           : ['anggota.manage', 'user.manage', 'anggota.kelompok'],
+  artikel         : ['artikel.write', 'artikel.review', 'artikel.publish'],
+  kajian          : ['kajian.manage', 'kajian.attendance', 'kajian.notulensi', 'kajian.materi'],
+  keuangan        : ['keuangan.manage'],
+  akunKas         : ['keuangan.akun'],
+  kategoriKeuangan: ['keuangan.akun'],
+  pesan           : ['pesan.read'],
+  surat           : ['surat.manage'],
+  sertifikat      : ['sertifikat.manage'],
+  tandaTangan     : ['ttd.manage'],
+  pengurus        : ['organisasi.manage'],
+  koordinator     : ['organisasi.manage'],
+  kaleidoskop     : ['organisasi.manage'],
+  pencapaian      : ['organisasi.manage'],
+  evaluasi        : ['organisasi.manage'],
+  penugasan       : ['redaksi.manage'],
+  redaksi         : ['redaksi.manage'],
+  buku            : ['buku.manage', 'buku.anggaran', 'buku.arsip'],
+  event           : ['mediaweb.manage'],
+  sosmed          : ['mediaweb.manage'],
+  video           : ['mediaweb.manage'],
+  media           : ['mediaweb.manage'],
+  desain          : ['mediaweb.manage'],
+  tugas           : ['mediaweb.manage'],
+  seo             : ['seo.manage'],
+
+  /* Tiap aksi mencatat jejaknya, jadi koleksi ini terbuka bagi siapa
+     pun yang sudah masuk — tetapi hanya untuk menambah. */
+  audit           : ['*'],
+
+  /* Ditulis pengunjung yang belum masuk, lewat endpoint tersendiri
+     yang hanya bisa menambah — bukan lewat simpan.php. */
+  kunjungan       : [],
+  langganan       : [],
+};
+
+/**
+ * Bolehkah pengguna ini menulis koleksi tersebut?
+ *
+ * `users` punya kekecualian yang perlu: tiap orang berhak menyunting
+ * akunnya sendiri lewat Pengaturan Akun tanpa memegang izin mengelola
+ * anggota. Server memeriksa bahwa yang berubah memang hanya barisnya
+ * sendiri; di sini cukup dibiarkan lewat.
+ */
+function bolehTulisKoleksi(user, koleksi) {
+  const izin = IZIN_KOLEKSI[koleksi];
+  if (izin === undefined) return false;      // koleksi tak dikenal server
+  if (izin.length === 0) return false;       // hanya lewat endpoint sendiri
+  if (izin[0] === '*') return !!user;
+  if (koleksi === 'users') return !!user;    // diperiksa lebih teliti di server
+  return canAny(user, izin);
+}
+
 function can(user, permission) {
   if (!user) return false;
   const role = ROLES[kunciRole(user.role)];
@@ -230,4 +302,5 @@ function assertCan(user, permission) {
   return true;
 }
 
-window.RBAC = { PERMISSIONS, ROLES, ROLE_LAMA, kunciRole, can, canAny, roleLabel, roleColor, assertCan };
+window.RBAC = { PERMISSIONS, ROLES, ROLE_LAMA, IZIN_KOLEKSI, kunciRole, can, canAny,
+                bolehTulisKoleksi, roleLabel, roleColor, assertCan };

@@ -94,6 +94,39 @@ foreach (ROLES as $peran => $izinPhp) {
 /* ---------- peran yang dipensiunkan ---------- */
 if ($lamaJs != ROLE_LAMA) $masalah[] = 'ROLE_LAMA berbeda antara rbac.js dan rbac.php';
 
+/* ---------- penjaga koleksi ----------
+   Sejak peramban ikut menyaring koleksi sebelum mengirim, daftar ini
+   hidup di dua tempat. Bila keduanya menyimpang, yang terjadi bukan
+   galat yang kentara: peramban akan diam-diam berhenti mengirim koleksi
+   yang sebenarnya boleh ditulis, dan pekerjaan orang hilang tanpa
+   pesan apa pun. */
+function bacaIzinKoleksiJs(string $js): array {
+  $blok = petikBlok($js, 'IZIN_KOLEKSI');
+  $blok = tanpaKomentar($blok);
+  $hasil = [];
+  preg_match_all('/([A-Za-z]+)\s*:\s*\[(.*?)\]/s', $blok, $c, PREG_SET_ORDER);
+  foreach ($c as $x) {
+    preg_match_all("/'([^']+)'/", $x[2], $izin);
+    $hasil[$x[1]] = $izin[1];
+  }
+  return $hasil;
+}
+
+$koleksiJs = bacaIzinKoleksiJs($js);
+foreach (array_diff(array_keys(IZIN_KOLEKSI), array_keys($koleksiJs)) as $k) {
+  $masalah[] = "Koleksi '$k' dijaga di rbac.php tetapi tidak di rbac.js";
+}
+foreach (array_diff(array_keys($koleksiJs), array_keys(IZIN_KOLEKSI)) as $k) {
+  $masalah[] = "Koleksi '$k' dijaga di rbac.js tetapi tidak di rbac.php";
+}
+foreach (IZIN_KOLEKSI as $koleksi => $daftarPhp) {
+  if (!isset($koleksiJs[$koleksi])) continue;
+  if ($daftarPhp != $koleksiJs[$koleksi]) {
+    $masalah[] = "IZIN_KOLEKSI['$koleksi'] berbeda: php[" . implode(', ', $daftarPhp)
+               . '] vs js[' . implode(', ', $koleksiJs[$koleksi]) . ']';
+  }
+}
+
 /* ---------- tiap izin yang dijaga benar-benar ada ---------- */
 $semuaIzin = array_unique(array_merge(...array_values(ROLES)));
 foreach (IZIN_KOLEKSI as $koleksi => $daftar) {

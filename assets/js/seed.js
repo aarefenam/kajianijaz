@@ -139,10 +139,12 @@ const SEED = {
       telegram : 'https://t.me/kajianalijaz',
     },
     /* Menu navigasi — bisa ditambah/kurangi dari ERP */
+    /* "Artikel" sengaja tidak ada di sini — tempatnya di sidebar kategori
+       pada hero, sebab pengunjung yang datang untuk membaca hampir selalu
+       datang untuk satu topik tertentu, bukan untuk daftar seluruhnya. */
     menu: [
       { label: 'Beranda',        href: 'index.html'   },
       { label: 'Tentang Kajian', href: 'tentang.html' },
-      { label: 'Artikel',        href: 'artikel.html' },
       { label: 'Kontak',         href: 'kontak.html'  },
     ],
   },
@@ -158,17 +160,137 @@ const SEED = {
       judul: 'Beranda',
       sections: [
         {
-          id: 'hero', tipe: 'hero', nama: 'Hero — Kaligrafi Selamat Datang', aktif: true,
+          id: 'hero', tipe: 'hero', nama: 'Hero — Sambutan & Pencarian', aktif: true,
           data: {
-            arab      : 'السَّلامُ عَلَيْكُم',
-            skrip     : 'Selamat Datang di',
-            judul     : "Kajian Al-I'jaz",
-            subjudul  : 'Menggali al-Quran dengan Ilmu,\nMenghidupkan Hati dengan Tafsir',
-            tombolTeks: 'Kenali Lebih Dekat',
-            tombolLink: 'tentang.html',
-            gambar    : ph('MUSHAF & TAFSIR', '#0E2E1C', '#2E6B33', 'القرآن'),
-            masjid    : masjidBawaan(),
-            durasiAnimasi: 4.5,
+            judul       : "Kajian Al-I'jaz",
+            subjudul    : 'Menggali al-Quran dengan ilmu, menghidupkan hati dengan tafsir. '
+                        + 'Forum kajian dan kepenulisan makalah di bawah naungan IKPM Kairo — '
+                        + 'terbuka bagi siapa pun yang ingin menekuni tafsir secara bersungguh-sungguh.',
+            cariPetunjuk: 'Cari kajian, artikel, atau buku…',
+            tombolTeks  : 'Kenali Lebih Dekat',
+            tombolLink  : 'tentang.html',
+            tombol2Teks : 'Baca Artikel',
+            tombol2Link : 'artikel.html',
+            lencana     : "Kajian Al-I'jaz",
+            masjid      : masjidBawaan(),
+          },
+        },
+        {
+          id: 'pemisah-hero', tipe: 'pemisah', nama: 'Pemisah — Kutipan', aktif: true,
+          data: {
+            kutipan: 'Sebaik-baik kalian adalah yang mempelajari al-Quran dan mengajarkannya.',
+            sumber : 'HR. Bukhari',
+          },
+        },
+        {
+          id: 'panel-kajian', tipe: 'panel', nama: 'Panel — Kajian Terbaru', aktif: true,
+          data: {
+            sumber    : 'kajian',
+            tema      : 'hijau',
+            judul     : 'Kajian Terbaru',
+            teks      : 'Jadwal kajian pekanan beserta pemakalah dan tempatnya. Terbuka untuk diikuti — datang, simak, lalu ikut berdiskusi.',
+            jumlah    : 6,
+            tombolTeks: '',
+            tombolLink: '',
+          },
+        },
+        {
+          id: 'panel-artikel', tipe: 'panel', nama: 'Panel — Artikel Terbaru', aktif: true,
+          data: {
+            sumber    : 'artikel',
+            tema      : 'krem',
+            judul     : 'Artikel Terbaru',
+            teks      : 'Tulisan ilmiah seputar tafsir dan ilmu-ilmu al-Quran, disusun anggota dan ditinjau redaksi sebelum tayang.',
+            jumlah    : 6,
+            tombolTeks: 'Baca Artikel Lainnya',
+            tombolLink: 'artikel.html',
+          },
+        },
+        {
+          id: 'panel-video', tipe: 'panel', nama: 'Panel — Video Kajian', aktif: true,
+          data: {
+            sumber    : 'video',
+            tema      : 'hijau',
+            judul     : 'Video Kajian',
+            teks      : 'Rekaman dan cuplikan kajian yang sudah tayang, agar yang berhalangan hadir tetap dapat menyimaknya.',
+            jumlah    : 6,
+            tombolTeks: '',
+            tombolLink: '',
+          },
+        },
+        {
+          id: 'panel-buku', tipe: 'panel', nama: 'Panel — Buku & Karya', aktif: true,
+          data: {
+            sumber    : 'buku',
+            tema      : 'krem',
+            judul     : 'Buku & Karya',
+            teks      : 'Naskah yang sedang digarap bersama — dari pengumpulan tulisan, penyuntingan, sampai siap terbit.',
+            jumlah    : 6,
+            tombolTeks: '',
+            tombolLink: '',
+          },
+        },
+        {
+          id: 'panel-agenda', tipe: 'panel', nama: 'Panel — Agenda Kegiatan', aktif: true,
+          data: {
+            sumber    : 'agenda',
+            tema      : 'hijau',
+            judul     : 'Agenda Kegiatan',
+            teks      : 'Kegiatan yang akan datang. Yang sudah lewat turun sendiri dari daftar ini.',
+            jumlah    : 6,
+            tombolTeks: '',
+            tombolLink: '',
+          },
+        },
+        {
+          id: 'panel-kontak', tipe: 'panel-kontak', nama: 'Panel — Hubungi Kami', aktif: true,
+          data: {
+            tema    : 'krem',
+            judul   : 'Hubungi Kami',
+            teks    : 'Untuk pertanyaan, kerja sama, atau sekadar bersilaturahmi. Nomor, surel, dan alamat di bawah dibaca langsung dari Identitas Situs — cukup diubah sekali di sana.',
+            subJudul: 'Kontak Kami',
+          },
+        },
+      ],
+    },
+
+    /* ---------- PAGE 2 : TENTANG KAJIAN ---------- */
+    tentang: {
+      judul: 'Tentang Kajian',
+      sections: [
+        {
+          id: 'hero-tentang', tipe: 'hero-halaman', nama: 'Hero Halaman', aktif: true,
+          data: {
+            skrip   : 'Tentang Kami',
+            judul   : "Keluarga Besar\nKajian Al-I'jaz",
+            subjudul: "Berkenalan dengan para pendiri dan anggota Kajian Al-I'jaz yang berkomitmen dalam mendalami tafsir al-Quran dan 'ulum al-Quran.",
+            gambar  : ph('MASJID & MENARA', '#0E2E1C', '#3D6B3F', 'مسجد'),
+          },
+        },
+        {
+          id: 'visi-misi', tipe: 'visi-misi', nama: 'Visi & Misi', aktif: true,
+          data: {
+            nomor: '01',
+            skrip: 'Visi & Misi',
+            judul: "Kajian Al-I'jaz",
+            visi : 'Menjadi kajian unggulan dalam pengembangan studi tafsir dan ilmu-ilmu al-Quran yang mampu melahirkan generasi yang berilmu, kritis, berintegritas, serta berkontribusi nyata bagi umat.',
+            misi : [
+              'Mengkaji dan mendalami ilmu-ilmu al-Quran secara sistematis, terarah, dan berkelanjutan.',
+              "Meningkatkan kemampuan analisis, pemahaman, serta interpretasi anggota dalam bidang tafsir al-Qur'an.",
+              'Mencetak kader-kader intelektual yang mampu berkontribusi dalam pengembangan studi al-Quran, baik dalam ranah akademik maupun sosial.',
+              'Membangun tradisi keilmuan yang aktif dan produktif melalui diskusi ilmiah, presentasi, serta penulisan karya ilmiah.',
+              'Menumbuhkan budaya berpikir kritis dan argumentatif yang tetap berlandaskan pada kaidah-kaidah ilmiah yang benar.',
+            ],
+          },
+        },
+        {
+          id: 'keluarga-besar', tipe: 'anggota', nama: 'Keluarga Besar', aktif: true,
+          data: {
+            nomor : '02',
+            skrip : 'Keluarga Besar',
+            judul : "Kajian Al-I'jaz",
+            intro : 'Para pendiri, pengurus, dan anggota aktif yang menjaga keberlangsungan tradisi keilmuan.',
+            tampilkanFilter: true,
           },
         },
         {
@@ -266,48 +388,6 @@ const SEED = {
       ],
     },
 
-    /* ---------- PAGE 2 : TENTANG KAJIAN ---------- */
-    tentang: {
-      judul: 'Tentang Kajian',
-      sections: [
-        {
-          id: 'hero-tentang', tipe: 'hero-halaman', nama: 'Hero Halaman', aktif: true,
-          data: {
-            skrip   : 'Tentang Kami',
-            judul   : "Keluarga Besar\nKajian Al-I'jaz",
-            subjudul: "Berkenalan dengan para pendiri dan anggota Kajian Al-I'jaz yang berkomitmen dalam mendalami tafsir al-Quran dan 'ulum al-Quran.",
-            gambar  : ph('MASJID & MENARA', '#0E2E1C', '#3D6B3F', 'مسجد'),
-          },
-        },
-        {
-          id: 'visi-misi', tipe: 'visi-misi', nama: 'Visi & Misi', aktif: true,
-          data: {
-            nomor: '01',
-            skrip: 'Visi & Misi',
-            judul: "Kajian Al-I'jaz",
-            visi : 'Menjadi kajian unggulan dalam pengembangan studi tafsir dan ilmu-ilmu al-Quran yang mampu melahirkan generasi yang berilmu, kritis, berintegritas, serta berkontribusi nyata bagi umat.',
-            misi : [
-              'Mengkaji dan mendalami ilmu-ilmu al-Quran secara sistematis, terarah, dan berkelanjutan.',
-              "Meningkatkan kemampuan analisis, pemahaman, serta interpretasi anggota dalam bidang tafsir al-Qur'an.",
-              'Mencetak kader-kader intelektual yang mampu berkontribusi dalam pengembangan studi al-Quran, baik dalam ranah akademik maupun sosial.',
-              'Membangun tradisi keilmuan yang aktif dan produktif melalui diskusi ilmiah, presentasi, serta penulisan karya ilmiah.',
-              'Menumbuhkan budaya berpikir kritis dan argumentatif yang tetap berlandaskan pada kaidah-kaidah ilmiah yang benar.',
-            ],
-          },
-        },
-        {
-          id: 'keluarga-besar', tipe: 'anggota', nama: 'Keluarga Besar', aktif: true,
-          data: {
-            nomor : '02',
-            skrip : 'Keluarga Besar',
-            judul : "Kajian Al-I'jaz",
-            intro : 'Para pendiri, pengurus, dan anggota aktif yang menjaga keberlangsungan tradisi keilmuan.',
-            tampilkanFilter: true,
-          },
-        },
-      ],
-    },
-
     /* ---------- PAGE 3 : ARTIKEL ---------- */
     artikel: {
       judul: 'Artikel',
@@ -326,7 +406,7 @@ const SEED = {
           data: {
             judul     : 'Artikel Terbaru',
             perHalaman: 4,
-            kategori  : ["Tafsir al-Quran", "'Ulum al-Quran", 'Tokoh Tafsir', 'Metodologi Tafsir', 'Kajian Tematik', 'Lainnya'],
+            kategori  : ['Seputar Tafsir', 'Ulumul Quran', 'Tokoh Tafsir', 'Wawasan Keislaman', 'Berita Acara'],
           },
         },
         {
@@ -450,7 +530,7 @@ const SEED = {
   artikel: [
     {
       id:'a1', judul:'Tafsir al-Manar: Relevansinya dalam Menanggulangi Penyimpangan Ajaran Islam di Indonesia',
-      slug:'tafsir-al-manar-relevansi', kategori:'Tafsir al-Quran', penulisId:'u5', status:'terbit',
+      slug:'tafsir-al-manar-relevansi', kategori:'Seputar Tafsir', penulisId:'u5', status:'terbit',
       tanggal:'2025-05-27', cover: ph('TAFSIR AL-MANAR','#1E4D2B','#0E2E1C','المنار'),
       ringkas:'Tafsir al-Manar karya Muhammad Abduh dan Rasyid Ridha merupakan salah satu karya tafsir modern yang memiliki relevansi besar dalam konteks umat Islam di Indonesia melalui pendekatan rasional dan kontekstual.',
       isi:[
@@ -488,7 +568,7 @@ const SEED = {
     },
     {
       id:'a4', judul:"Asbabun Nuzul dan Kaidah al-'Ibrah bi 'Umum al-Lafzh",
-      slug:'asbabun-nuzul-kaidah-ibrah', kategori:"'Ulum al-Quran", penulisId:'u9', status:'review',
+      slug:'asbabun-nuzul-kaidah-ibrah', kategori:'Ulumul Quran', penulisId:'u9', status:'review',
       tanggal:'2025-06-02', cover: ph("'ULUM AL-QURAN",'#1A4A2E','#0E2E1C','أسباب'),
       ringkas:"Pembahasan kaidah usuliyah masyhur: apakah yang menjadi patokan hukum adalah keumuman lafal atau kekhususan sebab turunnya ayat?",
       isi:[
@@ -500,7 +580,7 @@ const SEED = {
     },
     {
       id:'a5', judul:'Munasabah Antar Surat: Merangkai Keutuhan Pesan al-Quran',
-      slug:'munasabah-antar-surat', kategori:'Kajian Tematik', penulisId:'u10', status:'draft',
+      slug:'munasabah-antar-surat', kategori:'Wawasan Keislaman', penulisId:'u10', status:'draft',
       tanggal:'2025-06-08', cover: ph('MUNASABAH','#20402C','#3A6B45','مناسبة'),
       ringkas:'Ilmu munasabah membuktikan bahwa susunan surat dan ayat dalam al-Quran bukanlah kebetulan, melainkan tersusun dengan hikmah yang dalam.',
       isi:[

@@ -52,6 +52,10 @@ const ikonOrg = (k) => `<span style="display:grid;place-items:center">${IK_ORG[k
 const el = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const tglID = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+/* Bentuk pendek untuk kartu. "1 September 2026" pecah jadi dua baris di
+   kolom selebar seperempat panel, dan tanggal yang terpotong dua baris
+   membuat seluruh baris meta terlihat berantakan. */
+const tglPendek = (s) => new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 
 function toast(pesan, galat = false) {
   let box = document.querySelector('.toast-tempat');
@@ -159,6 +163,67 @@ function renderNavBawah(aktif) {
   </div></nav>`);
 }
 
+/* ---------------- ornamen ----------------
+   Ragam hias geometris, bukan gambar: seluruhnya SVG sebaris supaya
+   ikut berganti warna mengikuti tema panel dan tetap tajam di layar
+   mana pun — tanpa satu pun permintaan berkas tambahan. */
+const OR = {
+  /* Sepasang daun, mengapit judul panel. */
+  daun: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 3.5c0 7.2-3.4 11.4-9 11.9-1.9.2-3.4-.3-4.4-1.4-1.1-1.2-1.4-2.9-.8-4.6C7.4 5.6 12.5 3.5 20.5 3.5z"/><path d="M4 20.5c1.6-3.6 4.2-6.4 7.8-8.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  /* Medalion sudut panel — samar, hanya untuk memberi tekstur. */
+  medali: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true"><circle cx="60" cy="60" r="46"/><circle cx="60" cy="60" r="33"/><circle cx="60" cy="60" r="15"/><path d="M60 6v108M6 60h108M22 22l76 76M98 22l-76 76"/><path d="M60 22l27 38-27 38-27-38z"/><path d="M22 60l38-27 38 27-38 27z"/></svg>',
+  /* Untaian yang menggantung dari bibir atas panel. */
+  untai: '<svg viewBox="0 0 24 96" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 0v40"/><circle cx="12" cy="46" r="5"/><path d="M12 51v9"/><path d="M12 60l6 8-6 8-6-8z"/><path d="M12 76v8"/><circle cx="12" cy="88" r="3"/></svg>',
+  /* Garis pemisah dengan wajik di tengah. */
+  pemisah: '<svg viewBox="0 0 220 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M0 8h92M128 8h92"/><path d="M110 2l7 6-7 6-7-6z" fill="currentColor" stroke="none"/></svg>',
+  main: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  /* Panah lengkung bergaya tulisan tangan, menunjuk ke judul. */
+  panahLengkung: '<svg viewBox="0 0 110 140" fill="none" aria-hidden="true"><path d="M28 132c30-14-6-38 20-54s6-34 26-48" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><path d="M56 4 88 24 56 42z" fill="currentColor"/></svg>',
+  bagi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.4 10.8l7.2-4.2M8.4 13.2l7.2 4.2"/></svg>',
+};
+
+/* Tombol bagikan pada kartu. Ia hanya dipasang pada isi yang memang
+   punya alamat sendiri — artikel lewat ?buka=, video lewat tautannya.
+   Tombol berbagi yang tidak menghasilkan alamat apa pun sama saja
+   dengan tombol mati. */
+function pasangBagi(akar) {
+  akar.querySelectorAll('[data-bagi]').forEach((b) => {
+    b.onclick = async (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const url = new URL(b.dataset.bagi, location.href).href;
+      const judul = b.dataset.judul || Store.cms.situs.nama;
+      try {
+        if (navigator.share) { await navigator.share({ title: judul, url }); return; }
+        await navigator.clipboard.writeText(url);
+        toast('Tautan disalin ke papan klip.');
+      } catch (_) { /* dibatalkan pengguna — bukan galat */ }
+    };
+  });
+}
+
+/* Ikon untuk sidebar kategori di hero. Dipetakan lewat kata kunci, bukan
+   lewat urutan: nama kategori boleh diubah dan ditambah dari ERP, dan
+   ikon yang tergeser satu baris karena ada kategori baru di tengah akan
+   terlihat seperti kekeliruan. Yang tak dikenali memakai ikon kitab. */
+function ikonKategori(nama) {
+  const n = String(nama).toLowerCase();
+  if (/tokoh|ulama|biografi/.test(n)) return IK.orang;
+  if (/ulum|ilmu|metodolog|kaidah/.test(n)) return IK.pena;
+  if (/berita|acara|kegiatan|agenda/.test(n)) return IK.kalender;
+  if (/wawasan|keislaman|tematik|umum/.test(n)) return IK.target;
+  return IK.buku;
+}
+
+/* Daftar kategori tinggal di satu tempat saja: section "Daftar Artikel"
+   pada halaman Artikel — yang sama yang disunting lewat ERP → Kategori
+   Artikel. Hero membacanya dari sana, bukan menyimpan salinannya sendiri,
+   supaya menambah kategori cukup dilakukan sekali. */
+function kategoriArtikel() {
+  const sec = (Store.cms.halaman.artikel?.sections || [])
+    .find((x) => x.tipe === 'daftar-artikel');
+  return sec?.data?.kategori || [];
+}
+
 const GELOMBANG = `<div class="gelombang"><svg viewBox="0 0 1440 110" preserveAspectRatio="none">
   <path d="M0,62 C240,110 480,10 720,42 C960,74 1200,110 1440,58 L1440,110 L0,110 Z" fill="var(--oranye)" opacity=".92"/>
   <path d="M0,76 C240,124 480,24 720,56 C960,88 1200,120 1440,72 L1440,110 L0,110 Z" fill="var(--hijau-muda)"/>
@@ -181,41 +246,485 @@ function kepala(d, tengah = false) {
    PERENDER PER TIPE SECTION
    Menambah tipe baru cukup menambah entri di objek ini.
    ============================================================ */
+/* ============================================================
+   SUMBER ISI PANEL
+   ------------------------------------------------------------
+   Satu tempat yang tahu, untuk tiap jenis isi: bagaimana
+   mengambilnya, bagaimana menggambarkan kartunya, dan kata apa saja
+   yang dicari. Menambah panel baru di beranda berarti menambah satu
+   entri di sini — bukan menambah satu section baru di site.js.
+
+   Kolom yang dibaca di bawah sengaja terbatas pada yang memang
+   dikirim api/muat.php untuk pengunjung. Yang tidak dikirim —
+   presensi, notulensi, modal buku — tak akan pernah bisa bocor lewat
+   sini, sebab ia memang tidak pernah sampai ke peramban.
+   ============================================================ */
+const SUMBER = {
+  kajian: {
+    label: 'Kajian',
+    ambil: () => [...(Store.db.kajian || [])].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')),
+    cari : (x) => [x.judul, x.materi, x.tempat, x.angkatan],
+    kartu: (x) => `<article class="kk kk-kajian">
+      <div class="kk-atas">
+        <span class="kk-pil ${x.status === 'terjadwal' ? 'pil-akan' : ''}">${x.status === 'terjadwal' ? 'Akan datang' : 'Selesai'}</span>
+        <span class="kk-tgl">${IK.kalender} ${tglPendek(x.tanggal)}</span>
+      </div>
+      <h3 class="kk-judul">${esc(x.judul)}</h3>
+      ${x.materi ? `<p class="kk-teks">${esc(String(x.materi).slice(0, 110))}</p>` : ''}
+      <div class="kk-kaki">
+        <span>${IK.orang} ${esc(Store.namaUser(x.pemakalahId))}</span>
+        <span>${IK.pin} ${esc(x.tempat || '—')}</span>
+      </div>
+    </article>`,
+  },
+
+  artikel: {
+    label: 'Artikel',
+    ambil: () => (Store.db.artikel || []).filter((a) => a.status === 'terbit')
+      .slice().sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')),
+    cari : (x) => [x.judul, x.ringkas, x.kategori],
+    buka : (x) => bukaArtikel(x.id),
+    kartu: (x) => `<article class="kk kk-artikel" data-buka="${esc(x.id)}">
+      <div class="kk-gambar"><img src="${x.cover}" alt="" loading="lazy"></div>
+      <div class="kk-isi">
+        <span class="kk-tag">${esc(x.kategori)}</span>
+        <h3 class="kk-judul">${esc(x.judul)}</h3>
+        <div class="kk-kaki kk-garis">
+          <span>${IK.orang} ${esc(Store.namaUser(x.penulisId))}</span>
+          <span class="kk-kanan">${tglPendek(x.tanggal)}</span>
+          <button class="kk-bagi" type="button" title="Bagikan artikel ini"
+                  data-bagi="artikel.html?buka=${encodeURIComponent(x.id)}"
+                  data-judul="${esc(x.judul)}">${OR.bagi}</button>
+        </div>
+      </div>
+    </article>`,
+  },
+
+  video: {
+    label: 'Video',
+    ambil: () => [...(Store.db.video || [])].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')),
+    cari : (x) => [x.judul, x.platform],
+    kartu: (x) => `<article class="kk kk-video">
+      <a class="kk-gambar" ${x.tautan ? `href="${esc(x.tautan)}" target="_blank" rel="noopener"` : ''}>
+        <img src="${x.thumb}" alt="" loading="lazy">
+        <span class="kk-main">${OR.main}</span>
+        ${x.durasi ? `<span class="kk-durasi">${esc(x.durasi)}</span>` : ''}
+      </a>
+      <div class="kk-isi">
+        <h3 class="kk-judul">${esc(x.judul)}</h3>
+        <div class="kk-kaki kk-garis">
+          <span>${esc(x.platform || 'Video')}</span>
+          <span class="kk-kanan">${tglPendek(x.tanggal)}</span>
+          ${x.tautan ? `<button class="kk-bagi" type="button" title="Bagikan video ini"
+            data-bagi="${esc(x.tautan)}" data-judul="${esc(x.judul)}">${OR.bagi}</button>` : ''}
+        </div>
+      </div>
+    </article>`,
+  },
+
+  buku: {
+    label: 'Buku',
+    ambil: () => [...(Store.db.buku || [])],
+    cari : (x) => [x.judul, x.ringkas],
+    /* Tanpa gambar sampul: yang ada di data hanyalah naskah yang masih
+       digarap. Punggung buku tipografis lebih jujur daripada sampul
+       contoh yang bukan sampul aslinya. */
+    kartu: (x) => `<article class="kk kk-buku">
+      <div class="kk-sampul"><span>${esc(x.judul)}</span><i></i></div>
+      <div class="kk-isi">
+        <h3 class="kk-judul">${esc(x.judul)}</h3>
+        ${x.ringkas ? `<p class="kk-teks">${esc(String(x.ringkas).slice(0, 96))}</p>` : ''}
+        <div class="kk-kaki kk-garis"><span class="kk-tag">${esc(x.tahap || 'proses')}</span>
+        ${x.targetTerbit ? `<span>Target ${tglPendek(x.targetTerbit)}</span>` : ''}</div>
+      </div>
+    </article>`,
+  },
+
+  agenda: {
+    label: 'Agenda',
+    /* Yang sudah lewat turun sendiri — daftar acara yang memuat tanggal
+       kemarin membuat seluruh halaman terasa terbengkalai. */
+    ambil: () => {
+      const hariIni = new Date().toISOString().slice(0, 10);
+      const semua = Store.db.event || [];
+      const akan = semua.filter((x) => (x.tanggal || '') >= hariIni)
+        .sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || ''));
+      return akan.length ? akan
+        : [...semua].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+    },
+    cari : (x) => [x.judul, x.ket, x.lokasi],
+    kartu: (x) => {
+      const t = new Date(x.tanggal + 'T00:00:00');
+      const bln = isNaN(t) ? '' : t.toLocaleDateString('id-ID', { month: 'short' });
+      return `<article class="kk kk-agenda">
+        <div class="kk-tanggal"><b>${isNaN(t) ? '—' : t.getDate()}</b><span>${esc(bln)}</span></div>
+        <div class="kk-isi">
+          <h3 class="kk-judul">${esc(x.judul)}</h3>
+          ${x.ket ? `<p class="kk-teks">${esc(String(x.ket).slice(0, 96))}</p>` : ''}
+          <div class="kk-kaki kk-garis"><span>${IK.jam} ${esc(x.jam || '—')}</span><span>${IK.pin} ${esc(x.lokasi || '—')}</span></div>
+        </div>
+      </article>`;
+    },
+  },
+};
+
+/* ---------------- pencarian lintas isi ----------------
+   Mencari di lima sumber sekaligus, hasilnya muncul langsung di bawah
+   kolom. Semua di peramban, tanpa satu pun permintaan ke server —
+   datanya memang sudah ada di memori sejak halaman dimuat. */
+function pasangPencarian(akar) {
+  const inp = akar.querySelector('#cariGlobal');
+  const sar = akar.querySelector('#cariSaring');
+  const kotak = akar.querySelector('#cariHasil');
+  let sorot = -1;
+
+  const BATAS = 8;
+
+  const cocok = (q) => {
+    const kunci = q.toLowerCase().trim();
+    if (kunci.length < 2) return [];
+    const pilih = sar.value ? [sar.value] : Object.keys(SUMBER);
+
+    const per = pilih.map((nama) => {
+      const s = SUMBER[nama];
+      return s.ambil()
+        .filter((x) => s.cari(x).filter(Boolean).join(' ').toLowerCase().includes(kunci))
+        .map((x) => ({ nama, label: s.label, x }));
+    });
+
+    /* Diambil bergiliran satu per sumber, bukan sumber per sumber sampai
+       penuh. Kalau tidak, kata seumum "tafsir" akan menghabiskan seluruh
+       delapan baris dengan kajian saja — dan artikel yang dicari orang
+       tak pernah sempat muncul, padahal ada. */
+    const hasil = [];
+    for (let putaran = 0; hasil.length < BATAS; putaran++) {
+      let adaSisa = false;
+      for (const daftar of per) {
+        if (putaran >= daftar.length) continue;
+        adaSisa = true;
+        hasil.push(daftar[putaran]);
+        if (hasil.length >= BATAS) break;
+      }
+      if (!adaSisa) break;
+    }
+    return hasil;
+  };
+
+  const tutup = () => { kotak.hidden = true; inp.setAttribute('aria-expanded', 'false'); sorot = -1; };
+
+  const gambar = () => {
+    const hasil = cocok(inp.value);
+    if (!hasil.length) {
+      if (inp.value.trim().length < 2) return tutup();
+      kotak.innerHTML = `<div class="ch-kosong">Tidak ada yang cocok dengan "${esc(inp.value.trim())}".</div>`;
+      kotak.hidden = false; inp.setAttribute('aria-expanded', 'true');
+      return;
+    }
+    kotak.innerHTML = hasil.map((h, i) => `<button class="ch-baris" role="option" data-i="${i}">
+      <span class="ch-jenis">${esc(h.label)}</span>
+      <span class="ch-judul">${esc(h.x.judul)}</span>
+    </button>`).join('');
+    kotak.hidden = false;
+    inp.setAttribute('aria-expanded', 'true');
+    sorot = -1;
+    kotak.querySelectorAll('.ch-baris').forEach((b) => {
+      b.onclick = () => { tutup(); pilihHasil(hasil[+b.dataset.i]); };
+    });
+  };
+
+  /* Artikel dibuka di tempat lewat modal yang sudah ada; sisanya belum
+     punya halaman sendiri, jadi diarahkan ke panelnya di beranda —
+     lebih baik daripada tautan yang tidak menuju ke mana-mana. */
+  function pilihHasil(h) {
+    inp.value = '';
+    if (h.nama === 'artikel') return bukaArtikel(h.x.id);
+    const panel = document.querySelector(`[data-sumber="${h.nama}"]`);
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const kartu = panel.querySelectorAll('.kk')[SUMBER[h.nama].ambil().findIndex((y) => y.id === h.x.id)];
+      if (kartu) { kartu.classList.add('kk-sorot'); setTimeout(() => kartu.classList.remove('kk-sorot'), 2200); }
+    }
+  }
+
+  let tunda;
+  inp.oninput = () => { clearTimeout(tunda); tunda = setTimeout(gambar, 140); };
+  sar.onchange = () => { if (inp.value.trim().length >= 2) gambar(); };
+  inp.onfocus = () => { if (inp.value.trim().length >= 2) gambar(); };
+
+  inp.onkeydown = (e) => {
+    const baris = [...kotak.querySelectorAll('.ch-baris')];
+    if (e.key === 'Escape') return tutup();
+    if (!baris.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      sorot = (sorot + (e.key === 'ArrowDown' ? 1 : -1) + baris.length) % baris.length;
+      baris.forEach((b, i) => b.classList.toggle('aktif', i === sorot));
+      baris[sorot].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && sorot >= 0) {
+      e.preventDefault(); baris[sorot].click();
+    }
+  };
+
+  akar.querySelector('.cari-kotak').onsubmit = (e) => {
+    e.preventDefault();
+    const b = kotak.querySelector('.ch-baris');
+    if (b) b.click();
+  };
+
+  /* Menutup lewat pointerdown, bukan click: klik pada hasil pencarian
+     sendiri akan menutup kotaknya lebih dulu kalau memakai click. */
+  document.addEventListener('pointerdown', (e) => {
+    if (!akar.contains(e.target) || !e.target.closest('.hero-cari')) tutup();
+  });
+}
+
 const RENDER = {
 
   hero(d) {
-    const n = el(`<section class="hero">
-      <div class="hero-bg"><img src="${d.gambar}" alt=""></div>
-      ${d.masjid ? `<div class="hero-masjid" aria-hidden="true"><img src="${d.masjid}" alt=""></div>` : ''}
-      <div class="wrap hero-in">
-        <div class="kaligrafi" style="--durasi:${d.durasiAnimasi || 4.5}s">
-          <svg viewBox="0 0 400 120" role="img" aria-label="${esc(d.arab)}">
-            <text x="380" y="82" text-anchor="start" direction="rtl">${esc(d.arab)}</text>
-            <circle class="pena" r="3.6"/>
+    const kategori = kategoriArtikel();
+    const lencana = (d.lencana || "Kajian Al-I'jaz").toUpperCase();
+
+    const n = el(`<section class="hero hero-utama">
+      <div class="wrap hu-in">
+
+        <!-- Judul raksasa: lapisan paling belakang. Sosok di depannya
+             sengaja menutupi sebagian huruf — itulah yang membuat
+             keduanya terbaca satu bidang, bukan dua elemen bertumpuk. -->
+        <h1 class="hu-judul">${esc(d.judul)}</h1>
+
+        <span class="hero-panah" aria-hidden="true">${OR.panahLengkung}</span>
+
+        ${d.lencana === '' ? '' : `<span class="hero-lencana" aria-hidden="true">
+          <svg viewBox="0 0 132 132">
+            <defs><path id="lingkarLencana" d="M66,66 m-49,0 a49,49 0 1,1 98,0 a49,49 0 1,1 -98,0"/></defs>
+            <text><textPath href="#lingkarLencana" startOffset="0">${esc(lencana)} &#183; ${esc(lencana)} &#183; </textPath></text>
           </svg>
+          <span class="hl-tengah">${lambang()}</span>
+        </span>`}
+
+        <div class="hero-kartu">
+          <div class="hk-kiri">
+            <p class="hu-sub">${esc(d.subjudul)}</p>
+
+            ${d.cariPetunjuk ? `<div class="hero-cari">
+              <form class="cari-kotak" role="search" autocomplete="off">
+                <span class="cari-ikon">${IK.cari}</span>
+                <input type="search" id="cariGlobal" placeholder="${esc(d.cariPetunjuk)}"
+                       aria-label="Cari isi situs" aria-expanded="false" aria-controls="cariHasil">
+                <label class="cari-saring">
+                  <select id="cariSaring" aria-label="Batasi pencarian">
+                    <option value="">Semua</option>
+                    <option value="kajian">Kajian</option>
+                    <option value="artikel">Artikel</option>
+                    <option value="video">Video</option>
+                    <option value="buku">Buku</option>
+                    <option value="agenda">Agenda</option>
+                  </select>
+                  ${IK.bawah}
+                </label>
+              </form>
+              <div class="cari-hasil" id="cariHasil" role="listbox" hidden></div>
+            </div>` : ''}
+
+            <div class="hero-tombol">
+              ${d.tombolTeks ? `<a class="tombol tombol-gelap" href="${esc(d.tombolLink)}">${esc(d.tombolTeks)}</a>` : ''}
+              ${d.tombol2Teks ? `<a class="tombol tombol-garis" href="${esc(d.tombol2Link)}">${esc(d.tombol2Teks)}</a>` : ''}
+            </div>
+          </div>
+
+          ${kategori.length ? `<div class="hk-kanan">
+            <ul class="hero-pil">
+              ${kategori.map((k, i) => `<li><a href="artikel.html?kategori=${encodeURIComponent(k)}"
+                class="pil-kat ${i % 2 ? 'pil-isi' : ''}">${esc(k)}</a></li>`).join('')}
+            </ul>
+          </div>` : ''}
         </div>
-        <div class="hero-skrip">${esc(d.skrip)}</div>
-        <h1 class="hero-judul">${esc(d.judul)}</h1>
-        <p class="hero-sub">${esc(d.subjudul)}</p>
-        ${d.tombolTeks ? `<a class="tombol" href="${esc(d.tombolLink)}">${esc(d.tombolTeks)} ${IK.panah}</a>` : ''}
+
+        ${d.masjid ? `<div class="hero-sosok" aria-hidden="true"><img src="${d.masjid}" alt=""></div>` : ''}
       </div>
-      ${GELOMBANG}
     </section>`);
 
-    /* Gerak masuk masjid dipicu satu frame SETELAH elemen terpasang.
+    /* Gerak masuk sosok dipicu satu frame SETELAH elemen terpasang.
        Animasi CSS yang mulai bersamaan dengan pelukisan pertama membuat
        Chrome tidak pernah melukis gambar ini sama sekali; menunda satu
        frame menghindari jalur render bermasalah itu. Keadaan dasarnya
        sudah terlihat, jadi kegagalan skrip tidak menghilangkannya. */
-    const masjid = n.querySelector('.hero-masjid');
-    if (masjid) {
-      masjid.classList.add('siap-masuk');
+    const sosok = n.querySelector('.hero-sosok');
+    if (sosok) {
+      sosok.classList.add('siap-masuk');
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        masjid.classList.remove('siap-masuk');
-        masjid.classList.add('masuk');
+        sosok.classList.remove('siap-masuk');
+        sosok.classList.add('masuk');
       }));
     }
+
+    if (n.querySelector('#cariGlobal')) pasangPencarian(n);
     return n;
+  },
+
+  /* ---------------- pemisah berkata ----------------
+     Satu kalimat di antara hero dan panel pertama, diapit dua garis
+     tipis. Gunanya bukan hiasan: ia memberi jeda baca sebelum mata
+     masuk ke deretan kartu, dan jeda itulah yang membuat panel pertama
+     terasa sebagai bagian baru, bukan lanjutan hero.
+
+     Kutipan dan sumbernya disunting lewat ERP → Beranda seperti isi
+     lainnya, jadi ia bisa berganti tiap pekan tanpa menyentuh kode. */
+  pemisah(d) {
+    return el(`<section class="pemisah"><div class="wrap">
+      <blockquote class="pm-kutip">
+        <p>&ldquo;${esc(d.kutipan)}&rdquo;</p>
+        ${d.sumber ? `<cite>(${esc(d.sumber)})</cite>` : ''}
+      </blockquote>
+    </div></section>`);
+  },
+
+  /* ---------------- panel isi (generik) ----------------
+     Satu renderer untuk lima panel. Yang membedakan hanya `sumber`,
+     dan itu dipilih dari daftar di ERP — jadi menambah panel baru di
+     beranda tidak menuntut kode baru sama sekali. */
+  panel(d) {
+    const s = SUMBER[d.sumber];
+    if (!s) { console.warn('Sumber panel tidak dikenal:', d.sumber); return el('<div></div>'); }
+    const data = s.ambil().slice(0, d.jumlah || 6);
+
+    /* Tiap panel diakhiri satu tombol emas. Yang menuju halaman lain
+       memakai tautan; sisanya membentangkan kartu yang tadinya harus
+       digeser menjadi kisi utuh. Tak ada tombol yang tidak menuju ke
+       mana-mana — itu lebih membingungkan daripada tidak ada tombol. */
+    /* Tombol bentang hanya berguna bila jalurnya memang meluber, dan itu
+       baru ketahuan setelah digambar — enam kartu meluber di ponsel tapi
+       tidak di layar lebar. Karena itu ia dipasang dulu lalu disembunyikan
+       sendiri oleh perbarui() bila ternyata tak ada yang perlu dibentang. */
+    const aksi = d.tombolLink
+      ? `<a class="tombol tombol-emas" href="${esc(d.tombolLink)}">${esc(d.tombolTeks || 'Lihat Semua')}</a>`
+      : `<button class="tombol tombol-emas" type="button" data-bentang>Lihat Semua</button>`;
+
+    const n = el(`<section class="panel panel-${d.tema === 'krem' ? 'krem' : 'hijau'}" data-sumber="${esc(d.sumber)}">
+      <div class="panel-kotak">
+        <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
+        <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+
+        <header class="pn-kepala">
+          <h2 class="pn-judul">
+            <span class="pn-hias">${OR.daun}</span>
+            ${esc(d.judul)}
+            <span class="pn-hias">${OR.daun}</span>
+          </h2>
+          ${d.teks ? `<p class="pn-teks">${esc(d.teks)}</p>` : ''}
+        </header>
+
+        ${data.length ? `<div class="pn-rel">
+          <button class="pn-nav mundur" type="button" aria-label="Geser ke kiri">${IK.panah}</button>
+          <div class="pn-jalur${data.length < 4 ? ' sedikit' : ''}">${data.map(s.kartu).join('')}</div>
+          <button class="pn-nav maju" type="button" aria-label="Geser ke kanan">${IK.panah}</button>
+        </div>` : `<p class="pn-kosong">Belum ada isi untuk ditampilkan di sini.</p>`}
+
+        ${aksi ? `<div class="pn-aksi">${aksi}</div>` : ''}
+      </div>
+    </section>`);
+
+    const jalur = n.querySelector('.pn-jalur');
+    if (jalur) {
+      const geser = (arah) => {
+        const kartu = jalur.querySelector('.kk');
+        const langkah = kartu ? kartu.getBoundingClientRect().width + 18 : 300;
+        jalur.scrollBy({ left: arah * langkah, behavior: 'smooth' });
+      };
+      n.querySelector('.mundur').onclick = () => geser(-1);
+      n.querySelector('.maju').onclick = () => geser(1);
+
+      /* Tombol yang tidak menuju ke mana-mana lebih buruk daripada
+         tombol yang tidak ada: keduanya dimatikan saat jalurnya sudah
+         mentok, dan seluruh baris tombol disembunyikan bila isinya
+         memang muat seluruhnya. */
+      const perbarui = () => {
+        const mekar = n.querySelector('.pn-rel').classList.contains('mekar');
+        const sisaKiri = !mekar && jalur.scrollLeft > 4;
+        const sisaKanan = !mekar && jalur.scrollLeft + jalur.clientWidth < jalur.scrollWidth - 4;
+        n.querySelector('.mundur').disabled = !sisaKiri;
+        n.querySelector('.maju').disabled = !sisaKanan;
+        n.querySelector('.pn-rel').classList.toggle('tanpa-nav', !sisaKiri && !sisaKanan);
+
+        const t = n.querySelector('[data-bentang]');
+        if (t) {
+          const meluber = jalur.scrollWidth > jalur.clientWidth + 4;
+          t.parentElement.hidden = !mekar && !meluber;
+        }
+      };
+      jalur.addEventListener('scroll', perbarui, { passive: true });
+      window.addEventListener('resize', perbarui);
+      requestAnimationFrame(perbarui);
+
+      const bentang = n.querySelector('[data-bentang]');
+      if (bentang) {
+        bentang.onclick = () => {
+          const mekar = n.querySelector('.pn-rel').classList.toggle('mekar');
+          bentang.textContent = mekar ? 'Ringkaskan' : 'Lihat Semua';
+          if (!mekar) jalur.scrollTo({ left: 0, behavior: 'smooth' });
+          requestAnimationFrame(perbarui);
+        };
+      }
+
+      if (s.buka) {
+        jalur.querySelectorAll('[data-buka]').forEach((k) => {
+          k.onclick = (e) => { if (!e.target.closest('[data-bagi]')) s.buka({ id: k.dataset.buka }); };
+        });
+      }
+      pasangBagi(n);
+    }
+    return n;
+  },
+
+  /* ---------------- panel kontak ----------------
+     Nomor, surel, dan alamatnya dibaca dari Identitas Situs, bukan
+     diketik ulang di sini. Satu fakta, satu tempat — kalau nomornya
+     berubah, ia berubah di footer, di halaman Kontak, dan di sini
+     sekaligus. */
+  'panel-kontak'(d) {
+    const c = Store.cms.situs;
+    const wa = String(c.telepon || '').replace(/[^0-9]/g, '');
+    const kartu = [
+      c.telepon && { ikon: IK.telepon, judul: 'Chat WhatsApp', ket: 'Balasan pada jam kerja',
+        nilai: c.telepon, href: wa ? `https://wa.me/${wa}` : '' },
+      c.email && { ikon: IK.email, judul: 'Kirim Surel', ket: 'Untuk pertanyaan & kerja sama',
+        nilai: c.email, href: `mailto:${c.email}` },
+      c.alamat && { ikon: IK.pin, judul: 'Sekretariat', ket: 'Silakan bertandang',
+        nilai: c.alamat, href: c.maps || '' },
+    ].filter(Boolean);
+
+    return el(`<section class="panel panel-${d.tema === 'hijau' ? 'hijau' : 'krem'}">
+      <div class="panel-kotak">
+        <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
+        <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+
+        <header class="pn-kepala">
+          <h2 class="pn-judul">
+            <span class="pn-hias">${OR.daun}</span>${esc(d.judul)}<span class="pn-hias">${OR.daun}</span>
+          </h2>
+          ${d.teks ? `<p class="pn-teks">${esc(d.teks)}</p>` : ''}
+        </header>
+
+        ${d.subJudul ? `<div class="pn-sub">
+          <h3>${esc(d.subJudul)}</h3>
+          <span class="pn-pemisah">${OR.pemisah}</span>
+        </div>` : ''}
+
+        <div class="pn-kontak">
+          ${kartu.map((k) => `<${k.href ? 'a' : 'div'} class="kt"
+              ${k.href ? `href="${esc(k.href)}" target="_blank" rel="noopener"` : ''}>
+            <span class="kt-ikon">${k.ikon}</span>
+            <b class="kt-judul">${esc(k.judul)}</b>
+            <span class="kt-ket">${esc(k.ket)}</span>
+            <span class="kt-nilai">${esc(k.nilai)}</span>
+          </${k.href ? 'a' : 'div'}>`).join('')}
+        </div>
+      </div>
+    </section>`);
   },
 
   'hero-halaman'(d) {
@@ -394,7 +903,15 @@ const RENDER = {
     const wadah = sec.querySelector('#daftarArtikel');
     const pag = sec.querySelector('#paginasi');
     const cari = sec.querySelector('#cariArtikel');
-    let kategori = '', halaman = 1;
+
+    /* Kategori boleh datang dari alamatnya — inilah yang membuat sidebar
+       di hero berguna: kliknya mendarat langsung pada filter yang tepat,
+       bukan pada daftar seluruh artikel yang harus disaring ulang.
+       Nama yang tak dikenal diabaikan, supaya alamat yang dikarang
+       tidak menghasilkan halaman yang kosong tanpa penjelasan. */
+    const diminta = new URLSearchParams(location.search).get('kategori') || '';
+    let kategori = d.kategori.includes(diminta) ? diminta : '';
+    let halaman = 1;
     const perHal = d.perHalaman || 4;
     const terbit = () => Store.db.artikel.filter((a) => a.status === 'terbit');
 
@@ -461,6 +978,14 @@ const RENDER = {
 
     cari.oninput = () => { halaman = 1; gambar(); };
     daftarKategori(); miniTerbaru(); gambar();
+
+    /* Tautan bagikan menunjuk ke sini. Artikelnya dibuka langsung supaya
+       yang menerima tautan mendarat pada tulisannya, bukan pada daftar
+       yang harus dicari-cari lagi. */
+    const dibuka = new URLSearchParams(location.search).get('buka');
+    if (dibuka && terbit().some((a) => a.id === dibuka)) {
+      requestAnimationFrame(() => bukaArtikel(dibuka));
+    }
     return sec;
   },
 
