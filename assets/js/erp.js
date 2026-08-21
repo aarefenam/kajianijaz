@@ -1137,8 +1137,15 @@ HAL.tema = () => {
   const kanan = el(`<div class="panel" style="margin:0">
     <div class="panel-kepala"><h3>Identitas & Kontak</h3><span class="ket">header, footer, halaman kontak</span></div>
     <div class="panel-isi" id="ms"></div></div>`);
-  Object.entries(s).forEach(([k, v]) =>
-    kanan.querySelector('#ms').appendChild(medan(k, v, `situs.${k}`, RBAC.can(U, 'cms.page.edit'), RBAC.can(U, 'cms.media.upload'))));
+  /* Penanda migrasi ikut tersimpan di dalam `situs`, tetapi ia catatan
+     internal — bukan isi yang perlu disunting siapa pun. Tanpa disaring,
+     ia tampil di formulir ini sebagai kolom angka bernama "Beranda
+     Versi", dan tak ada yang tahu apa gunanya. */
+  const SITUS_INTERNAL = ['menuArtikelDipindah', 'berandaDirombak', 'pemisahDitambah', 'berandaVersi'];
+  Object.entries(s).forEach(([k, v]) => {
+    if (SITUS_INTERNAL.includes(k)) return;
+    kanan.querySelector('#ms').appendChild(medan(k, v, `situs.${k}`, RBAC.can(U, 'cms.page.edit'), RBAC.can(U, 'cms.media.upload')));
+  });
 
   box.appendChild(kartuFont(t, bisa));
 

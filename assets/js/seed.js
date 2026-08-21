@@ -186,6 +186,21 @@ const SEED = {
           },
         },
         {
+          id: 'tentang-singkat', tipe: 'teks-gambar', nama: 'About Us Singkat', aktif: true,
+          data: {
+            nomor : '01',
+            skrip : 'Apa itu',
+            judul : "Kajian Al-I'jaz?",
+            gambar: ph('QALAM & KITAB', '#E8E4D8', '#BFCBA8', 'علم'),
+            posisiGambar: 'kiri',
+            paragraf: [
+              "Kajian Al-I'jaz merupakan sebuah forum kajian dan kepenulisan makalah yang secara khusus berfokus pada studi tafsir al-Quran dan ilmu-ilmu yang berkaitan dengannya (baca: 'Ulum al-Quran). Kajian ini berada di bawah naungan IKPM Kairo Mesir, dan menjadi salah satu wadah pembinaan intelektual bagi mahasiswa, khususnya yang memiliki perhatian dan minat mendalam terhadap kajian al-Quran dan tafsir.",
+              "Sebagai forum akademik, Kajian Al-I'jaz tidak hanya berfungsi sebagai tempat penyampaian materi, tetapi juga sebagai ruang dialektika ilmiah yang mendorong anggotanya untuk aktif berdiskusi, menganalisis, serta mengembangkan pemahaman terhadap al-Quran secara komprehensif.",
+              "Selain itu, Kajian Al-I'jaz juga berperan sebagai sarana penguatan tradisi akademik di kalangan mahasiswa Indonesia di Kairo, khususnya dalam bidang tafsir dan 'ulum al-Quran, yang menuntut ketelitian, kedalaman analisis, serta kemampuan literasi yang tinggi.",
+            ],
+          },
+        },
+        {
           id: 'panel-kajian', tipe: 'panel', nama: 'Panel — Kajian Terbaru', aktif: true,
           data: {
             sumber    : 'kajian',
@@ -198,6 +213,22 @@ const SEED = {
           },
         },
         {
+          id: 'syarah', tipe: 'timeline', nama: "Syarah / Sejarah Kajian Al-I'jaz", aktif: true,
+          data: {
+            nomor : '02',
+            skrip : 'Syarah',
+            judul : "Kajian Al-I'jaz",
+            gambar: ph('AL-AZHAR KAIRO', '#1B5E20', '#0E2E1C', 'الأزهر'),
+            tema  : 'gelap',
+            butir : [
+              { teks: "Kajian Al-I'jaz didirikan pada tanggal 23 November 2011 di sekretariat IKPM lama, Kairo. Pendirian kajian ini dilatarbelakangi oleh kebutuhan akan adanya forum khusus yang secara intensif membahas ilmu tafsir dan 'ulum al-Quran, mengingat pentingnya kedua disiplin tersebut dalam memahami al-Quran secara mendalam." },
+              { teks: "Kajian ini digagas oleh beberapa mahasiswa yang memiliki latar belakang dan perhatian khusus dalam bidang tersebut, di antaranya: al-Ustadz Jauhar Ridloni Marzuq, al-Ustadz Novan Hariansyah, al-Ustadz Dede Permana, dan al-Ustadz Saeful Luthfy. Mereka melihat bahwa diperlukan sebuah ruang kajian yang lebih fokus, sistematis, dan berkelanjutan untuk mendalami ilmu-ilmu al-Quran." },
+              { teks: "Sebelum berdirinya Kajian Al-I'jaz, para penggagas merupakan bagian dari Kajian Nun, yaitu sebuah kajian umum yang berada di bawah IKPM. Namun, karena sifatnya yang masih umum dan belum terfokus pada satu disiplin tertentu, muncul inisiatif untuk membentuk kajian khusus yang secara spesifik mengkaji tafsir dan 'ulum al-Quran." },
+              { teks: "Dari latar belakang tersebut, lahirlah Kajian Al-I'jaz sebagai bentuk pengkhususan bidang keilmuan, sekaligus upaya menjaga dan mengembangkan tradisi keilmuan yang lebih mendalam dan terarah. Sejak saat itu, kajian ini terus berkembang dan menjadi salah satu forum keilmuan yang konsisten dalam mengkaji al-Quran dari berbagai perspektif ilmiah." },
+            ],
+          },
+        },
+        {
           id: 'panel-artikel', tipe: 'panel', nama: 'Panel — Artikel Terbaru', aktif: true,
           data: {
             sumber    : 'artikel',
@@ -207,6 +238,48 @@ const SEED = {
             jumlah    : 6,
             tombolTeks: 'Baca Artikel Lainnya',
             tombolLink: 'artikel.html',
+          },
+        },
+        {
+          id: 'sistem-metode', tipe: 'dua-kolom', nama: 'Sistem & Metode Kajian', aktif: true,
+          data: {
+            nomor : '03',
+            skrip : 'Sistem & Metode Kajian',
+            judul : "Kajian Al-I'jaz",
+            intro : 'Dalam pelaksanaannya, Kajian Al-I\'jaz menerapkan sistem pembelajaran yang terstruktur dan berjenjang, guna memastikan bahwa setiap anggota memperoleh pemahaman yang komprehensif dan berkesinambungan. Sistem kajian ini terbagi menjadi dua metode utama, yaitu:',
+            tema  : 'gelap',
+            kolom : [
+              {
+                label: 'A. Pembekalan Intensif (Tatsqif)',
+                ikon : 'kitab',
+                teks : "Tatsqif merupakan tahap awal yang wajib diikuti oleh anggota baru sebelum memasuki kajian reguler. Tahap ini bertujuan untuk memberikan bekal dasar dalam memahami ilmu-ilmu al-Quran, baik dari sisi konsep maupun metodologi.",
+                poin : [
+                  "Mengkaji satu kitab utama: al-Laali al-Hisan fi 'Ulum al-Quran karya Prof. Dr. Musa Syahin Lasyin.",
+                  'Materi dibagi ke dalam beberapa tema yang dipresentasikan oleh peserta secara bergantian.',
+                  'Dilengkapi sesi diskusi dan evaluasi untuk memperkuat pemahaman serta melatih kemampuan berpikir kritis.',
+                  'Menjadi fondasi penting sebelum anggota melanjutkan ke tahap kajian reguler.',
+                ],
+              },
+              {
+                label: 'B. Kajian Reguler (Makalah)',
+                ikon : 'makalah',
+                teks : 'Setelah menyelesaikan tahap tatsqif, anggota akan mengikuti kajian reguler yang menjadi inti dari proses pembelajaran di Kajian Al-I\'jaz. Fokus pada penyusunan dan presentasi makalah ilmiah berdasarkan tema-tema tertentu yang telah ditentukan.',
+                subJudul: 'Kajian reguler dibagi menjadi tiga level:',
+                level: [
+                  "Level 1: Ilmu-ilmu al-Quran ('Ulum al-Quran).",
+                  'Level 2: Ilmu Tafsir dan Tokoh Tafsir beserta Karya-karyanya.',
+                  'Level 3: Grand Tema dan Pembuatan Buku.',
+                ],
+                subJudul2: 'Melalui sistem ini, anggota dilatih untuk:',
+                poin: [
+                  'Mengkaji literatur secara mendalam.',
+                  'Menyusun tulisan ilmiah secara sistematis.',
+                  'Menyampaikan gagasan secara argumentatif.',
+                  'Menanggapi dan mengkritisi pendapat secara ilmiah.',
+                ],
+                penutup: "Selain itu, kajian reguler juga menjadi sarana untuk memperkuat tradisi akademik, khususnya dalam bidang penulisan ilmiah yang menjadi salah satu keterampilan penting bagi mahasiswa, terutama di lingkungan akademik seperti al-Azhar.",
+              },
+            ],
           },
         },
         {
@@ -254,6 +327,25 @@ const SEED = {
             subJudul: 'Kontak Kami',
           },
         },
+        {
+          id: 'organisasi', tipe: 'organisasi', nama: 'Struktur Organisasi', aktif: true,
+          data: {
+            nomor : '04',
+            skrip : 'Organisasi',
+            judul : "Kajian Al-I'jaz",
+            intro : 'Struktur kepengurusan yang menopang jalannya kajian, publikasi, dan administrasi organisasi.',
+            /* Terhubung ke modul Anggota di ERP lewat field `role` */
+            jabatan: [
+              { role: 'ketua',      nama: 'Ust. Jauhar Ridloni Marzuq', ikon: 'ketua'    },
+              { role: 'sekretaris', nama: 'Ust. Novan Hariansyah',      ikon: 'surat'    },
+              { role: 'bendahara',  nama: 'Ust. Dede Permana',          ikon: 'kas'      },
+              { role: 'pj_mediaweb',nama: 'Abdul Haris',                ikon: 'monitor'  },
+              { role: 'pj_kti',     nama: 'Nur Silvia Salsabila',       ikon: 'pena'     },
+              { role: 'pj_buku',    nama: 'Ust. Ahmad Zaky',            ikon: 'buku'     },
+              { role: 'pj_kajian',  nama: 'Ust. Anwar Sadad',           ikon: 'kajian'   },
+            ],
+          },
+        },
       ],
     },
 
@@ -294,98 +386,6 @@ const SEED = {
             judul : "Kajian Al-I'jaz",
             intro : 'Para pendiri, pengurus, dan anggota aktif yang menjaga keberlangsungan tradisi keilmuan.',
             tampilkanFilter: true,
-          },
-        },
-        {
-          id: 'tentang-singkat', tipe: 'teks-gambar', nama: 'About Us Singkat', aktif: true,
-          data: {
-            nomor : '01',
-            skrip : 'Apa itu',
-            judul : "Kajian Al-I'jaz?",
-            gambar: ph('QALAM & KITAB', '#E8E4D8', '#BFCBA8', 'علم'),
-            posisiGambar: 'kiri',
-            paragraf: [
-              "Kajian Al-I'jaz merupakan sebuah forum kajian dan kepenulisan makalah yang secara khusus berfokus pada studi tafsir al-Quran dan ilmu-ilmu yang berkaitan dengannya (baca: 'Ulum al-Quran). Kajian ini berada di bawah naungan IKPM Kairo Mesir, dan menjadi salah satu wadah pembinaan intelektual bagi mahasiswa, khususnya yang memiliki perhatian dan minat mendalam terhadap kajian al-Quran dan tafsir.",
-              "Sebagai forum akademik, Kajian Al-I'jaz tidak hanya berfungsi sebagai tempat penyampaian materi, tetapi juga sebagai ruang dialektika ilmiah yang mendorong anggotanya untuk aktif berdiskusi, menganalisis, serta mengembangkan pemahaman terhadap al-Quran secara komprehensif.",
-              "Selain itu, Kajian Al-I'jaz juga berperan sebagai sarana penguatan tradisi akademik di kalangan mahasiswa Indonesia di Kairo, khususnya dalam bidang tafsir dan 'ulum al-Quran, yang menuntut ketelitian, kedalaman analisis, serta kemampuan literasi yang tinggi.",
-            ],
-          },
-        },
-        {
-          id: 'syarah', tipe: 'timeline', nama: "Syarah / Sejarah Kajian Al-I'jaz", aktif: true,
-          data: {
-            nomor : '02',
-            skrip : 'Syarah',
-            judul : "Kajian Al-I'jaz",
-            gambar: ph('AL-AZHAR KAIRO', '#1B5E20', '#0E2E1C', 'الأزهر'),
-            tema  : 'gelap',
-            butir : [
-              { teks: "Kajian Al-I'jaz didirikan pada tanggal 23 November 2011 di sekretariat IKPM lama, Kairo. Pendirian kajian ini dilatarbelakangi oleh kebutuhan akan adanya forum khusus yang secara intensif membahas ilmu tafsir dan 'ulum al-Quran, mengingat pentingnya kedua disiplin tersebut dalam memahami al-Quran secara mendalam." },
-              { teks: "Kajian ini digagas oleh beberapa mahasiswa yang memiliki latar belakang dan perhatian khusus dalam bidang tersebut, di antaranya: al-Ustadz Jauhar Ridloni Marzuq, al-Ustadz Novan Hariansyah, al-Ustadz Dede Permana, dan al-Ustadz Saeful Luthfy. Mereka melihat bahwa diperlukan sebuah ruang kajian yang lebih fokus, sistematis, dan berkelanjutan untuk mendalami ilmu-ilmu al-Quran." },
-              { teks: "Sebelum berdirinya Kajian Al-I'jaz, para penggagas merupakan bagian dari Kajian Nun, yaitu sebuah kajian umum yang berada di bawah IKPM. Namun, karena sifatnya yang masih umum dan belum terfokus pada satu disiplin tertentu, muncul inisiatif untuk membentuk kajian khusus yang secara spesifik mengkaji tafsir dan 'ulum al-Quran." },
-              { teks: "Dari latar belakang tersebut, lahirlah Kajian Al-I'jaz sebagai bentuk pengkhususan bidang keilmuan, sekaligus upaya menjaga dan mengembangkan tradisi keilmuan yang lebih mendalam dan terarah. Sejak saat itu, kajian ini terus berkembang dan menjadi salah satu forum keilmuan yang konsisten dalam mengkaji al-Quran dari berbagai perspektif ilmiah." },
-            ],
-          },
-        },
-        {
-          id: 'sistem-metode', tipe: 'dua-kolom', nama: 'Sistem & Metode Kajian', aktif: true,
-          data: {
-            nomor : '03',
-            skrip : 'Sistem & Metode Kajian',
-            judul : "Kajian Al-I'jaz",
-            intro : 'Dalam pelaksanaannya, Kajian Al-I\'jaz menerapkan sistem pembelajaran yang terstruktur dan berjenjang, guna memastikan bahwa setiap anggota memperoleh pemahaman yang komprehensif dan berkesinambungan. Sistem kajian ini terbagi menjadi dua metode utama, yaitu:',
-            tema  : 'gelap',
-            kolom : [
-              {
-                label: 'A. Pembekalan Intensif (Tatsqif)',
-                ikon : 'kitab',
-                teks : "Tatsqif merupakan tahap awal yang wajib diikuti oleh anggota baru sebelum memasuki kajian reguler. Tahap ini bertujuan untuk memberikan bekal dasar dalam memahami ilmu-ilmu al-Quran, baik dari sisi konsep maupun metodologi.",
-                poin : [
-                  "Mengkaji satu kitab utama: al-Laali al-Hisan fi 'Ulum al-Quran karya Prof. Dr. Musa Syahin Lasyin.",
-                  'Materi dibagi ke dalam beberapa tema yang dipresentasikan oleh peserta secara bergantian.',
-                  'Dilengkapi sesi diskusi dan evaluasi untuk memperkuat pemahaman serta melatih kemampuan berpikir kritis.',
-                  'Menjadi fondasi penting sebelum anggota melanjutkan ke tahap kajian reguler.',
-                ],
-              },
-              {
-                label: 'B. Kajian Reguler (Makalah)',
-                ikon : 'makalah',
-                teks : 'Setelah menyelesaikan tahap tatsqif, anggota akan mengikuti kajian reguler yang menjadi inti dari proses pembelajaran di Kajian Al-I\'jaz. Fokus pada penyusunan dan presentasi makalah ilmiah berdasarkan tema-tema tertentu yang telah ditentukan.',
-                subJudul: 'Kajian reguler dibagi menjadi tiga level:',
-                level: [
-                  "Level 1: Ilmu-ilmu al-Quran ('Ulum al-Quran).",
-                  'Level 2: Ilmu Tafsir dan Tokoh Tafsir beserta Karya-karyanya.',
-                  'Level 3: Grand Tema dan Pembuatan Buku.',
-                ],
-                subJudul2: 'Melalui sistem ini, anggota dilatih untuk:',
-                poin: [
-                  'Mengkaji literatur secara mendalam.',
-                  'Menyusun tulisan ilmiah secara sistematis.',
-                  'Menyampaikan gagasan secara argumentatif.',
-                  'Menanggapi dan mengkritisi pendapat secara ilmiah.',
-                ],
-                penutup: "Selain itu, kajian reguler juga menjadi sarana untuk memperkuat tradisi akademik, khususnya dalam bidang penulisan ilmiah yang menjadi salah satu keterampilan penting bagi mahasiswa, terutama di lingkungan akademik seperti al-Azhar.",
-              },
-            ],
-          },
-        },
-        {
-          id: 'organisasi', tipe: 'organisasi', nama: 'Struktur Organisasi', aktif: true,
-          data: {
-            nomor : '04',
-            skrip : 'Organisasi',
-            judul : "Kajian Al-I'jaz",
-            intro : 'Struktur kepengurusan yang menopang jalannya kajian, publikasi, dan administrasi organisasi.',
-            /* Terhubung ke modul Anggota di ERP lewat field `role` */
-            jabatan: [
-              { role: 'ketua',      nama: 'Ust. Jauhar Ridloni Marzuq', ikon: 'ketua'    },
-              { role: 'sekretaris', nama: 'Ust. Novan Hariansyah',      ikon: 'surat'    },
-              { role: 'bendahara',  nama: 'Ust. Dede Permana',          ikon: 'kas'      },
-              { role: 'pj_mediaweb',nama: 'Abdul Haris',                ikon: 'monitor'  },
-              { role: 'pj_kti',     nama: 'Nur Silvia Salsabila',       ikon: 'pena'     },
-              { role: 'pj_buku',    nama: 'Ust. Ahmad Zaky',            ikon: 'buku'     },
-              { role: 'pj_kajian',  nama: 'Ust. Anwar Sadad',           ikon: 'kajian'   },
-            ],
           },
         },
       ],

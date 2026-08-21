@@ -153,8 +153,7 @@ function migrasiBentuk(tersimpan) {
   petakanRoleLama(tersimpan);
   petakanFontLama(tersimpan);
   rombakHero(tersimpan);
-  rombakBeranda(tersimpan);
-  sisipkanPemisah(tersimpan);
+  susunBeranda(tersimpan);
 
   /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
      pengurus dari seed.js yang belum ada di DB. Itu masuk akal selagi
@@ -192,7 +191,13 @@ function rombakHero(tersimpan) {
          jadi medan yang tak lagi dipakai akan tetap tampil dan disunting
          orang tanpa pernah berpengaruh pada apa pun. */
       ['arab', 'durasiAnimasi', 'katJudul', 'skrip', 'gambar'].forEach((k) => delete sec.data[k]);
-      if (sec.data.lencana === undefined) sec.data.lencana = "Kajian Al-I'jaz";
+      /* Medan yang baru ada pada rancangan sekarang — kolom cari,
+         tombol kedua, lencana — diambil dari seed bila belum ada.
+         Yang sudah diisi pengurus tidak disentuh. */
+      const contoh = (window.SEED?.halaman?.beranda?.sections || []).find((x) => x.tipe === 'hero');
+      if (contoh) Object.keys(contoh.data).forEach((k) => {
+        if (sec.data[k] === undefined) sec.data[k] = clone(contoh.data[k]);
+      });
       if (/^Hero — (Kaligrafi|Sambutan)/.test(sec.nama || '')) sec.nama = 'Hero — Sambutan Utama';
     });
 
@@ -243,80 +248,77 @@ function petakanFontLama(tersimpan) {
   });
 }
 
-/* Beranda disusun ulang: hero terpusat berkolom cari, lalu panel-panel
-   isi. Yang tersimpan di server masih berbentuk lama, dan di dalamnya
-   ada tulisan yang pernah disunting pengurus — About Us, Syarah,
-   Sistem & Metode, Struktur Organisasi.
+/* ------------------------------------------------------------
+   SUSUNAN BERANDA
+   ------------------------------------------------------------
+   Beranda sudah beberapa kali disusun ulang, dan tiap kali dijaga
+   penanda benar-salah tersendiri. Cara itu tidak bertahan: penandanya
+   menumpuk, dan yang sudah melewati perombakan kedua tak pernah
+   kebagian yang ketiga.
 
-   Karena itu bagian-bagian itu DIPINDAHKAN ke halaman Tentang, bukan
-   dibuang. Menghapusnya berarti menghapus tulisan orang, dan tidak ada
-   satu pun jalan untuk mengembalikannya selain arsip versi. */
-function rombakBeranda(tersimpan) {
+   Karena itu satu nomor versi menggantikan semuanya. Database yang
+   nomornya tertinggal disusun ulang menurut urutan di bawah — dengan
+   isi yang sudah ada dipertahankan apa adanya. Yang berpindah hanya
+   tempatnya, bukan tulisannya.
+   ------------------------------------------------------------ */
+const BERANDA_VERSI = 3;
+
+const URUT_BERANDA = [
+  'hero', 'pemisah-hero',
+  'tentang-singkat',      // Apa itu Kajian Al-I'jaz
+  'panel-kajian',
+  'syarah',               // Syarah Kajian Al-I'jaz
+  'panel-artikel',
+  'sistem-metode',        // Sistem & Metode Kajian
+  'panel-video', 'panel-buku', 'panel-agenda', 'panel-kontak',
+  'organisasi',           // Susunan Organisasi — penutup halaman
+];
+
+/* Sempat dipindahkan ke halaman Tentang pada perombakan sebelumnya;
+   kini ditarik kembali, berikut suntingan yang menyertainya. */
+const PERNAH_DI_TENTANG = ['tentang-singkat', 'syarah', 'sistem-metode', 'organisasi'];
+
+function susunBeranda(tersimpan) {
   const seedSec = window.SEED?.halaman?.beranda?.sections || [];
   if (!seedSec.length) return;
 
   [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
-    if (!sisi?.situs || sisi.situs.berandaDirombak) return;
+    if (!sisi?.situs) return;
+    if ((sisi.situs.berandaVersi || 0) >= BERANDA_VERSI) return;
     const beranda = sisi.halaman?.beranda;
     if (!beranda || !Array.isArray(beranda.sections)) return;
-    sisi.situs.berandaDirombak = 1;
+    sisi.situs.berandaVersi = BERANDA_VERSI;
 
-    /* Berandanya sudah berbentuk baru — pemasangan baru, atau penandanya
-       hilang entah bagaimana. Menjalankan perombakan di sini akan
-       menyalin keenam panel ke halaman Tentang. Bentuknya sendiri yang
-       memutuskan, bukan sekadar penanda: penanda bisa hilang, bentuk
-       tidak bisa berbohong. */
-    if (beranda.sections.some((x) => x.tipe === 'panel' || x.tipe === 'panel-kontak')) return;
+    /* Penanda dari perombakan terdahulu tak berguna lagi — dan bila
+       dibiarkan, ia tetap tampil sebagai medan yang dapat disunting
+       di halaman Tema. */
+    delete sisi.situs.berandaDirombak;
+    delete sisi.situs.pemisahDitambah;
 
-    const lama = beranda.sections;
-    const heroLama = lama.find((x) => x.tipe === 'hero');
-    const pindahan = lama.filter((x) => x.tipe !== 'hero');
+    const punya = new Map();
+    beranda.sections.forEach((sec) => punya.set(sec.id, sec));
 
-    /* Hero: tulisan yang sudah disunting dipertahankan, medan baru
-       diambil dari seed. Yang tidak ada lagi tempatnya dibuang. */
-    const heroBaru = clone(seedSec.find((x) => x.tipe === 'hero'));
-    if (heroLama && heroBaru) {
-      ['judul', 'subjudul', 'masjid'].forEach((k) => {
-        if (heroLama.data?.[k] !== undefined) heroBaru.data[k] = heroLama.data[k];
+    const tentang = sisi.halaman?.tentang;
+    if (tentang && Array.isArray(tentang.sections)) {
+      tentang.sections = tentang.sections.filter((sec) => {
+        if (!PERNAH_DI_TENTANG.includes(sec.id)) return true;
+        if (!punya.has(sec.id)) punya.set(sec.id, sec);
+        return false;
       });
     }
 
-    beranda.sections = [
-      ...(heroBaru ? [heroBaru] : []),
-      ...seedSec.filter((x) => x.tipe !== 'hero').map(clone),
-    ];
-
-    /* Bagian pindahan menyusul di halaman Tentang, dengan isinya apa
-       adanya. Yang idnya sudah ada di sana tidak digandakan. */
-    const tentang = sisi.halaman?.tentang;
-    if (tentang && Array.isArray(tentang.sections) && pindahan.length) {
-      const sudahAda = new Set(tentang.sections.map((x) => x.id));
-      pindahan.forEach((sec) => { if (!sudahAda.has(sec.id)) tentang.sections.push(sec); });
-    }
-  });
-}
-
-/* Pemisah berkata ditambahkan belakangan, sesudah beranda dirombak.
-   Database yang sudah memakai bentuk baru tidak akan tersentuh
-   rombakBeranda() lagi — ia berhenti begitu melihat panel di sana —
-   jadi penyisipannya perlu jalan sendiri.
-
-   Dijaga penanda sekali-jalan: pemisah yang sengaja dihapus pengurus
-   tidak boleh muncul kembali pada pemuatan berikutnya. */
-function sisipkanPemisah(tersimpan) {
-  const contoh = (window.SEED?.halaman?.beranda?.sections || [])
-    .find((x) => x.tipe === 'pemisah');
-  if (!contoh) return;
-
-  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
-    if (!sisi?.situs || sisi.situs.pemisahDitambah) return;
-    const sec = sisi.halaman?.beranda?.sections;
-    if (!Array.isArray(sec)) return;
-    sisi.situs.pemisahDitambah = 1;
-    if (sec.some((x) => x.tipe === 'pemisah')) return;
-
-    const i = sec.findIndex((x) => x.tipe === 'hero');
-    sec.splice(i < 0 ? 0 : i + 1, 0, clone(contoh));
+    const hasil = [];
+    URUT_BERANDA.forEach((id) => {
+      const ada = punya.get(id);
+      if (ada) { hasil.push(ada); punya.delete(id); return; }
+      const contoh = seedSec.find((x) => x.id === id);
+      if (contoh) hasil.push(clone(contoh));
+    });
+    /* Section buatan pengurus yang tak dikenal urutan di atas tetap
+       ikut, di belakang — lenyap tanpa jejak jauh lebih buruk
+       daripada urutan yang meleset. */
+    punya.forEach((sec) => hasil.push(sec));
+    beranda.sections = hasil;
   });
 }
 
