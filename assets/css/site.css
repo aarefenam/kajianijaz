@@ -244,11 +244,20 @@ a { color: inherit; text-decoration: none; }
    cari di sebelah kiri langsung tertutup. */
 .hero-sosok {
   position: absolute; z-index: 3; left: 56%; bottom: var(--hu-kaki); translate: -50% 0;
-  height: clamp(230px, 29vw, 420px);
+  /* Cukup tinggi sehingga kepala sosoknya naik menembus baris bawah
+     judul. Tumpang tindih itu bukan kebetulan — ia yang membuat judul
+     dan sosok terbaca sebagai satu bidang. */
+  height: clamp(280px, 35vw, 520px);
   pointer-events: none; user-select: none;
 }
 .hero-sosok img {
   height: 100%; width: auto; display: block;
+  /* Lebarnya ditahan supaya gambar yang melebar — masjid, misalnya,
+     alih-alih potret orang — tidak menutupi kolom cari di kirinya.
+     `contain` membuatnya menyusut proporsional, `bottom` menjaga
+     kakinya tetap rata dengan tepi bawah kartu. */
+  max-width: clamp(230px, 25vw, 400px);
+  object-fit: contain; object-position: bottom;
   filter: drop-shadow(0 26px 44px rgba(14,46,28,.30));
 }
 /* Keadaan awal & akhir gerak masuk. Keduanya kelas tambahan, sehingga
@@ -331,7 +340,8 @@ a { color: inherit; text-decoration: none; }
   .hero-pil li:nth-child(3n+2) { margin-right: 0; }
   .hero-cari, .hu-sub { max-width: none; }
 
-  .hero-sosok { z-index: 1; opacity: .16; height: clamp(220px, 52vw, 340px); }
+  .hero-sosok { z-index: 1; opacity: .16; height: clamp(240px, 56vw, 380px); }
+  .hero-sosok img { max-width: 62vw; }
   .hero-sosok.masuk { opacity: .16; }
   .hero-panah { display: none; }
   /* Pindah ke sisi kiri: tombol melayang "Masuk ERP" duduk tetap di

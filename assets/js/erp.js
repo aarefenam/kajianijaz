@@ -818,7 +818,7 @@ const BANTU = {
   logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
   favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
   faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
-  masjid    : 'Sosok yang berdiri di tengah hero, di depan judul raksasa. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
+  masjid    : 'Sosok yang berdiri di tengah hero, di depan judul raksasa — kepalanya sengaja menutupi sebagian baris bawah judul. Paling pas berupa POTRET tegak berlatar transparan (PNG atau WebP) dengan objek rata bawah. Gambar yang melebar akan dikecilkan sendiri agar tidak menutupi kolom pencarian. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
 };
 
 /* Batas lebar unggahan per jenis medan. Logo dan ikon tidak perlu besar;
