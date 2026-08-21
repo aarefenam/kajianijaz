@@ -2,16 +2,17 @@
 /* ============================================================
    CETAKAN KONFIGURASI — salin menjadi config.php
    ------------------------------------------------------------
-   Berkas config.php TIDAK boleh masuk repo. Ia dibuat sekali di
-   server lewat hPanel → File Manager, dan diisi dari
-   hPanel → Database → MySQL.
+   Berkas ini OPSIONAL. Tanpa config.php, situs tetap berjalan
+   memakai SQLite di folder data/ — tak ada yang perlu disiapkan.
 
+   Buat config.php hanya bila ingin memakai MySQL. Isinya diambil dari
+   hPanel → Database → MySQL, dan berkas ini TIDAK boleh masuk repo.
    Karena tak terlacak Git, ia selamat melewati penerapan otomatis:
    `git pull` tidak menghapus berkas yang tidak dikenalnya.
    ============================================================ */
 
 return [
-  /* 'mysql' di server, 'sqlite' saat menguji di mesin sendiri. */
+  /* 'sqlite' (bawaan, tanpa persiapan) atau 'mysql'. */
   'driver'   => 'mysql',
 
   /* --- dipakai bila driver = mysql --- */
@@ -21,7 +22,7 @@ return [
   'password' => 'ISI_KATA_SANDI_DATABASE',
 
   /* --- dipakai bila driver = sqlite --- */
-  'berkas'   => __DIR__ . '/../data/uji.sqlite',
+  'berkas'   => __DIR__ . '/../data/alijaz.sqlite',
 
   /* Kunci acak untuk menandatangani hal-hal kecil. Ganti dengan
      deretan acak apa pun sepanjang 32 karakter atau lebih. */

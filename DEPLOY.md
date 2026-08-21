@@ -288,14 +288,24 @@ Untuk sekadar mengirim cepat tanpa menunggu Actions, gunakan
 
 ---
 
-## 4. Database MySQL — sekali pasang
+## 4. Database — tanpa persiapan, atau MySQL bila mau
 
 Sejak ERP berpindah dari `localStorage` ke database, situs ini butuh
-**MySQL dan PHP** di server. Tanpa keduanya, halaman publik hanya akan
-menampilkan "Sambungan ke server sedang bermasalah". Hostinger sudah
-menyediakan PHP 8.3; yang perlu Anda buat hanya databasenya.
+**PHP** di server. Hostinger sudah menyediakannya (8.3).
 
-### a. Buat database di hPanel
+**Databasenya tidak perlu Anda siapkan.** Bila `api/config.php` tidak
+ada, situs memakai SQLite di folder `data/` yang dibuatnya sendiri.
+Sekali `git pull` mendarat, situs langsung hidup.
+
+Ini disengaja: satu berkas yang lupa dibuat tidak boleh menjatuhkan
+seluruh website. Pada skala organisasi ini SQLite pun sudah lebih dari
+cukup — puluhan pengurus yang sesekali menyimpan, bukan puluhan ribu
+pengunjung serentak menulis.
+
+Lanjutkan ke **langkah c** untuk memasang data awal. Bagian a dan b di
+bawah hanya perlu bila Anda memang ingin pindah ke MySQL.
+
+### a. (Opsional) Buat database MySQL di hPanel
 
 **hPanel → Database → Manajemen Database MySQL → Buat Database Baru**
 
@@ -311,7 +321,7 @@ menampilkan kata sandinya lagi:
 > Database di `.env.local` **tidak dipakai** — itu peninggalan server
 > lama. Buat yang baru.
 
-### b. Buat `api/config.php` di server
+### b. (Opsional) Buat `api/config.php` di server
 
 Berkas ini **sengaja tidak ada di repo**, sebab isinya kata sandi.
 Karena Git tidak mengenalnya, `git pull` juga tidak akan menghapusnya —
@@ -336,15 +346,12 @@ return [
 Tabelnya tidak perlu Anda buat sendiri — dibuat otomatis pada sambungan
 pertama.
 
-### c. Beri izin tulis pada folder `berkas/`
+> **Berpindah dari SQLite ke MySQL setelah dipakai?** Isinya tidak ikut
+> berpindah sendiri. Kosongkan dulu lewat ERP (Ketua Umum), atau minta
+> saya membuatkan pemindahnya — bentuk tabelnya sama persis di
+> kedua-duanya, jadi ini pekerjaan sebentar.
 
-Gambar unggahan disimpan sebagai berkas, bukan di dalam database.
-
-**File Manager → klik kanan folder `berkas` → Permissions → `755`**
-
-Bila foldernya belum ada, buat dengan nama persis `berkas`.
-
-### d. Pasang data awal — satu kali klik
+### c. Pasang data awal — satu kali klik
 
 Buka `https://alijazqurancenter.com/erp.html`. Karena databasenya masih
 kosong, yang muncul bukan layar masuk melainkan **"Pasang data awal"**.
@@ -365,7 +372,7 @@ Bila sandinya terlanjur hilang: masuk sebagai Ketua Umum, buka
 **Anggota**, hapus akun itu dan buat ulang — server akan menerbitkan
 kata sandi baru.
 
-### e. Tiap pengurus mengganti sandinya sendiri
+### d. Tiap pengurus mengganti sandinya sendiri
 
 Saat pertama masuk, ERP tidak membuka halaman apa pun sebelum kata
 sandinya diganti. Ini disengaja: sandi awal sempat berpindah tangan
@@ -380,7 +387,10 @@ menjadi kunci.
 # 1. Database tersambung? (harus menjawab JSON, bukan galat PHP)
 curl -s https://alijazqurancenter.com/api/muat.php | head -c 200
 
-# 2. Kredensial tertutup? (harus 403 atau 404 — JANGAN sampai isinya terbaca)
+# 2. Database SQLite tertutup? (harus 404 — ini isi seluruh organisasi)
+curl -s -o /dev/null -w '%{http_code}\n' https://alijazqurancenter.com/data/alijaz.sqlite
+
+# 3. Kredensial tertutup? (harus 403 atau 404 — JANGAN sampai isinya terbaca)
 curl -s -o /dev/null -w '%{http_code}\n' https://alijazqurancenter.com/api/config.php
 
 # 3. Riwayat Git tertutup? (harus 404)
@@ -403,11 +413,13 @@ Lalu di peramban:
 
 Urutan yang paling sering menjadi sebabnya:
 
-1. `api/config.php` belum dibuat, atau kata sandinya salah ketik
-2. Nama database/pengguna kurang awalan `u123456789_`
-3. PHP mati di hPanel — **hPanel → Lanjutan → Konfigurasi PHP**
-4. Folder `berkas/` belum dapat ditulis (ini hanya menggagalkan unggah
-   gambar, bukan seluruh situs)
+1. Akar situs tidak dapat ditulis, sehingga folder `data/` gagal dibuat
+   — setel izinnya ke `755` lewat File Manager
+2. PHP mati di hPanel — **hPanel → Lanjutan → Konfigurasi PHP**
+3. Bila memakai MySQL: kata sandi salah ketik, atau nama
+   database/pengguna kurang awalan `u123456789_`
+
+Galat yang muncul menyebut persis mana di antaranya.
 
 Pesan galat aslinya ada di **hPanel → Lanjutan → Log Galat**; ia sengaja
 tidak dikirim ke peramban, sebab memuat nama database dan pengguna.

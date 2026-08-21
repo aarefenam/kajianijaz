@@ -9,15 +9,37 @@
 declare(strict_types=1);
 require_once __DIR__ . '/rbac.php';
 
-/* ---------- konfigurasi ---------- */
+/* ---------- konfigurasi ----------
+   Tanpa config.php, situs tetap jalan memakai SQLite di folder data/.
+   Ini disengaja: satu berkas yang lupa dibuat tidak boleh menjatuhkan
+   seluruh website, dan pada skala organisasi ini SQLite sudah lebih
+   dari cukup — puluhan pengurus, bukan puluhan ribu pengunjung
+   serentak menulis.
+
+   Begitu api/config.php dibuat dan berisi kredensial MySQL, ia langsung
+   dipakai menggantikan yang di bawah. Tidak ada yang perlu diubah di
+   tempat lain. */
 function konfig(): array {
   static $c = null;
-  if ($c === null) {
-    $berkas = __DIR__ . '/config.php';
-    if (!is_file($berkas)) {
-      galat('Server belum dikonfigurasi. Salin api/config.contoh.php menjadi api/config.php.', 500);
-    }
-    $c = require $berkas;
+  if ($c !== null) return $c;
+
+  $bawaan = [
+    'driver'   => 'sqlite',
+    'host'     => 'localhost',
+    'database' => '',
+    'user'     => '',
+    'password' => '',
+    'berkas'   => __DIR__ . '/../data/alijaz.sqlite',
+    'rahasia'  => '',
+  ];
+
+  $berkas = __DIR__ . '/config.php';
+  $c = is_file($berkas) ? (require $berkas) + $bawaan : $bawaan;
+
+  /* Konfigurasi yang masih memuat isian cetakan sama saja dengan tidak
+     ada — lebih baik memakai SQLite daripada gagal menyambung MySQL. */
+  if (($c['driver'] ?? '') === 'mysql' && str_starts_with((string) $c['database'], 'ISI_')) {
+    $c['driver'] = 'sqlite';
   }
   return $c;
 }
@@ -28,11 +50,23 @@ function pdo(): PDO {
   if ($pdo !== null) return $pdo;
   $k = konfig();
 
+  if (($k['driver'] ?? 'mysql') === 'sqlite' && !in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+    galat('PHP di server ini tanpa pdo_sqlite. Buat database MySQL lalu isi api/config.php.', 500);
+  }
+
   try {
     if (($k['driver'] ?? 'mysql') === 'sqlite') {
       $dir = dirname($k['berkas']);
-      if (!is_dir($dir)) mkdir($dir, 0775, true);
+      if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        galat('Folder data/ tidak dapat dibuat. Beri izin tulis pada akar situs.', 500);
+      }
+      if (!is_writable($dir)) {
+        galat('Folder data/ tidak dapat ditulis. Setel izinnya ke 755 lewat File Manager.', 500);
+      }
       $pdo = new PDO('sqlite:' . $k['berkas']);
+      /* Tanpa ini, dua permintaan yang menulis bersamaan langsung
+         menyerah dengan "database is locked" alih-alih menunggu. */
+      $pdo->setAttribute(PDO::ATTR_TIMEOUT, 5);
     } else {
       $dsn = sprintf('mysql:host=%s;dbname=%s;charset=utf8mb4', $k['host'], $k['database']);
       $pdo = new PDO($dsn, $k['user'], $k['password']);
@@ -46,6 +80,7 @@ function pdo(): PDO {
 
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
   $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+  if (($k['driver'] ?? '') === 'sqlite') $pdo->exec('PRAGMA journal_mode = WAL');
   siapkanTabel($pdo);
   return $pdo;
 }
