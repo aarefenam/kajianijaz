@@ -74,11 +74,26 @@ function terapkanTema() {
   r.setProperty('--oranye', t.oranye);
   r.setProperty('--krem', t.krem);
   r.setProperty('--teks', t.teks);
-  r.setProperty('--font-judul', t.fontJudul);
-  r.setProperty('--font-skrip', t.fontSkrip);
+  terapkanFont(t, r);
   r.setProperty('--radius', t.radius + 'px');
   r.setProperty('--lebar', t.lebarKonten + 'px');
   terapkanFavicon(Store.cms.situs.favicon);
+}
+
+/**
+ * Pasang font pilihan: tumpukan CSS-nya diterapkan, berkasnya diunduh.
+ * Keduanya harus berjalan bersama — menerapkan nama font tanpa
+ * mengunduhnya persis kegagalan yang membuat pengaturan lama tak
+ * pernah berlaku.
+ */
+function terapkanFont(t, r) {
+  const utama = FONT.tumpuk('utama', t.fontUtama);
+  /* "Sama dengan font utama" disimpan sebagai tumpukan kosong. */
+  const aksen = FONT.tumpuk('aksen', t.fontAksen) || utama;
+  r.setProperty('--font-judul', utama);
+  r.setProperty('--font-skrip', aksen);
+  r.setProperty('--font-arab', FONT.tumpuk('arab', t.fontArab));
+  FONT.muat({ utama: t.fontUtama, aksen: t.fontAksen, arab: t.fontArab });
 }
 
 /* ---------------- kerangka: header, footer, nav ---------------- */

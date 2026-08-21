@@ -106,8 +106,11 @@ const SEED = {
     oranye     : '#F0951E',
     krem       : '#F7F5EF',
     teks       : '#1D2A21',
-    fontJudul  : "'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif",
-    fontSkrip  : "'Caveat', 'Segoe Script', 'Bradley Hand', cursive",
+    /* Kunci dari daftar di font.js, bukan tumpukan CSS mentah — lihat
+       keterangan di sana untuk alasannya. */
+    fontUtama  : 'jakarta',
+    fontAksen  : 'caveat',
+    fontArab   : 'amiri',
     radius     : 16,
     lebarKonten: 1180,
   },

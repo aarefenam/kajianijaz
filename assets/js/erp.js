@@ -147,6 +147,19 @@ function toast(pesan, galat = false) {
 const lambang = (px) =>
   `<img src="${Store.cms.situs.logo}" alt="Lambang ${esc(Store.cms.situs.nama)}" style="width:${px}px;height:${px}px;object-fit:contain">`;
 
+/* ERP memakai font dari tema TAYANG, sama seperti lambangnya. Dengan
+   begitu "ganti font seluruh situs" benar-benar berarti seluruhnya —
+   halaman publik dan panel pengurus sekaligus. */
+function terapkanFontErp() {
+  const t = Store.cms.theme || {};
+  const r = document.documentElement.style;
+  const utama = FONT.tumpuk('utama', t.fontUtama);
+  r.setProperty('--e-font', utama);
+  r.setProperty('--e-font-aksen', FONT.tumpuk('aksen', t.fontAksen) || utama);
+  r.setProperty('--e-font-arab', FONT.tumpuk('arab', t.fontArab));
+  FONT.muat({ utama: t.fontUtama, aksen: t.fontAksen, arab: t.fontArab });
+}
+
 function terapkanFaviconErp() {
   const url = Store.cms.situs.faviconErp;
   if (!url) return;
@@ -398,7 +411,7 @@ function layarLogin() {
         ${Object.keys(RBAC.ROLES).map((r) => `<div class="demo-baris" style="cursor:default">
           <span class="demo-titik" style="background:${RBAC.roleColor(r)}"></span>
           <span><span class="demo-nama">${esc(RBAC.roleLabel(r))}</span></span>
-          <span class="demo-mail">${RBAC.ROLES[r].length} wewenang</span>
+          <span class="demo-mail">${RBAC.ROLES[r].permissions.length} wewenang</span>
         </div>`).join('')}
       </div>
     </div>
@@ -1109,9 +1122,16 @@ HAL.tema = () => {
 
   const t = Store.draft.theme;
   const kiri = el(`<div class="panel" style="margin:0">
-    <div class="panel-kepala"><h3>Palet Warna & Tipografi</h3><span class="ket">berlaku ke seluruh halaman</span></div>
+    <div class="panel-kepala"><h3>Palet Warna & Ukuran</h3><span class="ket">berlaku ke seluruh halaman</span></div>
     <div class="panel-isi" id="mt"></div></div>`);
-  Object.entries(t).forEach(([k, v]) => kiri.querySelector('#mt').appendChild(medan(k, v, `theme.${k}`, bisa, bisa)));
+  /* Font punya kartunya sendiri di bawah — bila ikut di sini ia akan
+     tampil sebagai kolom teks, dan mengetik nama font di kolom teks
+     tidak pernah menjadikan font itu terpasang. */
+  const MEDAN_FONT = ['fontUtama', 'fontAksen', 'fontArab'];
+  Object.entries(t).forEach(([k, v]) => {
+    if (MEDAN_FONT.includes(k)) return;
+    kiri.querySelector('#mt').appendChild(medan(k, v, `theme.${k}`, bisa, bisa));
+  });
 
   const s = Store.draft.situs;
   const kanan = el(`<div class="panel" style="margin:0">
@@ -1119,6 +1139,8 @@ HAL.tema = () => {
     <div class="panel-isi" id="ms"></div></div>`);
   Object.entries(s).forEach(([k, v]) =>
     kanan.querySelector('#ms').appendChild(medan(k, v, `situs.${k}`, RBAC.can(U, 'cms.page.edit'), RBAC.can(U, 'cms.media.upload'))));
+
+  box.appendChild(kartuFont(t, bisa));
 
   /* Pratinjau identitas — lambang di atas latar hijau yang sebenarnya,
      bukan di atas kotak putih yang menyesatkan. */
@@ -1161,6 +1183,81 @@ HAL.tema = () => {
   return box;
 };
 HAL.tema.judul = () => ['Tema & Identitas', 'Warna, font, logo, dan data kontak organisasi.'];
+
+/* ============================================================
+   PEMILIH FONT
+   ------------------------------------------------------------
+   Tiga baris: font utama, font aksen tulisan tangan, dan font Arab.
+   Masing-masing dipilih dari daftar — bukan diketik — sebab yang
+   diketik belum tentu ada, dan font yang tidak ada gagal tanpa satu
+   pun pesan: halaman hanya diam-diam memakai font cadangan.
+
+   Contoh hurufnya digambar memakai font yang bersangkutan, jadi
+   pilihannya terlihat sebelum disimpan. Karena tiap contoh menuntut
+   fontnya terunduh, seluruh keluarga di daftar dimuat sekali saat
+   halaman ini dibuka — hanya di sini, bukan di halaman lain.
+   ============================================================ */
+function kartuFont(t, bisa) {
+  /* Contoh huruf hanya berguna bila digambar memakai font yang
+     bersangkutan, jadi seluruh keluarga di daftar diunduh di sini —
+     dan hanya di sini. */
+  FONT.muatSemua();
+
+  const baris = (jenis, kunci, judul, ket, contoh, gaya) => {
+    const d = FONT.kel(jenis);
+    const kini = d[kunci] ? kunci : Object.keys(d)[0];
+    return `<div class="fnt-baris">
+      <div class="fnt-kiri">
+        <label for="fnt-${jenis}">${esc(judul)}</label>
+        <div class="bantu">${esc(ket)}</div>
+        <select id="fnt-${jenis}" data-jenis="${jenis}" ${bisa ? '' : 'disabled'}>
+          ${Object.entries(d).map(([k, f]) =>
+            `<option value="${k}" ${k === kini ? 'selected' : ''}>${esc(f.label)} — ${esc(f.ket)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fnt-contoh" data-contoh="${jenis}"
+           style="font-family:${d[kini].tumpuk || FONT.tumpuk('utama', t.fontUtama)};${gaya}">${contoh}</div>
+    </div>`;
+  };
+
+  const kartu = el(`<div class="panel"><div class="panel-kepala">
+    <h3>Font Website</h3><span class="ket">berlaku ke seluruh halaman publik &amp; ERP</span></div>
+    <div class="panel-isi">
+      <div class="notis notis-info" style="margin-bottom:18px">${I.info}<div>
+        <b>Dipilih, bukan diketik</b>
+        Tiap pilihan di sini membawa berkas fontnya sekaligus, jadi yang dipilih pasti terpasang.
+        Contoh hurufnya di sebelah kanan sudah memakai font yang bersangkutan.
+      </div></div>
+      ${baris('utama', t.fontUtama, 'Font Utama',
+        'Dipakai seluruh tulisan: judul, paragraf, tombol, dan tabel di ERP.',
+        "Menggali al-Quran dengan Ilmu<br><span style='font-size:13.5px;opacity:.72'>Menghidupkan hati dengan tafsir — 1234567890</span>",
+        'font-size:19px;font-weight:700;line-height:1.45')}
+      ${baris('aksen', t.fontAksen, 'Font Aksen',
+        'Tulisan tangan pada sambutan hero dan judul kecil di atas tiap bagian.',
+        'Selamat Datang di', 'font-size:30px;line-height:1.2')}
+      ${baris('arab', t.fontArab, 'Font Arab',
+        'Untuk teks berhuruf Arab: kutipan di halaman publik dan tampilan di panel ERP.',
+        '&#1576;&#1616;&#1587;&#1618;&#1605;&#1616; &#1575;&#1604;&#1604;&#1617;&#1607;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1618;&#1605;&#1614;&#1606;&#1616;',
+        'font-size:26px;direction:rtl;line-height:1.7')}
+    </div></div>`);
+
+  kartu.querySelectorAll('select[data-jenis]').forEach((sel) => {
+    sel.onchange = () => {
+      const jenis = sel.dataset.jenis;
+      const f = FONT.kel(jenis)[sel.value];
+      /* Contohnya berganti seketika, sebelum disimpan — supaya pilihan
+         dapat dibandingkan tanpa harus menyimpan lalu membatalkan. */
+      const c = kartu.querySelector(`[data-contoh="${jenis}"]`);
+      if (c) c.style.fontFamily = f.tumpuk || FONT.tumpuk('utama', Store.draft.theme.fontUtama);
+      const kunci = { utama: 'fontUtama', aksen: 'fontAksen', arab: 'fontArab' }[jenis];
+      aman(() => {
+        Store.ubahDraft(U, `theme.${kunci}`, sel.value, 'cms.theme.edit');
+        toast('Tersimpan di draft. Ajukan agar ditinjau Ketua.');
+      });
+    };
+  });
+  return kartu;
+}
 
 /* ============================================================
    PERSETUJUAN
@@ -6093,6 +6190,7 @@ function gambar() {
   if (Store.perluPasang()) { app.appendChild(layarPasang()); return; }
   if (!Store.cms) { app.appendChild(layarGagal()); return; }
 
+  terapkanFontErp();
   terapkanFaviconErp();
 
   if (!U) { app.appendChild(layarLogin()); return; }

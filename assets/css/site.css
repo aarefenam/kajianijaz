@@ -17,6 +17,7 @@
   --font-judul: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
   --font-skrip: 'Caveat', 'Segoe Script', 'Bradley Hand', cursive;
   --font-arab: 'Amiri', 'Scheherazade New', 'Geeza Pro', 'Traditional Arabic', serif;
+  /* Dipakai lewat [lang="ar"] di bawah — bukan hanya disimpan. */
   --radius: 16px;
   --lebar: 1180px;
 
@@ -45,6 +46,11 @@ body {
 }
 
 img { max-width: 100%; display: block; }
+
+/* Teks berhuruf Arab memakai font naskh pilihan, di mana pun ia muncul.
+   Tanpa aturan ini, "Font Arab" di ERP hanya berlaku di panel ERP dan
+   tidak pernah menyentuh halaman publik sama sekali. */
+[lang="ar"], .arab { font-family: var(--font-arab); }
 a { color: inherit; text-decoration: none; }
 
 .wrap { width: min(100% - 40px, var(--lebar)); margin-inline: auto; }

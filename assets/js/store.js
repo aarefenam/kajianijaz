@@ -151,6 +151,7 @@ function migrasiBentuk(tersimpan) {
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
   petakanRoleLama(tersimpan);
+  petakanFontLama(tersimpan);
   rombakHero(tersimpan);
   rombakBeranda(tersimpan);
   sisipkanPemisah(tersimpan);
@@ -219,6 +220,26 @@ function rombakHero(tersimpan) {
 
   (tersimpan.artikel || []).forEach((a) => {
     if (KATEGORI_LAMA[a.kategori]) a.kategori = KATEGORI_LAMA[a.kategori];
+  });
+}
+
+/* Font dulu disimpan sebagai tumpukan CSS mentah dan disunting lewat
+   kolom teks. Kini ia kunci dari daftar di font.js, sehingga yang
+   dipilih pasti ikut terunduh. Yang tersimpan dipetakan berdasarkan
+   nama keluarganya — "'Plus Jakarta Sans', 'Segoe UI', …" dikenali
+   sebagai jakarta — bukan dibuang begitu saja. */
+function petakanFontLama(tersimpan) {
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    const t = sisi?.theme;
+    if (!t) return;
+    if (t.fontUtama === undefined) t.fontUtama = FONT.kenali('utama', t.fontJudul);
+    if (t.fontAksen === undefined) t.fontAksen = FONT.kenali('aksen', t.fontSkrip);
+    if (t.fontArab === undefined) t.fontArab = 'amiri';
+    /* Dibuang, bukan dibiarkan: halaman Tema menyusun formulirnya dari
+       bentuk data, jadi medan lama akan tetap tampil dan disunting
+       orang tanpa pernah berpengaruh pada apa pun. */
+    delete t.fontJudul;
+    delete t.fontSkrip;
   });
 }
 
