@@ -518,6 +518,33 @@ function pasangPencarian(akar) {
   });
 }
 
+/**
+ * Berapa kolom untuk sejumlah butir, agar baris terakhir tidak
+ * menyisakan satu kartu sendirian.
+ *
+ * Dengan `auto-fit` saja, lima butir jatuh menjadi empat kolom lalu
+ * satu — dan satu kartu yang berdiri sendiri di baris terakhir persis
+ * ketimpangan yang hendak dihindari, hanya berputar arah. Di sini tiap
+ * kemungkinan dinilai: pembagian yang habis paling baik, disusul yang
+ * baris terakhirnya paling penuh.
+ *
+ * Pilihannya sengaja hanya 4 atau 3. Dua kolom memang selalu habis
+ * dibagi untuk jumlah genap, tetapi sepuluh butir dalam lima baris
+ * berdua-dua terbaca sebagai daftar yang kepanjangan, bukan sebagai
+ * kisi — habis dibagi bukan satu-satunya ukuran rapi.
+ */
+function kolomSeimbang(n, pilihan = [4, 3]) {
+  if (n <= 2) return Math.max(1, n);
+  let terbaik = pilihan[pilihan.length - 1];
+  let nilai = -1;
+  pilihan.forEach((k) => {
+    const sisa = n % k;
+    const skor = sisa === 0 ? 100 + k : sisa * 10 + k;
+    if (skor > nilai) { nilai = skor; terbaik = k; }
+  });
+  return terbaik;
+}
+
 const RENDER = {
 
   hero(d) {
@@ -858,18 +885,31 @@ const RENDER = {
       <div class="grid-dua">${d.kolom.map(kol).join('')}</div>`);
   },
 
+  /* Visi di atas, misi di bawah — bukan berdampingan.
+
+     Berdampingan, keduanya selalu timpang: satu kalimat visi di kiri
+     berhadapan dengan lima butir misi di kanan, dan kolom kirinya
+     menyisakan bidang kosong sepanjang empat butir. Ketimpangan itu
+     bukan soal tata letak yang bisa dirapikan, melainkan soal panjang
+     isinya yang memang berbeda jauh.
+
+     Disusun bertingkat, keduanya justru mendapat porsi yang pas: visi
+     sebagai satu pernyataan lebar yang memang pantas menonjol, misi
+     sebagai kisi kartu bernomor yang tingginya rata sendiri. */
   'visi-misi'(d) {
     return panelBungkus(d, `
       ${kepala(d)}
-      <div class="grid-visi">
-        <div class="kartu-visi">
-          <div class="label-vm"><span class="ik">${IK.mata}</span>A. Visi</div>
-          <p>${esc(d.visi)}</p>
+      <div class="vm-visi">
+        <span class="vm-label"><span class="ik">${IK.mata}</span>Visi</span>
+        <p>${esc(d.visi)}</p>
+      </div>
+      <div class="vm-misi">
+        <div class="vm-kepala">
+          <span class="vm-label"><span class="ik">${IK.target}</span>Misi</span>
         </div>
-        <div class="kartu-misi">
-          <div class="label-vm"><span class="ik">${IK.target}</span>B. Misi</div>
-          <ol class="daftar-misi">${d.misi.map((m) => `<li><span>${esc(m)}</span></li>`).join('')}</ol>
-        </div>
+        <ol class="grid-misi" style="--kol:${kolomSeimbang(d.misi.length)}">
+          ${d.misi.map((m) => `<li><span class="vm-nomor"></span><p>${esc(m)}</p></li>`).join('')}
+        </ol>
       </div>`);
   },
 

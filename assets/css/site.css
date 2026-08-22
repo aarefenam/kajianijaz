@@ -566,28 +566,84 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* --------- visi & misi --------- */
-.grid-visi { display: grid; grid-template-columns: .9fr 1.1fr; gap: 44px; align-items: start; }
-.kartu-visi, .kartu-misi {
-  background: var(--putih); border-radius: 20px; padding: 32px; box-shadow: var(--bayang);
-  border: 1px solid var(--garis);
+/* --------- Visi & Misi ---------
+   Bertingkat, bukan berdampingan: satu kalimat visi berhadapan dengan
+   lima butir misi selalu menyisakan bidang kosong di kolom kirinya.
+   Lihat catatan pada perendernya di site.js. */
+.vm-visi {
+  position: relative;
+  max-width: 860px; margin: 0 auto 34px; padding: 32px clamp(24px, 4vw, 44px);
+  border-radius: 20px; text-align: center;
+  background: var(--putih); border: 1px solid var(--garis); box-shadow: var(--bayang);
 }
-.label-vm {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
-  font-size: 17px; font-weight: 800; color: var(--hijau);
+.vm-visi p {
+  margin: 14px 0 0; font-size: clamp(15.5px, 1.6vw, 18px); line-height: 1.7;
+  color: #3E4C43;
 }
-.label-vm .ik {
-  width: 40px; height: 40px; flex: none; border-radius: 11px; display: grid; place-items: center;
-  background: rgba(140,198,63,.16); color: var(--hijau);
+
+.vm-kepala { text-align: center; margin-bottom: 22px; }
+
+/* Label dipakai visi maupun misi, jadi keduanya terbaca sepasang. */
+.vm-label {
+  display: inline-flex; align-items: center; gap: 11px;
+  font-size: 12.6px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--hijau);
+  background: #EDF4E9; border: 1px solid rgba(27,94,32,.14);
+  border-radius: 999px; padding: 7px 16px 7px 8px;
 }
-.kartu-visi p { font-size: 15.5px; color: #3E4C43; margin: 0; text-align: justify; }
-.daftar-misi { counter-reset: m; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px; }
-.daftar-misi li {
-  counter-increment: m; display: flex; gap: 14px; font-size: 14.6px; color: #3E4C43; text-align: justify;
-}
-.daftar-misi li::before {
-  content: counter(m); flex: none; width: 27px; height: 27px; border-radius: 9px;
+.vm-label .ik {
+  width: 26px; height: 26px; flex: none; border-radius: 50%;
   display: grid; place-items: center; background: var(--hijau); color: #fff;
-  font-size: 12.5px; font-weight: 800;
+}
+.vm-label .ik svg { width: 14px; height: 14px; }
+
+/* Kisi bernomor. `auto-fit` membuat jumlah kolomnya menyesuaikan lebar,
+   dan `1fr` menyamakan tinggi tiap kartu dalam satu baris — itulah yang
+   membuat lima butir berbeda panjang tetap terbaca rata. */
+.grid-misi {
+  counter-reset: m; list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 16px;
+}
+/* Lebar kartunya dihitung dari jumlah kolom — dan jumlah kolom itu
+   sendiri dihitung dari jumlah butir, lihat kolomSeimbang() di site.js.
+
+   Dipakai flex, bukan grid: pada grid, dua kartu di baris terakhir
+   menempel ke kiri dan menyisakan lubang di kanan. Flex membuat baris
+   yang tak penuh berada di tengah — dan itulah yang membuat susunannya
+   terbaca rata, bukan sekadar rapi per baris. */
+.grid-misi li { flex: 0 1 calc((100% - (var(--kol, 3) - 1) * 16px) / var(--kol, 3)); }
+@media (max-width: 980px) { .grid-misi li { flex-basis: calc((100% - 16px) / 2); } }
+.grid-misi li {
+  counter-increment: m; position: relative;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 24px 22px 22px;
+  background: var(--putih); border: 1px solid var(--garis);
+  border-radius: 16px; box-shadow: var(--bayang);
+}
+.grid-misi p { margin: 0; font-size: 14.4px; line-height: 1.68; color: #3E4C43; }
+.vm-nomor {
+  width: 34px; height: 34px; flex: none; border-radius: 11px;
+  display: grid; place-items: center;
+  background: var(--hijau); color: #fff; font-size: 13.5px; font-weight: 800;
+}
+.vm-nomor::before { content: counter(m, decimal-leading-zero); }
+
+/* Panel hijau menimpa rupa terang di atas. */
+.panel-hijau .vm-visi,
+.panel-hijau .grid-misi li {
+  background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); box-shadow: none;
+}
+.panel-hijau .vm-visi p,
+.panel-hijau .grid-misi p { color: rgba(255,255,255,.82); }
+.panel-hijau .vm-label {
+  color: #fff; background: rgba(140,198,63,.14); border-color: rgba(140,198,63,.30);
+}
+.panel-hijau .vm-label .ik { background: var(--hijau-muda); color: var(--hijau-tua); }
+.panel-hijau .vm-nomor { background: var(--hijau-muda); color: var(--hijau-tua); }
+
+@media (max-width: 620px) {
+  .vm-visi { padding: 24px 20px; }
+  .grid-misi li { flex-basis: 100%; }
 }
 
 /* --------- organisasi --------- */
@@ -888,7 +944,7 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
 }
 @media (max-width: 560px) {
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
-  .kartu-metode, .kartu-visi, .kartu-misi, .kartu-form, .kartu-info { padding: 22px; }
+  .kartu-metode, .kartu-form, .kartu-info { padding: 22px; }
   .pita-kutipan { padding: 30px 24px; }
   .merek-nama { font-size: 25px; }
 }
@@ -1314,19 +1370,14 @@ a.kt:hover {
 .panel-hijau .tl-butir p,
 .panel-hijau .kartu-metode p,
 .panel-hijau .daftar-poin li,
-.panel-hijau .daftar-level li,
-.panel-hijau .kartu-visi p,
-.panel-hijau .daftar-misi li span { color: rgba(255,255,255,.80); }
+.panel-hijau .daftar-level li { color: rgba(255,255,255,.80); }
 
 .panel-hijau .kartu-metode h3,
 .panel-hijau .kartu-metode h4,
-.panel-hijau .label-vm,
 .panel-hijau .org-jabatan { color: #fff; }
 
 .panel-hijau .tl-butir,
 .panel-hijau .kartu-metode,
-.panel-hijau .kartu-visi,
-.panel-hijau .kartu-misi,
 .panel-hijau .kartu-org {
   background: rgba(255,255,255,.06);
   border-color: rgba(255,255,255,.14);
@@ -1337,7 +1388,6 @@ a.kt:hover {
 .panel-hijau .tl-ikon,
 .panel-hijau .kartu-metode h3 span.ik,
 .panel-hijau .org-ikon,
-.panel-hijau .label-vm .ik,
 .panel-hijau .daftar-level li::before {
   background: rgba(140,198,63,.18); border-color: rgba(140,198,63,.32); color: var(--hijau-muda);
 }
