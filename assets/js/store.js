@@ -154,6 +154,7 @@ function migrasiBentuk(tersimpan) {
   petakanFontLama(tersimpan);
   rombakHero(tersimpan);
   susunBeranda(tersimpan);
+  susunTentang(tersimpan);
   rapikanKepala(tersimpan);
 
   /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
@@ -266,11 +267,12 @@ function petakanFontLama(tersimpan) {
    isi yang sudah ada dipertahankan apa adanya. Yang berpindah hanya
    tempatnya, bukan tulisannya.
    ------------------------------------------------------------ */
-const BERANDA_VERSI = 4;
+const BERANDA_VERSI = 5;
 
 const URUT_BERANDA = [
   'hero', 'pemisah-hero',
   'tentang-singkat',      // Apa itu Kajian Al-I'jaz
+  'visi-misi',
   'panel-kajian',
   'syarah',               // Syarah Kajian Al-I'jaz
   'panel-artikel',
@@ -281,7 +283,7 @@ const URUT_BERANDA = [
 
 /* Sempat dipindahkan ke halaman Tentang pada perombakan sebelumnya;
    kini ditarik kembali, berikut suntingan yang menyertainya. */
-const PERNAH_DI_TENTANG = ['tentang-singkat', 'syarah', 'sistem-metode', 'organisasi'];
+const PERNAH_DI_TENTANG = ['tentang-singkat', 'syarah', 'sistem-metode', 'organisasi', 'visi-misi'];
 
 /* Nomor urut dibuang di seluruh halaman, bukan hanya beranda.
 
@@ -320,6 +322,31 @@ function rapikanKepala(tersimpan) {
   });
 }
 
+/* Halaman Tentang: kalimatnya diperbarui dan galeri kegiatan
+   ditambahkan. Dijaga penanda sekali-jalan — galeri yang sengaja
+   dihapus pengurus tidak boleh muncul kembali, dan kalimat yang sudah
+   ditulis ulang tidak boleh tertimpa. */
+const KALIMAT_TENTANG_LAMA =
+  "Berkenalan dengan para pendiri dan anggota Kajian Al-I'jaz yang berkomitmen dalam mendalami tafsir al-Quran dan 'ulum al-Quran.";
+
+function susunTentang(tersimpan) {
+  const contoh = (window.SEED?.halaman?.tentang?.sections || [])
+    .find((x) => x.tipe === 'galeri');
+
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    if (!sisi?.situs || sisi.situs.tentangVersi >= 1) return;
+    const sec = sisi.halaman?.tentang?.sections;
+    if (!Array.isArray(sec)) return;
+    sisi.situs.tentangVersi = 1;
+
+    const hero = sec.find((x) => x.tipe === 'hero-halaman');
+    if (hero?.data && hero.data.subjudul === KALIMAT_TENTANG_LAMA) {
+      hero.data.subjudul = 'Berkenalan dengan para pendiri, alumni, dan anggota kajian dari masa ke masa.';
+    }
+    if (contoh && !sec.some((x) => x.tipe === 'galeri')) sec.push(clone(contoh));
+  });
+}
+
 function susunBeranda(tersimpan) {
   const seedSec = window.SEED?.halaman?.beranda?.sections || [];
   if (!seedSec.length) return;
@@ -354,11 +381,12 @@ function susunBeranda(tersimpan) {
        sekali — semuanya jatuh ke krem, dan tiga panel krem berturut-turut
        membuat halaman terlihat kehabisan warna di tengah. */
     const TEMA_BERANDA = {
-      'tentang-singkat': 'krem', 'panel-kajian': 'hijau',
-      'syarah': 'krem', 'panel-artikel': 'hijau',
-      'sistem-metode': 'krem', 'panel-video': 'hijau',
-      'panel-buku': 'krem', 'panel-agenda': 'hijau',
-      'panel-kontak': 'krem', 'organisasi': 'hijau',
+      'tentang-singkat': 'krem', 'visi-misi': 'hijau',
+      'panel-kajian': 'krem', 'syarah': 'hijau',
+      'panel-artikel': 'krem', 'sistem-metode': 'hijau',
+      'panel-video': 'krem', 'panel-buku': 'hijau',
+      'panel-agenda': 'krem', 'panel-kontak': 'hijau',
+      'organisasi': 'krem',
     };
 
     const hasil = [];

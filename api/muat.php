@@ -21,7 +21,7 @@ if (isset($semua['isi']['users']) && is_array($semua['isi']['users'])) {
 
    Keuangan, surat, pesan masuk, presensi, dan jejak audit tidak termasuk. */
 if (!$u) {
-  $publik = ['cms', 'artikel', 'seo', 'users', 'kajian', 'video', 'buku', 'event'];
+  $publik = ['cms', 'artikel', 'seo', 'users', 'kajian', 'video', 'buku', 'event', 'media'];
   $semua['isi'] = array_intersect_key($semua['isi'], array_flip($publik));
   $semua['versi'] = array_intersect_key($semua['versi'], array_flip($publik));
 
@@ -65,6 +65,12 @@ if (!$u) {
       ['id', 'judul', 'tanggal', 'jam', 'lokasi', 'ket'],
       fn($x) => ($x['status'] ?? '') === 'terbit',
     ],
+    /* Galeri kegiatan di halaman Tentang. Hanya berkas yang benar-benar
+       ada — baris tanpa gambar akan tampil sebagai bingkai kosong. */
+    'media' => [
+      ['id', 'nama', 'jenis', 'tanggal', 'berkas'],
+      fn($x) => ($x['berkas'] ?? '') !== '',
+    ],
   ];
 
   foreach ($aturan as $nama => [$kolom, $lolos]) {
@@ -78,7 +84,7 @@ if (!$u) {
      menjawab seragam agar surel terdaftar tidak dapat ditebak — membagikan
      daftarnya di sini akan meniadakan upaya itu sama sekali. */
   if (isset($semua['isi']['users']) && is_array($semua['isi']['users'])) {
-    $tampak = ['id', 'nama', 'angkatan', 'level', 'pendidikan', 'kategori', 'foto', 'role'];
+    $tampak = ['id', 'nama', 'angkatan', 'level', 'pendidikan', 'kategori', 'foto', 'role', 'jabatan'];
     $semua['isi']['users'] = array_values(array_map(
       fn($x) => array_intersect_key($x, array_flip($tampak)),
       array_filter($semua['isi']['users'], fn($x) => ($x['status'] ?? 'aktif') !== 'nonaktif')

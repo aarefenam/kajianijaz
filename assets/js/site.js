@@ -621,6 +621,41 @@ const RENDER = {
     </div></section>`);
   },
 
+  /* ---------------- galeri kegiatan ----------------
+     Dibaca dari koleksi Media — yang sama yang dikelola PJ Media &
+     Website lewat ERP → Galeri Media. Jadi menambah foto kegiatan
+     cukup mengunggahnya sekali di sana, tanpa menyentuh halaman ini.
+
+     Disaring menurut jenis: koleksi itu juga memuat logo, banner, dan
+     template yang tak ada urusannya dengan dokumentasi kegiatan. */
+  galeri(d) {
+    const semua = (Store.db.media || [])
+      .filter((x) => x.berkas && (!d.jenis || x.jenis === d.jenis))
+      .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))
+      .slice(0, d.jumlah || 12);
+
+    const n = panelBungkus(d, `
+      ${kepala(d)}
+      ${d.teks ? `<p class="pn-teks pn-intro">${esc(d.teks)}</p>` : ''}
+      ${semua.length ? `<div class="grid-galeri">
+        ${semua.map((x, i) => `<figure class="gl-bingkai" data-i="${i}" tabindex="0" role="button"
+            aria-label="Perbesar ${esc(x.nama)}">
+          <img src="${x.berkas}" alt="${esc(x.nama)}" loading="lazy">
+          <figcaption><span>${esc(x.nama)}</span><small>${tglPendek(x.tanggal)}</small></figcaption>
+        </figure>`).join('')}
+      </div>` : `<p class="pn-kosong">Belum ada dokumentasi untuk ditampilkan.</p>`}`);
+
+    /* Diperbesar di tempat. Tanpa ini, satu-satunya cara melihat fotonya
+       utuh adalah membuka alamat berkasnya sendiri — dan bingkai galeri
+       memang memotong gambarnya agar barisnya rata. */
+    n.querySelectorAll('.gl-bingkai').forEach((f) => {
+      const buka = () => bukaGambar(semua[+f.dataset.i], semua);
+      f.onclick = buka;
+      f.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); buka(); } };
+    });
+    return n;
+  },
+
   /* ---------------- panel isi (generik) ----------------
      Satu renderer untuk lima panel. Yang membedakan hanya `sumber`,
      dan itu dipilih dari daftar di ERP — jadi menambah panel baru di
@@ -895,7 +930,7 @@ const RENDER = {
             </div>
           </div>
           <div class="ang-detail">${IK.toga}<span>${esc(u.pendidikan)}</span></div>
-          <div class="ang-detail">${IK.orang}<span>${esc(RBAC.roleLabel(u.role))}</span></div>
+          <div class="ang-detail">${IK.orang}<span>${esc(u.jabatan || RBAC.roleLabel(u.role))}</span></div>
           <div class="ang-sosmed">
             <a href="#" aria-label="Facebook">${IK.facebook}</a>
             <a href="#" aria-label="Instagram">${IK.instagram}</a>
@@ -1129,6 +1164,49 @@ const RENDER = {
     return sec;
   },
 };
+
+/* ---------------- pembesar gambar galeri ----------------
+   Satu tirai dipakai ulang, bukan satu per gambar: membuat elemen baru
+   tiap kali dibuka meninggalkan tumpukan tirai yang tak pernah dibuang.
+   Panah kiri-kanan berpindah gambar tanpa menutup dulu. */
+let tiraiGambar;
+function bukaGambar(item, daftar) {
+  if (!tiraiGambar) {
+    tiraiGambar = el(`<div class="tirai-gambar" role="dialog" aria-modal="true">
+      <button class="tg-tutup" aria-label="Tutup">${IK.tutup}</button>
+      <button class="tg-nav mundur" aria-label="Sebelumnya">${IK.panah}</button>
+      <figure class="tg-isi"><img alt=""><figcaption></figcaption></figure>
+      <button class="tg-nav maju" aria-label="Berikutnya">${IK.panah}</button>
+    </div>`);
+    document.body.appendChild(tiraiGambar);
+    tiraiGambar.onclick = (e) => { if (e.target === tiraiGambar) tutupGambar(); };
+    tiraiGambar.querySelector('.tg-tutup').onclick = tutupGambar;
+    document.addEventListener('keydown', (e) => {
+      if (!tiraiGambar?.classList.contains('buka')) return;
+      if (e.key === 'Escape') tutupGambar();
+      if (e.key === 'ArrowLeft') tiraiGambar.querySelector('.mundur').click();
+      if (e.key === 'ArrowRight') tiraiGambar.querySelector('.maju').click();
+    });
+  }
+
+  let i = daftar.indexOf(item);
+  const gambar = () => {
+    const x = daftar[i];
+    tiraiGambar.querySelector('img').src = x.berkas;
+    tiraiGambar.querySelector('img').alt = x.nama;
+    tiraiGambar.querySelector('figcaption').textContent = `${x.nama} · ${tglPendek(x.tanggal)}`;
+    /* Pada satu gambar, tombol geser hanya menipu — ia menjanjikan ada
+       gambar lain yang sebenarnya tidak ada. */
+    tiraiGambar.classList.toggle('sendiri', daftar.length < 2);
+  };
+  const geser = (arah) => { i = (i + arah + daftar.length) % daftar.length; gambar(); };
+  tiraiGambar.querySelector('.mundur').onclick = () => geser(-1);
+  tiraiGambar.querySelector('.maju').onclick = () => geser(1);
+
+  gambar();
+  tiraiGambar.classList.add('buka');
+}
+function tutupGambar() { tiraiGambar?.classList.remove('buka'); }
 
 /* ---------------- modal baca artikel ---------------- */
 let tirai;

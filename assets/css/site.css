@@ -1314,3 +1314,73 @@ a.kt:hover {
    kotaknya, alih-alih persegi tajam di dalam kotak yang membulat. */
 .pn-badan .kotak-gambar,
 .pn-badan .gambar-tegak img { border-radius: 18px; overflow: hidden; }
+
+/* ============================================================
+   GALERI KEGIATAN
+   ------------------------------------------------------------
+   Kisi bergambar dengan bingkai berukuran seragam, sebab foto
+   dokumentasi datang dengan perbandingan yang berbeda-beda dan barisan
+   yang tingginya tidak rata terbaca berantakan. Gambarnya dipotong agar
+   rata — dan justru karena dipotong, tiap bingkai dapat dibuka untuk
+   melihatnya utuh.
+   ============================================================ */
+.grid-galeri {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.gl-bingkai {
+  position: relative; margin: 0; cursor: zoom-in; overflow: hidden;
+  border-radius: 14px; aspect-ratio: 4 / 3;
+  background: rgba(255,255,255,.06);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.gl-bingkai img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }
+.gl-bingkai:hover { transform: translateY(-3px); box-shadow: 0 16px 32px -18px rgba(0,0,0,.6); }
+.gl-bingkai:hover img { transform: scale(1.06); }
+.gl-bingkai:focus-visible { outline: 2px solid var(--hijau-muda); outline-offset: 3px; }
+
+.gl-bingkai figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 26px 13px 11px;
+  background: linear-gradient(to top, rgba(14,46,28,.88), transparent);
+  color: #fff;
+}
+.gl-bingkai figcaption span { font-size: 13px; font-weight: 700; line-height: 1.3; }
+.gl-bingkai figcaption small { font-size: 11px; opacity: .75; }
+
+/* --- Pembesar --- */
+.tirai-gambar {
+  position: fixed; inset: 0; z-index: 200;
+  display: none; align-items: center; justify-content: center; gap: 10px;
+  padding: clamp(14px, 4vw, 48px);
+  background: rgba(8,20,13,.92); backdrop-filter: blur(4px);
+}
+.tirai-gambar.buka { display: flex; }
+.tg-isi { margin: 0; max-width: min(100%, 1100px); display: flex; flex-direction: column; gap: 12px; }
+.tg-isi img {
+  max-width: 100%; max-height: 78vh; width: auto; height: auto;
+  /* `contain` di sini, bukan `cover`: inilah satu-satunya tempat gambar
+     memang harus terlihat UTUH — di bingkai galeri ia sudah dipotong. */
+  object-fit: contain; border-radius: 14px; margin-inline: auto;
+}
+.tg-isi figcaption { text-align: center; color: rgba(255,255,255,.82); font-size: 13.4px; }
+
+.tg-tutup, .tg-nav {
+  flex: none; display: grid; place-items: center; cursor: pointer;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
+  color: #fff; transition: background .16s ease;
+}
+.tg-tutup:hover, .tg-nav:hover { background: rgba(255,255,255,.24); }
+.tg-tutup { position: absolute; top: clamp(12px, 3vw, 28px); right: clamp(12px, 3vw, 28px); }
+.tg-nav.mundur svg { transform: rotate(180deg); }
+.tirai-gambar.sendiri .tg-nav { display: none; }
+
+@media (max-width: 700px) {
+  .grid-galeri { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tg-nav { position: absolute; bottom: 18px; }
+  .tg-nav.mundur { left: 18px; }
+  .tg-nav.maju { right: 18px; }
+}

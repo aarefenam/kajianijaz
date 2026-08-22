@@ -200,10 +200,25 @@ const SEED = {
           },
         },
         {
+          id: 'visi-misi', tipe: 'visi-misi', nama: 'Visi & Misi', aktif: true,
+          data: {
+            tema      : 'hijau',
+            judul   : 'Visi & Misi',
+            visi : 'Menjadi kajian unggulan dalam pengembangan studi tafsir dan ilmu-ilmu al-Quran yang mampu melahirkan generasi yang berilmu, kritis, berintegritas, serta berkontribusi nyata bagi umat.',
+            misi : [
+              'Mengkaji dan mendalami ilmu-ilmu al-Quran secara sistematis, terarah, dan berkelanjutan.',
+              "Meningkatkan kemampuan analisis, pemahaman, serta interpretasi anggota dalam bidang tafsir al-Qur'an.",
+              'Mencetak kader-kader intelektual yang mampu berkontribusi dalam pengembangan studi al-Quran, baik dalam ranah akademik maupun sosial.',
+              'Membangun tradisi keilmuan yang aktif dan produktif melalui diskusi ilmiah, presentasi, serta penulisan karya ilmiah.',
+              'Menumbuhkan budaya berpikir kritis dan argumentatif yang tetap berlandaskan pada kaidah-kaidah ilmiah yang benar.',
+            ],
+          },
+        },
+        {
           id: 'panel-kajian', tipe: 'panel', nama: 'Panel — Kajian Terbaru', aktif: true,
           data: {
             sumber    : 'kajian',
-            tema      : 'hijau',
+            tema      : 'krem',
             judul     : 'Kajian Terbaru',
             teks      : 'Jadwal kajian pekanan beserta pemakalah dan tempatnya. Terbuka untuk diikuti — datang, simak, lalu ikut berdiskusi.',
             jumlah    : 6,
@@ -214,7 +229,7 @@ const SEED = {
         {
           id: 'syarah', tipe: 'timeline', nama: "Syarah / Sejarah Kajian Al-I'jaz", aktif: true,
           data: {
-            tema      : 'krem',
+            tema      : 'hijau',
             judul   : "Syarah Kajian Al-I'jaz",
             gambar: ph('AL-AZHAR KAIRO', '#1B5E20', '#0E2E1C', 'الأزهر'),
             butir : [
@@ -229,7 +244,7 @@ const SEED = {
           id: 'panel-artikel', tipe: 'panel', nama: 'Panel — Artikel Terbaru', aktif: true,
           data: {
             sumber    : 'artikel',
-            tema      : 'hijau',
+            tema      : 'krem',
             judul     : 'Artikel Terbaru',
             teks      : 'Tulisan ilmiah seputar tafsir dan ilmu-ilmu al-Quran, disusun anggota dan ditinjau redaksi sebelum tayang.',
             jumlah    : 6,
@@ -240,7 +255,7 @@ const SEED = {
         {
           id: 'sistem-metode', tipe: 'dua-kolom', nama: 'Sistem & Metode Kajian', aktif: true,
           data: {
-            tema      : 'krem',
+            tema      : 'hijau',
             judul   : 'Sistem & Metode Kajian',
             intro : 'Dalam pelaksanaannya, Kajian Al-I\'jaz menerapkan sistem pembelajaran yang terstruktur dan berjenjang, guna memastikan bahwa setiap anggota memperoleh pemahaman yang komprehensif dan berkesinambungan. Sistem kajian ini terbagi menjadi dua metode utama, yaitu:',
             kolom : [
@@ -281,7 +296,7 @@ const SEED = {
           id: 'panel-video', tipe: 'panel', nama: 'Panel — Video Kajian', aktif: true,
           data: {
             sumber    : 'video',
-            tema      : 'hijau',
+            tema      : 'krem',
             judul     : 'Video Kajian',
             teks      : 'Rekaman dan cuplikan kajian yang sudah tayang, agar yang berhalangan hadir tetap dapat menyimaknya.',
             jumlah    : 6,
@@ -293,7 +308,7 @@ const SEED = {
           id: 'panel-buku', tipe: 'panel', nama: 'Panel — Buku & Karya', aktif: true,
           data: {
             sumber    : 'buku',
-            tema      : 'krem',
+            tema      : 'hijau',
             judul     : 'Buku & Karya',
             teks      : 'Naskah yang sedang digarap bersama — dari pengumpulan tulisan, penyuntingan, sampai siap terbit.',
             jumlah    : 6,
@@ -305,7 +320,7 @@ const SEED = {
           id: 'panel-agenda', tipe: 'panel', nama: 'Panel — Agenda Kegiatan', aktif: true,
           data: {
             sumber    : 'agenda',
-            tema      : 'hijau',
+            tema      : 'krem',
             judul     : 'Agenda Kegiatan',
             teks      : 'Kegiatan yang akan datang. Yang sudah lewat turun sendiri dari daftar ini.',
             jumlah    : 6,
@@ -316,7 +331,7 @@ const SEED = {
         {
           id: 'panel-kontak', tipe: 'panel-kontak', nama: 'Panel — Hubungi Kami', aktif: true,
           data: {
-            tema    : 'krem',
+            tema    : 'hijau',
             judul   : 'Hubungi Kami',
             teks    : 'Untuk pertanyaan, kerja sama, atau sekadar bersilaturahmi. Nomor, surel, dan alamat di bawah dibaca langsung dari Identitas Situs — cukup diubah sekali di sana.',
             subJudul: 'Kontak Kami',
@@ -325,7 +340,7 @@ const SEED = {
         {
           id: 'organisasi', tipe: 'organisasi', nama: 'Struktur Organisasi', aktif: true,
           data: {
-            tema      : 'hijau',
+            tema      : 'krem',
             judul   : 'Susunan Organisasi',
             intro : 'Struktur kepengurusan yang menopang jalannya kajian, publikasi, dan administrasi organisasi.',
             /* Terhubung ke modul Anggota di ERP lewat field `role` */
@@ -352,23 +367,8 @@ const SEED = {
           data: {
             skrip   : 'Tentang Kami',
             judul   : "Keluarga Besar\nKajian Al-I'jaz",
-            subjudul: "Berkenalan dengan para pendiri dan anggota Kajian Al-I'jaz yang berkomitmen dalam mendalami tafsir al-Quran dan 'ulum al-Quran.",
+            subjudul: 'Berkenalan dengan para pendiri, alumni, dan anggota kajian dari masa ke masa.',
             gambar  : ph('MASJID & MENARA', '#0E2E1C', '#3D6B3F', 'مسجد'),
-          },
-        },
-        {
-          id: 'visi-misi', tipe: 'visi-misi', nama: 'Visi & Misi', aktif: true,
-          data: {
-            tema      : 'krem',
-            judul   : 'Visi & Misi',
-            visi : 'Menjadi kajian unggulan dalam pengembangan studi tafsir dan ilmu-ilmu al-Quran yang mampu melahirkan generasi yang berilmu, kritis, berintegritas, serta berkontribusi nyata bagi umat.',
-            misi : [
-              'Mengkaji dan mendalami ilmu-ilmu al-Quran secara sistematis, terarah, dan berkelanjutan.',
-              "Meningkatkan kemampuan analisis, pemahaman, serta interpretasi anggota dalam bidang tafsir al-Qur'an.",
-              'Mencetak kader-kader intelektual yang mampu berkontribusi dalam pengembangan studi al-Quran, baik dalam ranah akademik maupun sosial.',
-              'Membangun tradisi keilmuan yang aktif dan produktif melalui diskusi ilmiah, presentasi, serta penulisan karya ilmiah.',
-              'Menumbuhkan budaya berpikir kritis dan argumentatif yang tetap berlandaskan pada kaidah-kaidah ilmiah yang benar.',
-            ],
           },
         },
         {
@@ -377,6 +377,16 @@ const SEED = {
             judul   : "Keluarga Besar Al-I'jaz",
             intro : 'Para pendiri, pengurus, dan anggota aktif yang menjaga keberlangsungan tradisi keilmuan.',
             tampilkanFilter: true,
+          },
+        },
+        {
+          id: 'galeri-kegiatan', tipe: 'galeri', nama: 'Galeri Kegiatan', aktif: true,
+          data: {
+            tema  : 'hijau',
+            judul : 'Galeri Kegiatan',
+            teks  : 'Dokumentasi kajian pekanan, halaqah, dan kegiatan bersama dari waktu ke waktu.',
+            jenis : 'Foto',
+            jumlah: 12,
           },
         },
       ],
@@ -1047,6 +1057,16 @@ SEED.media = [
   { id:'md4', nama:'Banner Website',      jenis:'Grafis', tanggal:'2025-06-23', berkas: ph('BANNER WEBSITE','#26402C','#16281B','بانر') },
   { id:'md5', nama:'Dokumentasi Kajian',  jenis:'Foto',   tanggal:'2025-06-22', berkas: ph('DOKUMENTASI','#1A4A2E','#0E2E1C','توثيق') },
   { id:'md6', nama:'Cover Artikel',       jenis:'Grafis', tanggal:'2025-06-22', berkas: ph('COVER ARTIKEL','#14361F','#0A2314','غلاف') },
+
+  /* Dokumentasi kegiatan — inilah yang tampil di galeri halaman
+     Tentang. Sengaja lebih banyak daripada grafis: satu galeri berisi
+     dua foto terbaca seperti fiturnya belum jadi. */
+  { id:'md7',  nama:'Halaqah Ilmiah Bersama',    jenis:'Foto', tanggal:'2025-06-21', berkas: ph('HALAQAH ILMIAH','#1B5E20','#0E2E1C','حلقة') },
+  { id:'md8',  nama:'Presentasi Makalah Level 2',jenis:'Foto', tanggal:'2025-06-14', berkas: ph('PRESENTASI MAKALAH','#22532C','#102D19','بحث') },
+  { id:'md9',  nama:'Pembekalan Tatsqif',        jenis:'Foto', tanggal:'2025-06-07', berkas: ph('PEMBEKALAN TATSQIF','#17462A','#0B2415','تثقيف') },
+  { id:'md10', nama:'Diskusi Selepas Kajian',    jenis:'Foto', tanggal:'2025-05-31', berkas: ph('DISKUSI KAJIAN','#1E4D2B','#0E2E1C','نقاش') },
+  { id:'md11', nama:'Kunjungan ke Al-Azhar',     jenis:'Foto', tanggal:'2025-05-24', berkas: ph('KUNJUNGAN AL-AZHAR','#205630','#0F2C1B','الأزهر') },
+  { id:'md12', nama:'Peringatan Nuzulul Quran',  jenis:'Foto', tanggal:'2025-05-17', berkas: ph('NUZULUL QURAN','#1A4A2E','#0E2E1C','نزول') },
 ];
 
 SEED.desain = [

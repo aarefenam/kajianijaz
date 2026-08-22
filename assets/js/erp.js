@@ -811,6 +811,7 @@ const dasborUmum = () => {
 const LABEL = {
   skrip: 'Teks Skrip (tulisan tangan)', judul: 'Judul', subjudul: 'Sub Judul',
   cariPetunjuk: 'Teks Bayangan Kolom Cari',
+  jenis: 'Jenis Berkas Ditampilkan',
   tombol2Teks: 'Label Tombol Kedua', tombol2Link: 'Tautan Tombol Kedua', tema: 'Tema Panel',
   lencana: 'Teks Lencana Melingkar',
   sumber: 'Sumber Isi', tema: 'Tema Panel', jumlah: 'Jumlah Ditampilkan',
@@ -1141,7 +1142,7 @@ HAL.tema = () => {
      internal — bukan isi yang perlu disunting siapa pun. Tanpa disaring,
      ia tampil di formulir ini sebagai kolom angka bernama "Beranda
      Versi", dan tak ada yang tahu apa gunanya. */
-  const SITUS_INTERNAL = ['menuArtikelDipindah', 'berandaDirombak', 'pemisahDitambah', 'berandaVersi'];
+  const SITUS_INTERNAL = ['menuArtikelDipindah', 'berandaDirombak', 'pemisahDitambah', 'berandaVersi', 'tentangVersi'];
   Object.entries(s).forEach(([k, v]) => {
     if (SITUS_INTERNAL.includes(k)) return;
     kanan.querySelector('#ms').appendChild(medan(k, v, `situs.${k}`, RBAC.can(U, 'cms.page.edit'), RBAC.can(U, 'cms.media.upload')));
@@ -1759,9 +1760,14 @@ function formAnggota(u) {
       <div class="grup"><label>Jabatan / Role ERP</label>
         <select id="r" ${bisaRole ? '' : 'disabled'}>${Object.entries(RBAC.ROLES).map(([k, v]) => `<option value="${k}" ${u?.role === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
         <div class="bantu">${bisaRole ? 'Menentukan menu dan wewenang orang ini di ERP.' : 'Hanya Ketua Umum yang dapat mengubah role.'}</div></div>
-      <div class="grup"><label>Kategori Tampil di Website</label>
-        <select id="kt">${['pendiri', 'anggota', 'alumni'].map((x) => `<option ${u?.kategori === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="grup"><label>Label di Website</label>
+        <select id="kt">${['pendiri', 'anggota', 'alumni'].map((x) => `<option ${u?.kategori === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+        <div class="bantu">Pil yang tampil di kartu: Pendiri, Anggota Aktif, atau Alumni.</div></div>
     </div>
+    <div class="grup"><label>Jabatan di Kajian</label>
+      <input id="jb" value="${esc(u?.jabatan || '')}" placeholder="${esc(RBAC.roleLabel(u?.role || 'anggota'))}">
+      <div class="bantu">Jabatan organisasi yang tampil di halaman Tentang. Berbeda dari role ERP di
+        atas — role menentukan wewenang, ini menentukan sebutan. Dikosongkan berarti mengikuti role.</div></div>
     <div class="grup"><label>Riwayat Pendidikan</label><input id="p" value="${esc(u?.pendidikan || '')}" placeholder="S1 Tafsir & Ilmu al-Quran, Universitas Al-Azhar Kairo"></div>
   </div>`);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
@@ -1774,7 +1780,7 @@ function formAnggota(u) {
     aman(() => {
       Store.simpanAnggota(U, {
         id: u?.id, nama: g('n').trim(), email: g('e').trim(), angkatan: g('a'), level: g('l'),
-        status: g('s'), role: g('r'), kategori: g('kt'), pendidikan: g('p'),
+        status: g('s'), role: g('r'), kategori: g('kt'), pendidikan: g('p'), jabatan: g('jb').trim(),
       });
       tutupModal(); toast('Data anggota tersimpan.'); gambar();
     });
