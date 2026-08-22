@@ -26,7 +26,7 @@
      seluruh pengurus tanpa melewati persetujuan. Nilai di bawah hanya
      berlaku sampai temanya termuat. */
   --e-font: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
-  --e-font-aksen: 'Caveat', 'Segoe Script', cursive;
+  --e-font-merek: 'Playfair Display', Georgia, serif;
   --e-font-arab: 'Amiri', 'Traditional Arabic', Georgia, serif;
 }
 
@@ -61,7 +61,7 @@ button { font-family: inherit; }
   background: linear-gradient(140deg, rgba(140,198,63,.24), rgba(240,149,30,.18));
   border: 1px solid rgba(255,255,255,.22);
 }
-.login-merek .nama { font-family: var(--e-font-aksen); font-size: 34px; line-height: 1; }
+.login-merek .nama { font-family: var(--e-font-merek); font-size: 34px; line-height: 1; }
 .login-merek .tag { font-size: 12px; color: rgba(255,255,255,.62); }
 .login-kiri h1 { font-size: 34px; font-weight: 800; line-height: 1.2; margin: 0 0 14px; letter-spacing: -.5px; }
 .login-kiri p { color: rgba(255,255,255,.72); font-size: 14.5px; max-width: 420px; margin: 0 0 34px; }
@@ -101,7 +101,7 @@ button { font-family: inherit; }
   border: 1px solid rgba(255,255,255,.18);
 }
 .sb-merek .lambang img, .login-merek .lambang img { object-fit: contain; }
-.sb-merek .nama { font-family: var(--e-font-aksen); font-size: 25px; color: #fff; line-height: 1; }
+.sb-merek .nama { font-family: var(--e-font-merek); font-size: 25px; color: #fff; line-height: 1; }
 .sb-merek .tag { font-size: 10.5px; color: rgba(255,255,255,.5); letter-spacing: .4px; }
 
 .sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px 20px; }
@@ -309,7 +309,7 @@ tbody tr:hover { background: #FAFBFA; }
   border: 1px solid rgba(255,255,255,.20);
 }
 .pratinjau-merek .kotak img { width: 28px; height: 28px; object-fit: contain; }
-.pratinjau-merek .nm { font-family: var(--e-font-aksen); font-size: 27px; color: #fff; line-height: 1; }
+.pratinjau-merek .nm { font-family: var(--e-font-merek); font-size: 27px; color: #fff; line-height: 1; }
 .pratinjau-merek .tg { font-size: 11px; color: rgba(255,255,255,.62); }
 
 .pratinjau-tab {

@@ -89,11 +89,11 @@ function terapkanTema() {
 function terapkanFont(t, r) {
   const utama = FONT.tumpuk('utama', t.fontUtama);
   /* "Sama dengan font utama" disimpan sebagai tumpukan kosong. */
-  const aksen = FONT.tumpuk('aksen', t.fontAksen) || utama;
+  const merek = FONT.tumpuk('merek', t.fontMerek) || utama;
   r.setProperty('--font-judul', utama);
-  r.setProperty('--font-skrip', aksen);
+  r.setProperty('--font-merek', merek);
   r.setProperty('--font-arab', FONT.tumpuk('arab', t.fontArab));
-  FONT.muat({ utama: t.fontUtama, aksen: t.fontAksen, arab: t.fontArab });
+  FONT.muat({ utama: t.fontUtama, merek: t.fontMerek, arab: t.fontArab });
 }
 
 /* ---------------- kerangka: header, footer, nav ---------------- */
@@ -246,15 +246,42 @@ const GELOMBANG = `<div class="gelombang"><svg viewBox="0 0 1440 110" preserveAs
 </svg></div>`;
 
 /* ---------------- kepala section ---------------- */
-function kepala(d, tengah = false) {
-  return `<div class="kepala${tengah ? ' kepala-tengah' : ''}">
-    ${d.nomor ? `<div class="nomor">${esc(d.nomor)}</div>` : ''}
-    <div>
-      ${d.skrip ? `<div class="judul-skrip">${esc(d.skrip)}</div>` : ''}
-      <h2 class="judul-teks">${esc(d.judul)}</h2>
-      <div class="garis-bawah"></div>
+/**
+ * Kepala bagian — bentuknya sama persis dengan kepala panel, sebab
+ * itulah yang membuat seluruh halaman terbaca sebagai satu rancangan
+ * alih-alih dua yang kebetulan bertetangga.
+ *
+ * Nomor urut dan garis bawah dilepas. Nomor pada bagian yang urutannya
+ * dapat digeser dari ERP hanya menjadi janji yang tak ditepati: begitu
+ * satu bagian dipindahkan, penomorannya salah dan tak ada yang
+ * membetulkannya.
+ */
+function kepala(d) {
+  return `<header class="pn-kepala">
+    ${d.skrip ? `<div class="pn-label">${esc(d.skrip)}</div>` : ''}
+    <h2 class="pn-judul">
+      <span class="pn-hias">${OR.daun}</span>${esc(d.judul)}<span class="pn-hias">${OR.daun}</span>
+    </h2>
+  </header>`;
+}
+
+/**
+ * Bungkus sebuah bagian ke dalam kotak panel — sudut tumpul, ragam hias
+ * di keempat penjurunya, dan tema hijau atau krem berselang. Dipakai
+ * bagian-bagian bercerita, sehingga ia sejajar dengan panel isi di
+ * sekitarnya alih-alih tampil sebagai pita selebar layar.
+ */
+function panelBungkus(d, isi, kelasTambahan = '') {
+  const tema = d.tema === 'hijau' ? 'hijau' : 'krem';
+  return el(`<section class="panel panel-${tema} ${kelasTambahan}">
+    <div class="panel-kotak">
+      <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
+      <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
+      <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
+      <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+      <div class="pn-badan">${isi}</div>
     </div>
-  </div>`;
+  </section>`);
 }
 
 /* ============================================================
@@ -755,25 +782,23 @@ const RENDER = {
   },
 
   'teks-gambar'(d) {
-    return el(`<section class="sec pola-terang"><div class="wrap">
+    return panelBungkus(d, `
       ${kepala(d)}
       <div class="grid-teks-gambar ${d.posisiGambar === 'kanan' ? 'kanan' : ''}">
         <div class="kotak-gambar"><img src="${d.gambar}" alt=""></div>
         <div class="isi-teks">${d.paragraf.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
-      </div>
-    </div></section>`);
+      </div>`);
   },
 
   timeline(d) {
-    return el(`<section class="sec sec-gelap"><div class="wrap">
+    return panelBungkus(d, `
       ${kepala(d)}
       <div class="grid-timeline">
         <div class="timeline">
           ${d.butir.map((b) => `<div class="tl-butir"><span class="tl-ikon">${IK.buku}</span><p>${esc(b.teks)}</p></div>`).join('')}
         </div>
         <div class="gambar-tegak"><img src="${d.gambar}" alt=""></div>
-      </div>
-    </div></section>`);
+      </div>`);
   },
 
   'dua-kolom'(d) {
@@ -786,15 +811,14 @@ const RENDER = {
       ${k.poin ? `<ul class="daftar-poin">${k.poin.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${k.penutup ? `<p class="penutup-metode">${esc(k.penutup)}</p>` : ''}
     </div>`;
-    return el(`<section class="sec sec-gelap"><div class="wrap">
+    return panelBungkus(d, `
       ${kepala(d)}
-      ${d.intro ? `<p class="intro-sec">${esc(d.intro)}</p>` : ''}
-      <div class="grid-dua">${d.kolom.map(kol).join('')}</div>
-    </div></section>`);
+      ${d.intro ? `<p class="pn-teks pn-intro">${esc(d.intro)}</p>` : ''}
+      <div class="grid-dua">${d.kolom.map(kol).join('')}</div>`);
   },
 
   'visi-misi'(d) {
-    return el(`<section class="sec pola-terang"><div class="wrap">
+    return panelBungkus(d, `
       ${kepala(d)}
       <div class="grid-visi">
         <div class="kartu-visi">
@@ -805,8 +829,7 @@ const RENDER = {
           <div class="label-vm"><span class="ik">${IK.target}</span>B. Misi</div>
           <ol class="daftar-misi">${d.misi.map((m) => `<li><span>${esc(m)}</span></li>`).join('')}</ol>
         </div>
-      </div>
-    </div></section>`);
+      </div>`);
   },
 
   organisasi(d) {
@@ -815,17 +838,16 @@ const RENDER = {
       <div class="org-jabatan">${esc(RBAC.roleLabel(j.role))}</div>
       <div class="org-nama">${esc(j.nama)}</div>
     </div>`).join('');
-    return el(`<section class="sec pola-terang"><div class="wrap">
+    return panelBungkus(d, `
       ${kepala(d)}
-      ${d.intro ? `<p style="max-width:640px;margin:-18px 0 32px;color:#55645A;font-size:15px">${esc(d.intro)}</p>` : ''}
-      <div class="grid-org">${kartu}</div>
-    </div></section>`);
+      ${d.intro ? `<p class="pn-teks pn-intro">${esc(d.intro)}</p>` : ''}
+      <div class="grid-org">${kartu}</div>`);
   },
 
   /* --------- daftar anggota dengan filter + pencarian --------- */
   anggota(d) {
     const sec = el(`<section class="sec pola-terang"><div class="wrap">
-      ${kepala(d, true)}
+      ${kepala(d)}
       ${d.tampilkanFilter ? `<div class="tab-filter">
         <button data-f="semua" class="aktif">${IK.grup} Semua</button>
         <button data-f="pendiri">${IK.bintang} Pendiri</button>
@@ -1091,7 +1113,7 @@ const RENDER = {
 
   faq(d) {
     const sec = el(`<section class="sec" style="padding-top:0"><div class="wrap" style="max-width:840px">
-      ${kepala(d, true)}
+      ${kepala(d)}
       <div id="daftarFaq">${d.butir.map((b) => `<div class="akordeon">
         <button class="akordeon-kepala">${esc(b.t)} ${IK.bawah}</button>
         <div class="akordeon-isi"><p>${esc(b.j)}</p></div>

@@ -155,9 +155,9 @@ function terapkanFontErp() {
   const r = document.documentElement.style;
   const utama = FONT.tumpuk('utama', t.fontUtama);
   r.setProperty('--e-font', utama);
-  r.setProperty('--e-font-aksen', FONT.tumpuk('aksen', t.fontAksen) || utama);
+  r.setProperty('--e-font-merek', FONT.tumpuk('merek', t.fontMerek) || utama);
   r.setProperty('--e-font-arab', FONT.tumpuk('arab', t.fontArab));
-  FONT.muat({ utama: t.fontUtama, aksen: t.fontAksen, arab: t.fontArab });
+  FONT.muat({ utama: t.fontUtama, merek: t.fontMerek, arab: t.fontArab });
 }
 
 function terapkanFaviconErp() {
@@ -811,7 +811,7 @@ const dasborUmum = () => {
 const LABEL = {
   skrip: 'Teks Skrip (tulisan tangan)', judul: 'Judul', subjudul: 'Sub Judul',
   cariPetunjuk: 'Teks Bayangan Kolom Cari',
-  tombol2Teks: 'Label Tombol Kedua', tombol2Link: 'Tautan Tombol Kedua',
+  tombol2Teks: 'Label Tombol Kedua', tombol2Link: 'Tautan Tombol Kedua', tema: 'Tema Panel',
   lencana: 'Teks Lencana Melingkar',
   sumber: 'Sumber Isi', tema: 'Tema Panel', jumlah: 'Jumlah Ditampilkan',
   tombolTeks: 'Label Tombol', tombolLink: 'Tautan Tombol', gambar: 'Gambar', nomor: 'Nomor Section',
@@ -1127,7 +1127,7 @@ HAL.tema = () => {
   /* Font punya kartunya sendiri di bawah — bila ikut di sini ia akan
      tampil sebagai kolom teks, dan mengetik nama font di kolom teks
      tidak pernah menjadikan font itu terpasang. */
-  const MEDAN_FONT = ['fontUtama', 'fontAksen', 'fontArab'];
+  const MEDAN_FONT = ['fontUtama', 'fontMerek', 'fontArab'];
   Object.entries(t).forEach(([k, v]) => {
     if (MEDAN_FONT.includes(k)) return;
     kiri.querySelector('#mt').appendChild(medan(k, v, `theme.${k}`, bisa, bisa));
@@ -1239,9 +1239,9 @@ function kartuFont(t, bisa) {
         'Dipakai seluruh tulisan: judul, paragraf, tombol, dan tabel di ERP.',
         "Menggali al-Quran dengan Ilmu<br><span style='font-size:13.5px;opacity:.72'>Menghidupkan hati dengan tafsir — 1234567890</span>",
         'font-size:19px;font-weight:700;line-height:1.45')}
-      ${baris('aksen', t.fontAksen, 'Font Aksen',
-        'Tulisan tangan pada sambutan hero dan judul kecil di atas tiap bagian.',
-        'Selamat Datang di', 'font-size:30px;line-height:1.2')}
+      ${baris('merek', t.fontMerek, 'Font Merek',
+        'Nama organisasi di header dan kaki halaman — tempat rupa hurufnya memang dimaksudkan terlihat.',
+        "Kajian Al-I'jaz", 'font-size:34px;font-weight:600;line-height:1.2')}
       ${baris('arab', t.fontArab, 'Font Arab',
         'Untuk teks berhuruf Arab: kutipan di halaman publik dan tampilan di panel ERP.',
         '&#1576;&#1616;&#1587;&#1618;&#1605;&#1616; &#1575;&#1604;&#1604;&#1617;&#1607;&#1616; &#1575;&#1604;&#1585;&#1617;&#1614;&#1581;&#1618;&#1605;&#1614;&#1606;&#1616;',
@@ -1256,7 +1256,7 @@ function kartuFont(t, bisa) {
          dapat dibandingkan tanpa harus menyimpan lalu membatalkan. */
       const c = kartu.querySelector(`[data-contoh="${jenis}"]`);
       if (c) c.style.fontFamily = f.tumpuk || FONT.tumpuk('utama', Store.draft.theme.fontUtama);
-      const kunci = { utama: 'fontUtama', aksen: 'fontAksen', arab: 'fontArab' }[jenis];
+      const kunci = { utama: 'fontUtama', merek: 'fontMerek', arab: 'fontArab' }[jenis];
       aman(() => {
         Store.ubahDraft(U, `theme.${kunci}`, sel.value, 'cms.theme.edit');
         toast('Tersimpan di draft. Ajukan agar ditinjau Ketua.');

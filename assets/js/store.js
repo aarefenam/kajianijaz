@@ -154,6 +154,7 @@ function migrasiBentuk(tersimpan) {
   petakanFontLama(tersimpan);
   rombakHero(tersimpan);
   susunBeranda(tersimpan);
+  rapikanKepala(tersimpan);
 
   /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
      pengurus dari seed.js yang belum ada di DB. Itu masuk akal selagi
@@ -238,7 +239,11 @@ function petakanFontLama(tersimpan) {
     const t = sisi?.theme;
     if (!t) return;
     if (t.fontUtama === undefined) t.fontUtama = FONT.kenali('utama', t.fontJudul);
-    if (t.fontAksen === undefined) t.fontAksen = FONT.kenali('aksen', t.fontSkrip);
+    /* Pilihan tulisan tangan lama — Caveat dan sejenisnya — tidak ada
+       lagi padanannya. Semuanya jatuh ke serif bawaan, bukan dibiarkan
+       menunjuk keluarga yang sudah tak dikenal daftar. */
+    if (t.fontMerek === undefined) t.fontMerek = 'playfair';
+    delete t.fontAksen;
     if (t.fontArab === undefined) t.fontArab = 'amiri';
     /* Dibuang, bukan dibiarkan: halaman Tema menyusun formulirnya dari
        bentuk data, jadi medan lama akan tetap tampil dan disunting
@@ -261,7 +266,7 @@ function petakanFontLama(tersimpan) {
    isi yang sudah ada dipertahankan apa adanya. Yang berpindah hanya
    tempatnya, bukan tulisannya.
    ------------------------------------------------------------ */
-const BERANDA_VERSI = 3;
+const BERANDA_VERSI = 4;
 
 const URUT_BERANDA = [
   'hero', 'pemisah-hero',
@@ -277,6 +282,43 @@ const URUT_BERANDA = [
 /* Sempat dipindahkan ke halaman Tentang pada perombakan sebelumnya;
    kini ditarik kembali, berikut suntingan yang menyertainya. */
 const PERNAH_DI_TENTANG = ['tentang-singkat', 'syarah', 'sistem-metode', 'organisasi'];
+
+/* Nomor urut dibuang di seluruh halaman, bukan hanya beranda.
+
+   Judulnya pun dirapikan. Dulu kata depan judul berdiri di baris skrip
+   terpisah — "Apa itu" di atas "Kajian Al-I'jaz" — dan keduanya dibaca
+   sebagai satu kalimat. Dengan kepala bagian yang baru, baris skrip
+   menjadi label kecil, sehingga empat bagian berbeda semuanya berjudul
+   "Kajian Al-I'jaz". Judulnya disatukan supaya masing-masing kembali
+   menyebut dirinya sendiri. */
+const JUDUL_SATU = {
+  'tentang-singkat': "Apa itu Kajian Al-I'jaz?",
+  'syarah'         : "Syarah Kajian Al-I'jaz",
+  'sistem-metode'  : 'Sistem & Metode Kajian',
+  'organisasi'     : 'Susunan Organisasi',
+  'visi-misi'      : 'Visi & Misi',
+  'keluarga-besar' : "Keluarga Besar Al-I'jaz",
+  'form-kontak'    : 'Sampaikan Pesan Anda',
+  'faq'            : 'Pertanyaan yang Sering Diajukan',
+};
+
+function rapikanKepala(tersimpan) {
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => {
+    Object.values(sisi?.halaman || {}).forEach((hal) => {
+      (hal.sections || []).forEach((sec) => {
+        if (!sec.data) return;
+        delete sec.data.nomor;
+        if (!JUDUL_SATU[sec.id]) return;
+        /* Hanya judul bawaan yang disatukan. Yang sudah ditulis ulang
+           pengurus dibiarkan — merekalah yang lebih tahu maksudnya. */
+        if (/^Kajian Al-I'jaz\??$/.test(sec.data.judul || '') || sec.data.skrip !== undefined) {
+          sec.data.judul = JUDUL_SATU[sec.id];
+        }
+        delete sec.data.skrip;
+      });
+    });
+  });
+}
 
 function susunBeranda(tersimpan) {
   const seedSec = window.SEED?.halaman?.beranda?.sections || [];
@@ -307,6 +349,18 @@ function susunBeranda(tersimpan) {
       });
     }
 
+    /* Tema tiap bagian ditetapkan ulang supaya hijau dan krem benar-benar
+       berselang. Sebelum ini keempat bagian bercerita tak punya tema sama
+       sekali — semuanya jatuh ke krem, dan tiga panel krem berturut-turut
+       membuat halaman terlihat kehabisan warna di tengah. */
+    const TEMA_BERANDA = {
+      'tentang-singkat': 'krem', 'panel-kajian': 'hijau',
+      'syarah': 'krem', 'panel-artikel': 'hijau',
+      'sistem-metode': 'krem', 'panel-video': 'hijau',
+      'panel-buku': 'krem', 'panel-agenda': 'hijau',
+      'panel-kontak': 'krem', 'organisasi': 'hijau',
+    };
+
     const hasil = [];
     URUT_BERANDA.forEach((id) => {
       const ada = punya.get(id);
@@ -318,6 +372,12 @@ function susunBeranda(tersimpan) {
        ikut, di belakang — lenyap tanpa jejak jauh lebih buruk
        daripada urutan yang meleset. */
     punya.forEach((sec) => hasil.push(sec));
+    hasil.forEach((sec) => {
+      if (TEMA_BERANDA[sec.id] && sec.data) sec.data.tema = TEMA_BERANDA[sec.id];
+      /* Nomor urut sudah tidak digambar; dibiarkan, ia akan tetap tampil
+         sebagai medan yang dapat disunting di editor CMS. */
+      if (sec.data) delete sec.data.nomor;
+    });
     beranda.sections = hasil;
   });
 }

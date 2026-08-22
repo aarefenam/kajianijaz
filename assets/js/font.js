@@ -65,29 +65,39 @@ const FONT_UTAMA = {
   },
 };
 
-const FONT_AKSEN = {
-  caveat: {
-    label: 'Caveat', ket: 'Bawaan — tulisan tangan yang mengalir',
-    q: 'Caveat:wght@600;700',
-    tumpuk: "'Caveat', 'Segoe Script', cursive",
+/* Dulu berisi font tulisan tangan. Diganti seluruhnya: tulisan tangan
+   pada lembaga keilmuan terbaca sebagai catatan tempel, bukan sebagai
+   identitas. Yang menggantikannya serif bermartabat — untuk nama
+   organisasi di header dan judul besar, tempat rupa huruf memang
+   dimaksudkan terlihat. */
+const FONT_MEREK = {
+  playfair: {
+    label: 'Playfair Display', ket: 'Bawaan — kontras tinggi, berwibawa',
+    q: 'Playfair+Display:wght@500;600;700',
+    tumpuk: "'Playfair Display', Georgia, 'Times New Roman', serif",
   },
-  kalam: {
-    label: 'Kalam', ket: 'Tulisan tangan tegak, lebih terbaca',
-    q: 'Kalam:wght@400;700',
-    tumpuk: "'Kalam', 'Segoe Script', cursive",
+  cormorant: {
+    label: 'Cormorant Garamond', ket: 'Ramping dan klasik, bernuansa kitab',
+    q: 'Cormorant+Garamond:wght@500;600;700',
+    tumpuk: "'Cormorant Garamond', Georgia, 'Times New Roman', serif",
   },
-  patrick: {
-    label: 'Patrick Hand', ket: 'Sederhana, seperti tulisan pensil',
-    q: 'Patrick+Hand',
-    tumpuk: "'Patrick Hand', 'Segoe Script', cursive",
+  spectral: {
+    label: 'Spectral', ket: 'Serif modern, sangat jernih di layar',
+    q: 'Spectral:wght@500;600;700',
+    tumpuk: "'Spectral', Georgia, 'Times New Roman', serif",
   },
-  shadows: {
-    label: 'Shadows Into Light', ket: 'Tipis dan miring, berkesan ringan',
-    q: 'Shadows+Into+Light',
-    tumpuk: "'Shadows Into Light', 'Segoe Script', cursive",
+  marcellus: {
+    label: 'Marcellus', ket: 'Bergaya prasasti, tenang dan berumur',
+    q: 'Marcellus',
+    tumpuk: "'Marcellus', Georgia, 'Times New Roman', serif",
+  },
+  lora: {
+    label: 'Lora', ket: 'Berkait hangat, serasi dengan teks panjang',
+    q: 'Lora:wght@500;600;700',
+    tumpuk: "'Lora', Georgia, 'Times New Roman', serif",
   },
   /* Nilai kosong berarti "ikut font utama" — dipetakan saat diterapkan. */
-  sama: { label: 'Sama dengan Font Utama', ket: 'Tanpa aksen tulisan tangan', q: '', tumpuk: '' },
+  sama: { label: 'Sama dengan Font Utama', ket: 'Tanpa serif terpisah', q: '', tumpuk: '' },
 };
 
 const FONT_ARAB = {
@@ -111,14 +121,16 @@ const FONT_ARAB = {
 /* Yang sudah dimuat lewat <link> statis di kepala tiap halaman. Tidak
    perlu diminta ulang — dan membiarkannya statis membuat tampilan
    bawaan tampil seketika, tanpa menunggu data tema tiba dari server. */
-const FONT_BAWAAN = new Set(['jakarta', 'caveat', 'amiri']);
+/* Playfair Display ikut di <link> statis tiap halaman, menggantikan
+   Caveat. */
+const FONT_BAWAAN = new Set(['jakarta', 'playfair', 'amiri']);
 
-const kel = (jenis) => (jenis === 'aksen' ? FONT_AKSEN : jenis === 'arab' ? FONT_ARAB : FONT_UTAMA);
+const kel = (jenis) => (jenis === 'merek' ? FONT_MEREK : jenis === 'arab' ? FONT_ARAB : FONT_UTAMA);
 
 /** Tumpukan CSS untuk sebuah kunci; jatuh ke bawaan bila tak dikenal. */
 function tumpuk(jenis, kunci) {
   const d = kel(jenis);
-  const bawaan = jenis === 'aksen' ? 'caveat' : jenis === 'arab' ? 'amiri' : 'jakarta';
+  const bawaan = jenis === 'merek' ? 'playfair' : jenis === 'arab' ? 'amiri' : 'jakarta';
   return (d[kunci] || d[bawaan]).tumpuk;
 }
 
@@ -164,7 +176,7 @@ function muat(pilihan) {
 function muatSemua() {
   if (typeof document === 'undefined') return;
   const q = [];
-  [FONT_UTAMA, FONT_AKSEN, FONT_ARAB].forEach((d) => {
+  [FONT_UTAMA, FONT_MEREK, FONT_ARAB].forEach((d) => {
     Object.values(d).forEach((f) => { if (f.q && !q.includes(f.q)) q.push(f.q); });
   });
   const l = document.getElementById('fontContoh') || document.createElement('link');
@@ -182,8 +194,8 @@ function kenali(jenis, tumpukLama) {
     const nama = d[k].label.toLowerCase();
     return nama !== 'bawaan perangkat' && teks.includes(nama);
   });
-  return ketemu || (jenis === 'aksen' ? 'caveat' : jenis === 'arab' ? 'amiri' : 'jakarta');
+  return ketemu || (jenis === 'merek' ? 'playfair' : jenis === 'arab' ? 'amiri' : 'jakarta');
 }
 
-window.FONT = { UTAMA: FONT_UTAMA, AKSEN: FONT_AKSEN, ARAB: FONT_ARAB,
+window.FONT = { UTAMA: FONT_UTAMA, MEREK: FONT_MEREK, ARAB: FONT_ARAB,
                 kel, tumpuk, muat, muatSemua, kenali };

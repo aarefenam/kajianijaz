@@ -109,7 +109,7 @@ const SEED = {
     /* Kunci dari daftar di font.js, bukan tumpukan CSS mentah — lihat
        keterangan di sana untuk alasannya. */
     fontUtama  : 'jakarta',
-    fontAksen  : 'caveat',
+    fontMerek  : 'playfair',
     fontArab   : 'amiri',
     radius     : 16,
     lebarKonten: 1180,
@@ -188,9 +188,8 @@ const SEED = {
         {
           id: 'tentang-singkat', tipe: 'teks-gambar', nama: 'About Us Singkat', aktif: true,
           data: {
-            nomor : '01',
-            skrip : 'Apa itu',
-            judul : "Kajian Al-I'jaz?",
+            tema      : 'krem',
+            judul   : "Apa itu Kajian Al-I'jaz?",
             gambar: ph('QALAM & KITAB', '#E8E4D8', '#BFCBA8', 'علم'),
             posisiGambar: 'kiri',
             paragraf: [
@@ -215,11 +214,9 @@ const SEED = {
         {
           id: 'syarah', tipe: 'timeline', nama: "Syarah / Sejarah Kajian Al-I'jaz", aktif: true,
           data: {
-            nomor : '02',
-            skrip : 'Syarah',
-            judul : "Kajian Al-I'jaz",
+            tema      : 'krem',
+            judul   : "Syarah Kajian Al-I'jaz",
             gambar: ph('AL-AZHAR KAIRO', '#1B5E20', '#0E2E1C', 'الأزهر'),
-            tema  : 'gelap',
             butir : [
               { teks: "Kajian Al-I'jaz didirikan pada tanggal 23 November 2011 di sekretariat IKPM lama, Kairo. Pendirian kajian ini dilatarbelakangi oleh kebutuhan akan adanya forum khusus yang secara intensif membahas ilmu tafsir dan 'ulum al-Quran, mengingat pentingnya kedua disiplin tersebut dalam memahami al-Quran secara mendalam." },
               { teks: "Kajian ini digagas oleh beberapa mahasiswa yang memiliki latar belakang dan perhatian khusus dalam bidang tersebut, di antaranya: al-Ustadz Jauhar Ridloni Marzuq, al-Ustadz Novan Hariansyah, al-Ustadz Dede Permana, dan al-Ustadz Saeful Luthfy. Mereka melihat bahwa diperlukan sebuah ruang kajian yang lebih fokus, sistematis, dan berkelanjutan untuk mendalami ilmu-ilmu al-Quran." },
@@ -232,7 +229,7 @@ const SEED = {
           id: 'panel-artikel', tipe: 'panel', nama: 'Panel — Artikel Terbaru', aktif: true,
           data: {
             sumber    : 'artikel',
-            tema      : 'krem',
+            tema      : 'hijau',
             judul     : 'Artikel Terbaru',
             teks      : 'Tulisan ilmiah seputar tafsir dan ilmu-ilmu al-Quran, disusun anggota dan ditinjau redaksi sebelum tayang.',
             jumlah    : 6,
@@ -243,11 +240,9 @@ const SEED = {
         {
           id: 'sistem-metode', tipe: 'dua-kolom', nama: 'Sistem & Metode Kajian', aktif: true,
           data: {
-            nomor : '03',
-            skrip : 'Sistem & Metode Kajian',
-            judul : "Kajian Al-I'jaz",
+            tema      : 'krem',
+            judul   : 'Sistem & Metode Kajian',
             intro : 'Dalam pelaksanaannya, Kajian Al-I\'jaz menerapkan sistem pembelajaran yang terstruktur dan berjenjang, guna memastikan bahwa setiap anggota memperoleh pemahaman yang komprehensif dan berkesinambungan. Sistem kajian ini terbagi menjadi dua metode utama, yaitu:',
-            tema  : 'gelap',
             kolom : [
               {
                 label: 'A. Pembekalan Intensif (Tatsqif)',
@@ -330,9 +325,8 @@ const SEED = {
         {
           id: 'organisasi', tipe: 'organisasi', nama: 'Struktur Organisasi', aktif: true,
           data: {
-            nomor : '04',
-            skrip : 'Organisasi',
-            judul : "Kajian Al-I'jaz",
+            tema      : 'hijau',
+            judul   : 'Susunan Organisasi',
             intro : 'Struktur kepengurusan yang menopang jalannya kajian, publikasi, dan administrasi organisasi.',
             /* Terhubung ke modul Anggota di ERP lewat field `role` */
             jabatan: [
@@ -365,9 +359,8 @@ const SEED = {
         {
           id: 'visi-misi', tipe: 'visi-misi', nama: 'Visi & Misi', aktif: true,
           data: {
-            nomor: '01',
-            skrip: 'Visi & Misi',
-            judul: "Kajian Al-I'jaz",
+            tema      : 'krem',
+            judul   : 'Visi & Misi',
             visi : 'Menjadi kajian unggulan dalam pengembangan studi tafsir dan ilmu-ilmu al-Quran yang mampu melahirkan generasi yang berilmu, kritis, berintegritas, serta berkontribusi nyata bagi umat.',
             misi : [
               'Mengkaji dan mendalami ilmu-ilmu al-Quran secara sistematis, terarah, dan berkelanjutan.',
@@ -381,9 +374,7 @@ const SEED = {
         {
           id: 'keluarga-besar', tipe: 'anggota', nama: 'Keluarga Besar', aktif: true,
           data: {
-            nomor : '02',
-            skrip : 'Keluarga Besar',
-            judul : "Kajian Al-I'jaz",
+            judul   : "Keluarga Besar Al-I'jaz",
             intro : 'Para pendiri, pengurus, dan anggota aktif yang menjaga keberlangsungan tradisi keilmuan.',
             tampilkanFilter: true,
           },
@@ -440,9 +431,7 @@ const SEED = {
         {
           id: 'form-kontak', tipe: 'form-kontak', nama: 'Form & Info Kontak', aktif: true,
           data: {
-            nomor : '01',
-            skrip : 'Kirim Pesan',
-            judul : 'Sampaikan Pesan Anda',
+            judul   : 'Sampaikan Pesan Anda',
             intro : 'Tim kami akan membalas melalui email dalam 1–3 hari kerja.',
             subjek: ['Pendaftaran Anggota Baru', 'Pertanyaan Seputar Kajian', 'Kerja Sama & Kolaborasi', 'Kontribusi Artikel', 'Lainnya'],
           },
@@ -450,9 +439,7 @@ const SEED = {
         {
           id: 'faq', tipe: 'faq', nama: 'Pertanyaan Umum', aktif: true,
           data: {
-            nomor: '02',
-            skrip: 'Pertanyaan Umum',
-            judul: 'FAQ',
+            judul   : 'Pertanyaan yang Sering Diajukan',
             butir: [
               { t: "Siapa saja yang boleh bergabung dengan Kajian Al-I'jaz?", j: 'Terbuka bagi mahasiswa Indonesia di Kairo yang memiliki minat mendalam pada studi tafsir dan \'ulum al-Quran, khususnya anggota IKPM Kairo.' },
               { t: 'Apakah anggota baru langsung mengikuti kajian reguler?', j: 'Tidak. Setiap anggota baru wajib menyelesaikan tahap Pembekalan Intensif (Tatsqif) terlebih dahulu sebagai fondasi keilmuan sebelum masuk ke kajian reguler.' },
