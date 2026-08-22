@@ -24,6 +24,7 @@ const I = {
   surat:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3 7 9 6 9-6"/></svg>',
   arsip:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="4" width="18" height="4.5" rx="1.5"/><path d="M5 8.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.5M10 12.5h4"/></svg>',
   riwayat:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4M12 7.5V12l3 2"/></svg>',
+  gembok:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><path d="M12 14.5v2.5"/></svg>',
   perisai:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.4-7.5 9.5-4.4-1.1-7.5-4.9-7.5-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg>',
   log:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
   keluar:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
@@ -424,7 +425,7 @@ function layarLogin() {
         <button class="btn btn-lime" style="width:100%;padding:13px" type="submit">Masuk</button>
       </form>
       <p style="font-size:12.4px;color:var(--e-abu);margin-top:20px;text-align:center">
-        Lupa kata sandi? Hubungi Sekretaris untuk penyetelan ulang.<br>
+        Lupa kata sandi? Sekretaris atau Ketua Umum dapat menyetel ulang dari menu Anggota.<br>
         <a href="index.html" style="color:var(--e-hijau);font-weight:700">← Kembali ke website</a>
       </p>
     </div></div>
@@ -1717,6 +1718,12 @@ function dialogNotulensi(k) {
    DATA ANGGOTA
    ============================================================ */
 HAL.anggota = () => {
+  /* Menyetel ulang sandi orang lain dibuka bagi pemegang anggota.manage
+     — Sekretaris — sebab layar masuk memang menyuruh menghubunginya.
+     Servernya menolak bila sasarannya Ketua Umum dan yang menyetel
+     bukan Ketua. */
+  const bisaSetel = RBAC.canAny(U, ['anggota.manage', 'user.manage']);
+
   const box = el(`<div><div class="panel-kepala" style="background:#fff;border:1px solid var(--e-garis);border-radius:var(--e-radius);margin-bottom:18px">
     <h3>Data Keanggotaan</h3><span class="ket">${Store.db.users.length} orang terdaftar</span>
     <div class="kanan"><button class="btn btn-lime btn-kecil" id="ba">${I.tambah} Tambah Anggota</button></div></div></div>`);
@@ -1734,15 +1741,53 @@ HAL.anggota = () => {
       <td><span class="lencana" style="background:${RBAC.roleColor(u.role)}22;color:${RBAC.roleColor(u.role)}">${esc(RBAC.roleLabel(u.role))}</span></td>
       <td>${esc(u.angkatan)}</td><td>${esc(u.level)}</td>
       <td><span class="lencana ${u.status === 'aktif' ? 'l-hijau' : u.status === 'alumni' ? 'l-biru' : 'l-abu'}">${esc(u.status)}</span></td>
-      <td class="aksi-sel"><button class="btn btn-garis btn-ikon">${I.sunting}</button></td>
+      <td class="aksi-sel"><div class="sel-aksi">
+        <button class="ikon-aksi sunting" title="Ubah data">${I.sunting}</button>
+        ${bisaSetel ? `<button class="ikon-aksi" data-sandi title="Setel ulang kata sandi">${I.gembok}</button>` : ''}
+      </div></td>
     </tr>`);
-    tr.querySelector('button').onclick = () => formAnggota(u);
+    tr.querySelector('.sunting').onclick = () => formAnggota(u);
+    tr.querySelector('[data-sandi]')?.addEventListener('click', () => setelSandiAnggota(u));
     tb.appendChild(tr);
   });
   box.appendChild(p);
   return box;
 };
 HAL.anggota.judul = () => ['Data Anggota', 'Keanggotaan, jenjang kajian, dan penetapan jabatan.'];
+
+/**
+ * Setel ulang kata sandi seorang anggota, lalu tampilkan sandinya
+ * sekali. Ditegaskan lebih dulu: ini membuat sandi lama TIDAK berlaku,
+ * dan orang yang sedang memakainya akan terkunci sampai menerima yang
+ * baru.
+ */
+function setelSandiAnggota(u) {
+  konfirmasi('Setel ulang kata sandi',
+    `Kata sandi ${u.nama} akan diganti dengan yang baru. Sandi lamanya langsung tidak berlaku, `
+    + 'dan sandi baru hanya ditampilkan sekali — salin sebelum menutup jendelanya.',
+    async () => {
+      const d = await amanTunggu(null, () => Store.setelSandi(u.id));
+      if (!d) return;
+      const isi = el(`<div>
+        <p style="margin:0 0 14px;font-size:14px;color:#44534A">
+          Sampaikan kata sandi ini kepada <b>${esc(d.nama)}</b>. Ia akan diminta menggantinya
+          saat pertama masuk, dan sandi ini <b>tidak dapat dilihat lagi</b> setelah jendela ditutup.</p>
+        <div class="kartu-sandi">
+          <table class="tbl-sandi"><tbody>
+            <tr><td>Email</td><td><code>${esc(d.email)}</code></td></tr>
+            <tr><td>Sandi baru</td><td><code style="font-size:17px">${esc(d.sandi)}</code></td></tr>
+          </tbody></table>
+          <div class="ks-aksi"><button class="btn btn-garis" data-salin>Salin</button></div>
+        </div></div>`);
+      modal({ judul: 'Kata sandi baru', isi });
+      isi.querySelector('[data-salin]').onclick = () => {
+        navigator.clipboard.writeText(`${d.email}\t${d.sandi}`).then(
+          () => toast('Disalin ke papan klip.'),
+          () => toast('Peramban menolak menyalin. Salin manual dari tabel.', true));
+      };
+      gambar();
+    }, 'Ya, setel ulang');
+}
 
 function formAnggota(u) {
   const bisaRole = RBAC.can(U, 'user.manage');
@@ -1770,9 +1815,12 @@ function formAnggota(u) {
         atas — role menentukan wewenang, ini menentukan sebutan. Dikosongkan berarti mengikuti role.</div></div>
     <div class="grup"><label>Riwayat Pendidikan</label><input id="p" value="${esc(u?.pendidikan || '')}" placeholder="S1 Tafsir & Ilmu al-Quran, Universitas Al-Azhar Kairo"></div>
   </div>`);
+  const bisaSetel = u && RBAC.canAny(U, ['anggota.manage', 'user.manage']);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    ${bisaSetel ? `<button class="btn btn-garis" data-sandi style="margin-right:auto">${I.gembok} Setel Ulang Sandi</button>` : ''}
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
   modal({ judul: u ? 'Ubah Data Anggota' : 'Tambah Anggota Baru', isi, kaki, lebar: true });
+  kaki.querySelector('[data-sandi]')?.addEventListener('click', () => { tutupModal(); setelSandiAnggota(u); });
   kaki.querySelector('[data-b]').onclick = tutupModal;
   kaki.querySelector('[data-s]').onclick = () => {
     const g = (id) => isi.querySelector('#' + id).value;

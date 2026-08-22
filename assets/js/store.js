@@ -736,6 +736,25 @@ function userAktif() {
 /** Benarkah pengguna ini masih memakai kata sandi bawaan? */
 function perluGantiSandi() { return wajibGantiSandi; }
 
+/**
+ * Setel ulang kata sandi anggota lain. Dikembalikan sekali dalam bentuk
+ * polos supaya dapat disampaikan; sesudah itu tak terbaca lagi.
+ *
+ * Versi koleksi `users` ikut dimajukan di sini, sebab server menulisnya
+ * langsung. Tanpa itu, penyimpanan berikutnya dari peramban ini akan
+ * berdiri di atas versi usang dan ditolak 409.
+ */
+async function setelSandi(idAnggota) {
+  const d = await panggil('setel-sandi.php', {
+    method: 'POST', body: JSON.stringify({ id: idAnggota }),
+  });
+  if (d.versi) Object.assign(versiKoleksi, d.versi);
+  await muat();
+  const u = userAktif();
+  if (u) { catat(u, 'sandi.setel', idAnggota, `${u.nama} menyetel ulang kata sandi ${d.nama}`); simpan(); }
+  return d;
+}
+
 async function gantiSandi(lama, baru) {
   const d = await panggil('sandi.php', { method: 'POST', body: JSON.stringify({ lama, baru }) });
   if (d.versi) Object.assign(versiKoleksi, d.versi);
@@ -1568,7 +1587,7 @@ window.Store = {
 
   berlangganan, berlanggananStatus, simpan, kirimPerubahan, clone, uid,
   siap, login, logout, userAktif,
-  perluGantiSandi, gantiSandi,
+  perluGantiSandi, gantiSandi, setelSandi,
   perluPasang, pasang, kosongkanSemua,
   ubahDraft, toggleSection, geserSection, resetDraft,
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
