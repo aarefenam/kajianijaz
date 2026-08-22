@@ -36,6 +36,23 @@
       catat(`PASANG  sandi seed '123456' terbawa: ${polos.length} (harus 0)`);
     }
 
+    /* ---------- 1b. perender ganda ----------
+       RENDER adalah objek literal: kunci yang tertulis dua kali
+       dimenangkan yang TERAKHIR, tanpa satu pun peringatan. Sempat
+       terjadi — seluruh blok tersalin, dan suntingan pada salinan yang
+       kalah tidak pernah berpengaruh. Gagalnya sepenuhnya senyap, jadi
+       ia harus dijaga di sini. */
+    const sumberSite = await fetch('assets/js/site.js').then((r) => r.text());
+    const iR = sumberSite.indexOf('const RENDER = {');
+    let dalam = 0, akhirR = iR;
+    for (let i = iR; i < sumberSite.length; i++) {
+      if (sumberSite[i] === '{') dalam++;
+      else if (sumberSite[i] === '}') { dalam--; if (!dalam) { akhirR = i; break; } }
+    }
+    const kunciR = [...sumberSite.slice(iR, akhirR).matchAll(/^  '?([a-zA-Z-]+)'?\(d\) \{/gm)].map((m) => m[1]);
+    const gandaR = kunciR.filter((k, i) => kunciR.indexOf(k) !== i);
+    catat(`RENDER  ${kunciR.length} tipe section, ganda: ${gandaR.length ? gandaR.join(', ') : 'tidak ada'}`);
+
     /* ---------- 2. sandi lama harus ditolak ---------- */
     let ditolak = false;
     try { await Store.login('ketua@alijaz.id', '123456'); }

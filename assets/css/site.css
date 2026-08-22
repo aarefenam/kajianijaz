@@ -529,109 +529,114 @@ a { color: inherit; text-decoration: none; }
 .gambar-tegak { border-radius: 22px; overflow: hidden; aspect-ratio: 3/4; box-shadow: var(--bayang-kuat); }
 .gambar-tegak img { width: 100%; height: 100%; object-fit: cover; }
 
-.grid-dua { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; }
-.kartu-metode {
-  background: var(--putih); border: 1px solid rgba(14,46,28,.10);
-  border-radius: 18px; padding: 28px;
-}
-.kartu-metode h3 {
-  display: flex; align-items: center; gap: 12px; margin: 0 0 15px;
-  font-size: 17.5px; color: var(--hijau-tua); font-weight: 800;
-}
-.kartu-metode h3 span.ik {
-  width: 38px; height: 38px; flex: none; border-radius: 10px; display: grid; place-items: center;
-  background: #EDF4E9; border: 1px solid rgba(27,94,32,.14); color: var(--hijau);
-}
-.kartu-metode p { font-size: 14.2px; color: #45534A; margin: 0 0 14px; text-align: justify; }
-.kartu-metode h4 { font-size: 13.6px; color: var(--hijau-tua); margin: 16px 0 9px; font-weight: 700; }
-.daftar-poin { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 9px; }
-.daftar-poin li { position: relative; padding-left: 24px; font-size: 13.8px; color: #45534A; }
-.daftar-poin li::before {
-  content: ''; position: absolute; left: 4px; top: 9px; width: 7px; height: 7px;
-  border-radius: 2px; transform: rotate(45deg); background: var(--oranye);
-}
-.daftar-level { counter-reset: lv; list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
-.daftar-level li {
-  counter-increment: lv; position: relative; padding-left: 34px;
-  font-size: 13.8px; color: #45534A;
-}
-.daftar-level li::before {
-  content: counter(lv); position: absolute; left: 0; top: 1px;
-  width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
-  background: #EDF4E9; color: var(--hijau); font-size: 11.5px; font-weight: 800;
-}
-.penutup-metode {
-  font-size: 13.4px; font-style: italic; color: var(--abu);
-  border-left: 3px solid rgba(240,149,30,.55); padding-left: 14px; margin-top: 16px;
-}
 
 /* --------- visi & misi --------- */
-/* --------- Visi & Misi ---------
-   Disusun seperti halaman dokumen: label kecil di margin kiri, isinya
-   di kanan. Yang menyusun hanya ukuran huruf, jarak, dan garis rambut —
-   tanpa kotak, tanpa pil, tanpa ikon.
+/* --------- Susunan dokumen ---------
+   Dipakai Visi & Misi dan Sistem & Metode: label kecil di margin kiri,
+   isinya di kanan. Yang menyusun hanya ukuran huruf, jarak, dan garis
+   rambut — tanpa kotak, tanpa pil, tanpa ikon.
 
    Alasannya bukan selera. Susunan kartu membuat tiap butir tampak sama
-   besar dan sama penting, padahal visi adalah satu pernyataan dan misi
-   adalah daftar; memberi keduanya bentuk yang sama menghapus derajat di
-   antaranya. Di sini visi memang tampil lebih besar, dan misi memang
-   terbaca sebagai daftar. */
-.vm { max-width: 980px; margin-inline: auto; }
+   besar dan sama penting, padahal isinya berbeda derajat: satu
+   pernyataan berhadapan dengan daftar, satu tahap mendahului tahap
+   berikutnya. Memberi semuanya bentuk yang sama menghapus susunan itu.
 
-.vm-blok {
-  display: grid; grid-template-columns: 116px minmax(0, 1fr);
+   Namanya `dok`, bukan `vm`, justru karena ia sebuah POLA — dan pola
+   yang dinamai menurut satu bagian saja akan terasa salah tempat
+   begitu dipakai bagian kedua. */
+.dok { max-width: 980px; margin-inline: auto; }
+
+.dok-intro {
+  max-width: 760px; margin: 0 auto 8px; text-align: center;
+  font-size: 14.6px; line-height: 1.75;
+}
+.panel-hijau .dok-intro { color: rgba(255,255,255,.72); }
+.panel-krem  .dok-intro { color: var(--abu); }
+
+.dok-blok {
+  display: grid; grid-template-columns: clamp(112px, 13vw, 168px) minmax(0, 1fr);
   gap: 0 40px; align-items: start;
   padding: 34px 0;
 }
-.vm-blok + .vm-blok { border-top: 1px solid var(--garis); }
-.vm-blok:first-child { padding-top: 6px; }
-.vm-blok:last-child { padding-bottom: 4px; }
+.dok-blok + .dok-blok { border-top: 1px solid var(--garis); }
+.dok-blok:first-child { padding-top: 6px; }
+.dok-blok:last-child { padding-bottom: 4px; }
 
 /* Label di margin kiri. Baris dasarnya diturunkan sedikit agar sejajar
    dengan baris pertama isinya, bukan dengan tepi atas kotaknya. */
-.vm-label {
-  margin: 6px 0 0; font-size: 11.8px; font-weight: 800;
+.dok-label {
+  margin: 6px 0 0; font-size: 11.8px; font-weight: 800; line-height: 1.7;
   letter-spacing: 2.2px; text-transform: uppercase; color: var(--oranye);
 }
 
-.vm-pernyataan {
+.dok-pernyataan {
   margin: 0; max-width: 40em;
   font-size: clamp(18px, 2.1vw, 23px); font-weight: 500; line-height: 1.62;
   letter-spacing: -.2px; color: var(--hijau-tua);
 }
 
-.vm-daftar { list-style: none; margin: 0; padding: 0; counter-reset: m; }
-.vm-daftar li {
+.dok-isi { max-width: 46em; }
+.dok-teks { margin: 0; font-size: 15.2px; line-height: 1.75; color: #3E4C43; }
+.dok-sub {
+  margin: 26px 0 12px; font-size: 12.4px; font-weight: 800;
+  letter-spacing: 1.4px; text-transform: uppercase; color: var(--hijau);
+}
+
+.dok-daftar { list-style: none; margin: 0; padding: 0; counter-reset: m; }
+.dok-daftar li {
   counter-increment: m;
   display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 0 8px;
   padding: 15px 0; align-items: baseline;
 }
-.vm-daftar li + li { border-top: 1px solid var(--garis); }
-.vm-daftar li:first-child { padding-top: 2px; }
-.vm-daftar li:last-child { padding-bottom: 0; }
-.vm-daftar p { margin: 0; max-width: 46em; font-size: 15.2px; line-height: 1.72; color: #3E4C43; }
+.dok-daftar li + li { border-top: 1px solid var(--garis); }
+.dok-daftar li:first-child { padding-top: 2px; }
+.dok-daftar li:last-child { padding-bottom: 0; }
+.dok-daftar p { margin: 0; font-size: 15.2px; line-height: 1.72; color: #3E4C43; }
 
 /* Angka berkait di antara huruf tak berkait — cara lama menandai
    penomoran tanpa perlu kotak atau lingkaran di sekelilingnya. */
-.vm-angka {
+.dok-angka {
   font-family: var(--font-merek); font-size: 20px; font-weight: 500;
   color: var(--hijau); opacity: .55; font-variant-numeric: tabular-nums;
 }
-.vm-angka::before { content: counter(m, decimal-leading-zero); }
+.dok-angka::before { content: counter(m, decimal-leading-zero); }
+
+/* Butir tanpa nomor: penanda wajik kecil, sejajar dengan angka di atas. */
+.dok-poin { list-style: none; margin: 0; padding: 0; }
+.dok-poin li {
+  position: relative; padding: 9px 0 9px 46px;
+  font-size: 15px; line-height: 1.72; color: #3E4C43;
+}
+.dok-poin li::before {
+  content: ''; position: absolute; left: 8px; top: 18px;
+  width: 6px; height: 6px; transform: rotate(45deg); background: var(--oranye);
+}
+
+.dok-penutup {
+  margin: 22px 0 0; padding-left: 18px;
+  border-left: 2px solid rgba(240,149,30,.55);
+  font-size: 14.4px; font-style: italic; line-height: 1.72; color: var(--abu);
+}
 
 /* Panel hijau menimpa rupa terang di atas. */
-.panel-hijau .vm-blok + .vm-blok,
-.panel-hijau .vm-daftar li + li { border-top-color: rgba(255,255,255,.14); }
-.panel-hijau .vm-pernyataan { color: #fff; }
-.panel-hijau .vm-daftar p { color: rgba(255,255,255,.78); }
-.panel-hijau .vm-angka { color: var(--hijau-muda); opacity: .7; }
+.panel-hijau .dok-blok + .dok-blok,
+.panel-hijau .dok-daftar li + li { border-top-color: rgba(255,255,255,.14); }
+.panel-hijau .dok-pernyataan { color: #fff; }
+.panel-hijau .dok-sub { color: var(--hijau-muda); }
+.panel-hijau .dok-teks,
+.panel-hijau .dok-daftar p,
+.panel-hijau .dok-poin li { color: rgba(255,255,255,.78); }
+.panel-hijau .dok-penutup { color: rgba(255,255,255,.62); }
+.panel-hijau .dok-angka { color: var(--hijau-muda); opacity: .7; }
 
 /* Di layar sempit label turun ke atas isinya — kolom margin selebar
-   116px akan menyisakan lorong kosong yang menyempitkan bacaan. */
+   itu akan menyisakan lorong kosong yang menyempitkan bacaan. */
 @media (max-width: 720px) {
-  .vm-blok { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 26px 0; }
-  .vm-label { margin: 0; }
-  .vm-daftar li { grid-template-columns: 34px minmax(0, 1fr); }
+  .dok-blok { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 26px 0; }
+  .dok-label { margin: 0; }
+  .dok-daftar li { grid-template-columns: 34px minmax(0, 1fr); }
+  .dok-poin li { padding-left: 34px; }
+  .dok-poin li::before { left: 4px; }
 }
 
 /* --------- organisasi --------- */
@@ -921,7 +926,7 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   .nav-bawah { display: block; }
   body { padding-bottom: 74px; }
   .pintas-erp { bottom: 88px; }
-  .grid-teks-gambar, .grid-teks-gambar.kanan, .grid-dua, .grid-kontak, .pita-kutipan { grid-template-columns: 1fr; }
+  .grid-teks-gambar, .grid-teks-gambar.kanan, .grid-kontak, .pita-kutipan { grid-template-columns: 1fr; }
   .grid-teks-gambar.kanan .kotak-gambar { order: 0; }
   .kartu-artikel { grid-template-columns: 1fr; }
   .sec { padding: 58px 0; }
@@ -932,7 +937,7 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
 }
 @media (max-width: 560px) {
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
-  .kartu-metode, .kartu-form, .kartu-info { padding: 22px; }
+  .kartu-form, .kartu-info { padding: 22px; }
   .pita-kutipan { padding: 30px 24px; }
   .merek-nama { font-size: 25px; }
 }
@@ -1355,17 +1360,11 @@ a.kt:hover {
 
 /* --- Panel hijau menimpa rupa terang di atas --- */
 .panel-hijau .isi-teks p,
-.panel-hijau .tl-butir p,
-.panel-hijau .kartu-metode p,
-.panel-hijau .daftar-poin li,
-.panel-hijau .daftar-level li { color: rgba(255,255,255,.80); }
+.panel-hijau .tl-butir p { color: rgba(255,255,255,.80); }
 
-.panel-hijau .kartu-metode h3,
-.panel-hijau .kartu-metode h4,
 .panel-hijau .org-jabatan { color: #fff; }
 
 .panel-hijau .tl-butir,
-.panel-hijau .kartu-metode,
 .panel-hijau .kartu-org {
   background: rgba(255,255,255,.06);
   border-color: rgba(255,255,255,.14);
@@ -1374,13 +1373,10 @@ a.kt:hover {
 .panel-hijau .tl-butir:hover { box-shadow: none; background: rgba(255,255,255,.10); }
 
 .panel-hijau .tl-ikon,
-.panel-hijau .kartu-metode h3 span.ik,
-.panel-hijau .org-ikon,
-.panel-hijau .daftar-level li::before {
+.panel-hijau .org-ikon {
   background: rgba(140,198,63,.18); border-color: rgba(140,198,63,.32); color: var(--hijau-muda);
 }
 .panel-hijau .org-nama { color: rgba(255,255,255,.72); }
-.panel-hijau .penutup-metode { color: rgba(255,255,255,.62); }
 
 /* Gambar di dalam panel ikut bersudut tumpul supaya sebangun dengan
    kotaknya, alih-alih persegi tajam di dalam kotak yang membulat. */
