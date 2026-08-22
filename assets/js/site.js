@@ -269,14 +269,22 @@ function kepala(d) {
  * bagian-bagian bercerita, sehingga ia sejajar dengan panel isi di
  * sekitarnya alih-alih tampil sebagai pita selebar layar.
  */
-function panelBungkus(d, isi, kelasTambahan = '') {
+function panelBungkus(d, isi, kelasTambahan = '', polos = false) {
   const tema = d.tema === 'hijau' ? 'hijau' : 'krem';
-  return el(`<section class="panel panel-${tema} ${kelasTambahan}">
-    <div class="panel-kotak">
+  /* Ragam hias membingkai KUMPULAN — deretan kartu kajian, artikel,
+     buku. Pada bagian yang sengaja disusun sebagai dokumen, ia justru
+     mengganggu: cincinnya berdiri tepat di belakang tulisan, dan
+     halaman yang seluruh panelnya berhias sama persis terbaca seperti
+     cetakan mesin. Sesekali tanpa hiasan bukan kelalaian; itu yang
+     memberi jeda. */
+  const hias = polos ? '' : `
       <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
       <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
       <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
-      <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+      <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>`;
+
+  return el(`<section class="panel panel-${tema} ${kelasTambahan}">
+    <div class="panel-kotak">${hias}
       <div class="pn-badan">${isi}</div>
     </div>
   </section>`);
@@ -516,33 +524,6 @@ function pasangPencarian(akar) {
   document.addEventListener('pointerdown', (e) => {
     if (!akar.contains(e.target) || !e.target.closest('.hero-cari')) tutup();
   });
-}
-
-/**
- * Berapa kolom untuk sejumlah butir, agar baris terakhir tidak
- * menyisakan satu kartu sendirian.
- *
- * Dengan `auto-fit` saja, lima butir jatuh menjadi empat kolom lalu
- * satu — dan satu kartu yang berdiri sendiri di baris terakhir persis
- * ketimpangan yang hendak dihindari, hanya berputar arah. Di sini tiap
- * kemungkinan dinilai: pembagian yang habis paling baik, disusul yang
- * baris terakhirnya paling penuh.
- *
- * Pilihannya sengaja hanya 4 atau 3. Dua kolom memang selalu habis
- * dibagi untuk jumlah genap, tetapi sepuluh butir dalam lima baris
- * berdua-dua terbaca sebagai daftar yang kepanjangan, bukan sebagai
- * kisi — habis dibagi bukan satu-satunya ukuran rapi.
- */
-function kolomSeimbang(n, pilihan = [4, 3]) {
-  if (n <= 2) return Math.max(1, n);
-  let terbaik = pilihan[pilihan.length - 1];
-  let nilai = -1;
-  pilihan.forEach((k) => {
-    const sisa = n % k;
-    const skor = sisa === 0 ? 100 + k : sisa * 10 + k;
-    if (skor > nilai) { nilai = skor; terbaik = k; }
-  });
-  return terbaik;
 }
 
 const RENDER = {
@@ -885,32 +866,272 @@ const RENDER = {
       <div class="grid-dua">${d.kolom.map(kol).join('')}</div>`);
   },
 
-  /* Visi di atas, misi di bawah — bukan berdampingan.
+  /* Visi & Misi disusun seperti halaman dokumen, bukan seperti kisi
+     kartu: label kecil di margin kiri, isinya di kanan.
 
-     Berdampingan, keduanya selalu timpang: satu kalimat visi di kiri
-     berhadapan dengan lima butir misi di kanan, dan kolom kirinya
-     menyisakan bidang kosong sepanjang empat butir. Ketimpangan itu
-     bukan soal tata letak yang bisa dirapikan, melainkan soal panjang
-     isinya yang memang berbeda jauh.
+     Susunan sebelumnya — pil berikon bundar, angka dalam kotak, semua
+     rata tengah, lima kartu seragam — membuat tiap butir tampak sama
+     penting dan sama besar. Padahal visi adalah satu pernyataan, dan
+     misi adalah daftar. Bentuk yang sama untuk dua hal yang berbeda
+     derajatnya justru menghapus susunannya.
 
-     Disusun bertingkat, keduanya justru mendapat porsi yang pas: visi
-     sebagai satu pernyataan lebar yang memang pantas menonjol, misi
-     sebagai kisi kartu bernomor yang tingginya rata sendiri. */
+     Di sini yang menyusun hanyalah ukuran huruf, jarak, dan garis
+     rambut — tanpa kotak, tanpa pil, tanpa ikon. */
   'visi-misi'(d) {
     return panelBungkus(d, `
       ${kepala(d)}
-      <div class="vm-visi">
-        <span class="vm-label"><span class="ik">${IK.mata}</span>Visi</span>
-        <p>${esc(d.visi)}</p>
+      <div class="vm">
+        <section class="vm-blok">
+          <h3 class="vm-label">Visi</h3>
+          <p class="vm-pernyataan">${esc(d.visi)}</p>
+        </section>
+
+        <section class="vm-blok">
+          <h3 class="vm-label">Misi</h3>
+          <ol class="vm-daftar">
+            ${d.misi.map((m) => `<li><span class="vm-angka"></span><p>${esc(m)}</p></li>`).join('')}
+          </ol>
+        </section>
+      </div>`, '', true);
+  },
+
+  /* ---------------- galeri kegiatan ----------------
+     Dibaca dari koleksi Media — yang sama yang dikelola PJ Media &
+     Website lewat ERP → Galeri Media. Jadi menambah foto kegiatan
+     cukup mengunggahnya sekali di sana, tanpa menyentuh halaman ini.
+
+     Disaring menurut jenis: koleksi itu juga memuat logo, banner, dan
+     template yang tak ada urusannya dengan dokumentasi kegiatan. */
+  galeri(d) {
+    const semua = (Store.db.media || [])
+      .filter((x) => x.berkas && (!d.jenis || x.jenis === d.jenis))
+      .sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''))
+      .slice(0, d.jumlah || 12);
+
+    const n = panelBungkus(d, `
+      ${kepala(d)}
+      ${d.teks ? `<p class="pn-teks pn-intro">${esc(d.teks)}</p>` : ''}
+      ${semua.length ? `<div class="grid-galeri">
+        ${semua.map((x, i) => `<figure class="gl-bingkai" data-i="${i}" tabindex="0" role="button"
+            aria-label="Perbesar ${esc(x.nama)}">
+          <img src="${x.berkas}" alt="${esc(x.nama)}" loading="lazy">
+          <figcaption><span>${esc(x.nama)}</span><small>${tglPendek(x.tanggal)}</small></figcaption>
+        </figure>`).join('')}
+      </div>` : `<p class="pn-kosong">Belum ada dokumentasi untuk ditampilkan.</p>`}`);
+
+    /* Diperbesar di tempat. Tanpa ini, satu-satunya cara melihat fotonya
+       utuh adalah membuka alamat berkasnya sendiri — dan bingkai galeri
+       memang memotong gambarnya agar barisnya rata. */
+    n.querySelectorAll('.gl-bingkai').forEach((f) => {
+      const buka = () => bukaGambar(semua[+f.dataset.i], semua);
+      f.onclick = buka;
+      f.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); buka(); } };
+    });
+    return n;
+  },
+
+  /* ---------------- panel isi (generik) ----------------
+     Satu renderer untuk lima panel. Yang membedakan hanya `sumber`,
+     dan itu dipilih dari daftar di ERP — jadi menambah panel baru di
+     beranda tidak menuntut kode baru sama sekali. */
+  panel(d) {
+    const s = SUMBER[d.sumber];
+    if (!s) { console.warn('Sumber panel tidak dikenal:', d.sumber); return el('<div></div>'); }
+    const data = s.ambil().slice(0, d.jumlah || 6);
+
+    /* Tiap panel diakhiri satu tombol emas. Yang menuju halaman lain
+       memakai tautan; sisanya membentangkan kartu yang tadinya harus
+       digeser menjadi kisi utuh. Tak ada tombol yang tidak menuju ke
+       mana-mana — itu lebih membingungkan daripada tidak ada tombol. */
+    /* Tombol bentang hanya berguna bila jalurnya memang meluber, dan itu
+       baru ketahuan setelah digambar — enam kartu meluber di ponsel tapi
+       tidak di layar lebar. Karena itu ia dipasang dulu lalu disembunyikan
+       sendiri oleh perbarui() bila ternyata tak ada yang perlu dibentang. */
+    const aksi = d.tombolLink
+      ? `<a class="tombol tombol-emas" href="${esc(d.tombolLink)}">${esc(d.tombolTeks || 'Lihat Semua')}</a>`
+      : `<button class="tombol tombol-emas" type="button" data-bentang>Lihat Semua</button>`;
+
+    const n = el(`<section class="panel panel-${d.tema === 'krem' ? 'krem' : 'hijau'}" data-sumber="${esc(d.sumber)}">
+      <div class="panel-kotak">
+        <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
+        <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+
+        <header class="pn-kepala">
+          <h2 class="pn-judul">
+            <span class="pn-hias">${OR.daun}</span>
+            ${esc(d.judul)}
+            <span class="pn-hias">${OR.daun}</span>
+          </h2>
+          ${d.teks ? `<p class="pn-teks">${esc(d.teks)}</p>` : ''}
+        </header>
+
+        ${data.length ? `<div class="pn-rel">
+          <button class="pn-nav mundur" type="button" aria-label="Geser ke kiri">${IK.panah}</button>
+          <div class="pn-jalur${data.length < 4 ? ' sedikit' : ''}">${data.map(s.kartu).join('')}</div>
+          <button class="pn-nav maju" type="button" aria-label="Geser ke kanan">${IK.panah}</button>
+        </div>` : `<p class="pn-kosong">Belum ada isi untuk ditampilkan di sini.</p>`}
+
+        ${aksi ? `<div class="pn-aksi">${aksi}</div>` : ''}
       </div>
-      <div class="vm-misi">
-        <div class="vm-kepala">
-          <span class="vm-label"><span class="ik">${IK.target}</span>Misi</span>
+    </section>`);
+
+    const jalur = n.querySelector('.pn-jalur');
+    if (jalur) {
+      const geser = (arah) => {
+        const kartu = jalur.querySelector('.kk');
+        const langkah = kartu ? kartu.getBoundingClientRect().width + 18 : 300;
+        jalur.scrollBy({ left: arah * langkah, behavior: 'smooth' });
+      };
+      n.querySelector('.mundur').onclick = () => geser(-1);
+      n.querySelector('.maju').onclick = () => geser(1);
+
+      /* Tombol yang tidak menuju ke mana-mana lebih buruk daripada
+         tombol yang tidak ada: keduanya dimatikan saat jalurnya sudah
+         mentok, dan seluruh baris tombol disembunyikan bila isinya
+         memang muat seluruhnya. */
+      const perbarui = () => {
+        const mekar = n.querySelector('.pn-rel').classList.contains('mekar');
+        const sisaKiri = !mekar && jalur.scrollLeft > 4;
+        const sisaKanan = !mekar && jalur.scrollLeft + jalur.clientWidth < jalur.scrollWidth - 4;
+        n.querySelector('.mundur').disabled = !sisaKiri;
+        n.querySelector('.maju').disabled = !sisaKanan;
+        n.querySelector('.pn-rel').classList.toggle('tanpa-nav', !sisaKiri && !sisaKanan);
+
+        const t = n.querySelector('[data-bentang]');
+        if (t) {
+          const meluber = jalur.scrollWidth > jalur.clientWidth + 4;
+          t.parentElement.hidden = !mekar && !meluber;
+        }
+      };
+      jalur.addEventListener('scroll', perbarui, { passive: true });
+      window.addEventListener('resize', perbarui);
+      requestAnimationFrame(perbarui);
+
+      const bentang = n.querySelector('[data-bentang]');
+      if (bentang) {
+        bentang.onclick = () => {
+          const mekar = n.querySelector('.pn-rel').classList.toggle('mekar');
+          bentang.textContent = mekar ? 'Ringkaskan' : 'Lihat Semua';
+          if (!mekar) jalur.scrollTo({ left: 0, behavior: 'smooth' });
+          requestAnimationFrame(perbarui);
+        };
+      }
+
+      if (s.buka) {
+        jalur.querySelectorAll('[data-buka]').forEach((k) => {
+          k.onclick = (e) => { if (!e.target.closest('[data-bagi]')) s.buka({ id: k.dataset.buka }); };
+        });
+      }
+      pasangBagi(n);
+    }
+    return n;
+  },
+
+  /* ---------------- panel kontak ----------------
+     Nomor, surel, dan alamatnya dibaca dari Identitas Situs, bukan
+     diketik ulang di sini. Satu fakta, satu tempat — kalau nomornya
+     berubah, ia berubah di footer, di halaman Kontak, dan di sini
+     sekaligus. */
+  'panel-kontak'(d) {
+    const c = Store.cms.situs;
+    const wa = String(c.telepon || '').replace(/[^0-9]/g, '');
+    const kartu = [
+      c.telepon && { ikon: IK.telepon, judul: 'Chat WhatsApp', ket: 'Balasan pada jam kerja',
+        nilai: c.telepon, href: wa ? `https://wa.me/${wa}` : '' },
+      c.email && { ikon: IK.email, judul: 'Kirim Surel', ket: 'Untuk pertanyaan & kerja sama',
+        nilai: c.email, href: `mailto:${c.email}` },
+      c.alamat && { ikon: IK.pin, judul: 'Sekretariat', ket: 'Silakan bertandang',
+        nilai: c.alamat, href: c.maps || '' },
+    ].filter(Boolean);
+
+    return el(`<section class="panel panel-${d.tema === 'hijau' ? 'hijau' : 'krem'}">
+      <div class="panel-kotak">
+        <span class="pn-medali ka" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-medali ki" aria-hidden="true">${OR.medali}</span>
+        <span class="pn-untai ki" aria-hidden="true">${OR.untai}</span>
+        <span class="pn-untai ka" aria-hidden="true">${OR.untai}</span>
+
+        <header class="pn-kepala">
+          <h2 class="pn-judul">
+            <span class="pn-hias">${OR.daun}</span>${esc(d.judul)}<span class="pn-hias">${OR.daun}</span>
+          </h2>
+          ${d.teks ? `<p class="pn-teks">${esc(d.teks)}</p>` : ''}
+        </header>
+
+        ${d.subJudul ? `<div class="pn-sub">
+          <h3>${esc(d.subJudul)}</h3>
+          <span class="pn-pemisah">${OR.pemisah}</span>
+        </div>` : ''}
+
+        <div class="pn-kontak">
+          ${kartu.map((k) => `<${k.href ? 'a' : 'div'} class="kt"
+              ${k.href ? `href="${esc(k.href)}" target="_blank" rel="noopener"` : ''}>
+            <span class="kt-ikon">${k.ikon}</span>
+            <b class="kt-judul">${esc(k.judul)}</b>
+            <span class="kt-ket">${esc(k.ket)}</span>
+            <span class="kt-nilai">${esc(k.nilai)}</span>
+          </${k.href ? 'a' : 'div'}>`).join('')}
         </div>
-        <ol class="grid-misi" style="--kol:${kolomSeimbang(d.misi.length)}">
-          ${d.misi.map((m) => `<li><span class="vm-nomor"></span><p>${esc(m)}</p></li>`).join('')}
-        </ol>
+      </div>
+    </section>`);
+  },
+
+  /* Hero halaman dalam — Tentang, Artikel, Kontak.
+
+     Terpusat di atas foto yang benar-benar terlihat, bukan pita hijau
+     dengan foto samar di belakangnya. Fotonya memang bagian dari
+     rancangan; menutupinya dengan gradasi pekat sama saja dengan tidak
+     memasangnya. */
+  'hero-halaman'(d) {
+    return el(`<section class="hero hero-halaman">
+      <div class="hero-bg"><img src="${d.gambar}" alt=""></div>
+      <span class="hh-tiang ki" aria-hidden="true">${OR.tiang}</span>
+      <span class="hh-tiang ka" aria-hidden="true">${OR.tiang}</span>
+      <div class="wrap hero-halaman-in">
+        ${d.skrip ? `<div class="hero-skrip">${esc(d.skrip)}</div>` : ''}
+        <h1 class="hero-judul">${esc(d.judul)}</h1>
+        <p class="hero-sub">${esc(d.subjudul)}</p>
+        ${d.tombolTeks ? `<a class="tombol tombol-emas" href="${esc(d.tombolLink)}">${esc(d.tombolTeks)}</a>` : ''}
+      </div>
+    </section>`);
+  },
+
+  'teks-gambar'(d) {
+    return panelBungkus(d, `
+      ${kepala(d)}
+      <div class="grid-teks-gambar ${d.posisiGambar === 'kanan' ? 'kanan' : ''}">
+        <div class="kotak-gambar"><img src="${d.gambar}" alt=""></div>
+        <div class="isi-teks">${d.paragraf.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
       </div>`);
+  },
+
+  timeline(d) {
+    return panelBungkus(d, `
+      ${kepala(d)}
+      <div class="grid-timeline">
+        <div class="timeline">
+          ${d.butir.map((b) => `<div class="tl-butir"><span class="tl-ikon">${IK.buku}</span><p>${esc(b.teks)}</p></div>`).join('')}
+        </div>
+        <div class="gambar-tegak"><img src="${d.gambar}" alt=""></div>
+      </div>`);
+  },
+
+  'dua-kolom'(d) {
+    const kol = (k) => `<div class="kartu-metode">
+      <h3><span class="ik">${k.ikon === 'kitab' ? IK.buku : IK.dokumen}</span>${esc(k.label)}</h3>
+      <p>${esc(k.teks)}</p>
+      ${k.subJudul ? `<h4>${esc(k.subJudul)}</h4>` : ''}
+      ${k.level ? `<ol class="daftar-level">${k.level.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
+      ${k.subJudul2 ? `<h4>${esc(k.subJudul2)}</h4>` : ''}
+      ${k.poin ? `<ul class="daftar-poin">${k.poin.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${k.penutup ? `<p class="penutup-metode">${esc(k.penutup)}</p>` : ''}
+    </div>`;
+    return panelBungkus(d, `
+      ${kepala(d)}
+      ${d.intro ? `<p class="pn-teks pn-intro">${esc(d.intro)}</p>` : ''}
+      <div class="grid-dua">${d.kolom.map(kol).join('')}</div>`);
   },
 
   organisasi(d) {
