@@ -45,7 +45,20 @@ body {
   overflow-x: hidden;
 }
 
-img { max-width: 100%; display: block; }
+/* Bawaan untuk SEMUA gambar: isi bingkainya, jangan melar.
+
+   `object-fit` hanya berpengaruh ketika sebuah gambar diberi lebar DAN
+   tinggi sekaligus — pada gambar yang tingginya otomatis, aturan ini
+   tidak melakukan apa-apa. Justru itu sebabnya ia aman dijadikan
+   bawaan: yang terkena hanyalah bingkai berukuran pasti, dan di sanalah
+   gambar berbanding lain jadi penyet kalau tidak diatur.
+
+   Sebelum ini tiap bingkai harus mengaturnya sendiri, dan yang
+   terlewat — foto anggota di sidebar, daftar presensi, kartu absen —
+   menampilkan wajah yang gepeng. Yang memang tidak boleh terpotong
+   (logo, ikon tab, sosok hero) menyatakan `contain` sendiri, dan itu
+   tetap menang atas bawaan ini. */
+img { max-width: 100%; display: block; object-fit: cover; }
 
 /* Teks berhuruf Arab memakai font naskh pilihan, di mana pun ia muncul.
    Tanpa aturan ini, "Font Arab" di ERP hanya berlaku di panel ERP dan

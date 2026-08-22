@@ -1456,7 +1456,14 @@ function kecilkanGambar(file, lebarMaks, mutu) {
       const punyaAlfa = ['image/png', 'image/webp', 'image/gif'].includes(file.type);
       const img = new Image();
       img.onload = () => {
-        const skala = Math.min(1, lebarMaks / img.width);
+        /* Dikecilkan menurut LEBAR dan TINGGI sekaligus. Dengan lebar
+           saja, potret 1000x8000 lolos tanpa disentuh — lebarnya sudah
+           di bawah batas — lalu tersimpan sebagai berkas raksasa yang
+           di bingkainya hanya tampak sesobek. Batas tingginya longgar
+           (1,6x lebar) supaya potret tegak yang wajar tidak ikut
+           terpangkas. */
+        const tinggiMaks = lebarMaks * 1.6;
+        const skala = Math.min(1, lebarMaks / img.width, tinggiMaks / img.height);
         const c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(img.width * skala));
         c.height = Math.max(1, Math.round(img.height * skala));
