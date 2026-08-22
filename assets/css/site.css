@@ -429,13 +429,47 @@ a { color: inherit; text-decoration: none; }
 }
 .tombol-garis:hover { background: rgba(140,198,63,.12); }
 
-/* --------- Hero halaman dalam (Tentang / Artikel / Kontak) --------- */
+/* --------- Hero halaman dalam (Tentang / Artikel / Kontak) ---------
+   Terpusat di atas foto. Sebelumnya ia pita hijau tua dengan foto samar
+   di belakangnya, ditutup gelombang di kakinya — dan fotonya praktis
+   tak terlihat. Kini gradasinya hanya menggelapkan secukupnya agar
+   tulisan putih tetap terbaca, sementara fotonya sendiri tetap tampak
+   sebagai foto. */
 .hero-halaman { position: relative; background: var(--hijau-tua); overflow: hidden; }
-.hero-halaman .hero-bg img { opacity: .55; }
-.hero-halaman-in { position: relative; z-index: 2; padding: 76px 0 108px; max-width: 560px; }
+.hero-halaman .hero-bg img { opacity: .78; }
+.hero-halaman .hero-bg::after {
+  background:
+    linear-gradient(180deg, rgba(14,46,28,.66) 0%, rgba(14,46,28,.52) 46%, rgba(14,46,28,.80) 100%),
+    radial-gradient(70% 62% at 50% 42%, rgba(14,46,28,.30), transparent 72%);
+}
+.hero-halaman-in {
+  position: relative; z-index: 3;
+  padding: clamp(72px, 9vw, 118px) 0 clamp(76px, 10vw, 124px);
+  max-width: 760px; margin-inline: auto; text-align: center;
+}
 .hero-halaman .hero-skrip, .hero-halaman .hero-judul, .hero-halaman .hero-sub { animation-delay: .1s; }
-.hero-halaman .hero-judul { font-size: clamp(32px, 5vw, 50px); white-space: pre-line; }
-.hero-halaman .hero-sub { font-size: 15px; }
+.hero-halaman .hero-judul {
+  font-size: clamp(32px, 5.2vw, 54px); white-space: pre-line;
+  text-wrap: balance; letter-spacing: -1px;
+}
+.hero-halaman .hero-sub { font-size: 15.6px; max-width: 620px; margin-inline: auto; }
+.hero-halaman .tombol-emas { margin-top: 26px; opacity: 0; animation: naik .8s ease forwards .75s; }
+
+/* Tiang berhias di kedua tepi — pengganti gelombang yang dilepas.
+   Ia menandai batas hero tanpa memotongnya dengan garis melintang. */
+.hh-tiang {
+  position: absolute; top: 0; bottom: 0; z-index: 2;
+  width: clamp(46px, 5vw, 68px); color: rgba(140,198,63,.30);
+  pointer-events: none;
+}
+.hh-tiang svg { width: 100%; height: 100%; display: block; }
+.hh-tiang.ki { left: clamp(10px, 4vw, 76px); }
+.hh-tiang.ka { right: clamp(10px, 4vw, 76px); transform: scaleX(-1); }
+
+/* Di layar sempit tiangnya tepat berada di belakang tulisan. */
+@media (max-width: 820px) {
+  .hh-tiang { display: none; }
+}
 
 /* ============================ SECTION ============================ */
 .sec { padding: 84px 0; position: relative; }

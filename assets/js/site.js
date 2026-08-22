@@ -187,6 +187,9 @@ const OR = {
   daun: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.5 3.5c0 7.2-3.4 11.4-9 11.9-1.9.2-3.4-.3-4.4-1.4-1.1-1.2-1.4-2.9-.8-4.6C7.4 5.6 12.5 3.5 20.5 3.5z"/><path d="M4 20.5c1.6-3.6 4.2-6.4 7.8-8.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   /* Medalion sudut panel — samar, hanya untuk memberi tekstur. */
   medali: '<svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.1" aria-hidden="true"><circle cx="60" cy="60" r="46"/><circle cx="60" cy="60" r="33"/><circle cx="60" cy="60" r="15"/><path d="M60 6v108M6 60h108M22 22l76 76M98 22l-76 76"/><path d="M60 22l27 38-27 38-27-38z"/><path d="M22 60l38-27 38 27-38 27z"/></svg>',
+  /* Tiang berhias di kedua tepi hero halaman dalam: batang tegak dengan
+     rozet di pucuknya, seperti tiang lampu masjid. */
+  tiang: '<svg viewBox="0 0 60 300" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M30 78v222"/><circle cx="30" cy="46" r="26"/><circle cx="30" cy="46" r="17"/><path d="M30 20l18 26-18 26-18-26z"/><path d="M4 46l26-18 26 18-26 18z"/><path d="M30 84l7 9-7 9-7-9z"/><path d="M22 300h16"/></svg>',
   /* Untaian yang menggantung dari bibir atas panel. */
   untai: '<svg viewBox="0 0 24 96" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M12 0v40"/><circle cx="12" cy="46" r="5"/><path d="M12 51v9"/><path d="M12 60l6 8-6 8-6-8z"/><path d="M12 76v8"/><circle cx="12" cy="88" r="3"/></svg>',
   /* Garis pemisah dengan wajik di tengah. */
@@ -239,11 +242,6 @@ function kategoriArtikel() {
   return sec?.data?.kategori || [];
 }
 
-const GELOMBANG = `<div class="gelombang"><svg viewBox="0 0 1440 110" preserveAspectRatio="none">
-  <path d="M0,62 C240,110 480,10 720,42 C960,74 1200,110 1440,58 L1440,110 L0,110 Z" fill="var(--oranye)" opacity=".92"/>
-  <path d="M0,76 C240,124 480,24 720,56 C960,88 1200,120 1440,72 L1440,110 L0,110 Z" fill="var(--hijau-muda)"/>
-  <path d="M0,92 C240,136 480,40 720,72 C960,102 1200,132 1440,88 L1440,110 L0,110 Z" fill="var(--krem)"/>
-</svg></div>`;
 
 /* ---------------- kepala section ---------------- */
 /**
@@ -804,15 +802,23 @@ const RENDER = {
     </section>`);
   },
 
+  /* Hero halaman dalam — Tentang, Artikel, Kontak.
+
+     Terpusat di atas foto yang benar-benar terlihat, bukan pita hijau
+     dengan foto samar di belakangnya. Fotonya memang bagian dari
+     rancangan; menutupinya dengan gradasi pekat sama saja dengan tidak
+     memasangnya. */
   'hero-halaman'(d) {
     return el(`<section class="hero hero-halaman">
       <div class="hero-bg"><img src="${d.gambar}" alt=""></div>
+      <span class="hh-tiang ki" aria-hidden="true">${OR.tiang}</span>
+      <span class="hh-tiang ka" aria-hidden="true">${OR.tiang}</span>
       <div class="wrap hero-halaman-in">
-        <div class="hero-skrip">${esc(d.skrip)}</div>
+        ${d.skrip ? `<div class="hero-skrip">${esc(d.skrip)}</div>` : ''}
         <h1 class="hero-judul">${esc(d.judul)}</h1>
         <p class="hero-sub">${esc(d.subjudul)}</p>
+        ${d.tombolTeks ? `<a class="tombol tombol-emas" href="${esc(d.tombolLink)}">${esc(d.tombolTeks)}</a>` : ''}
       </div>
-      ${GELOMBANG}
     </section>`);
   },
 

@@ -156,6 +156,7 @@ function migrasiBentuk(tersimpan) {
   susunBeranda(tersimpan);
   susunTentang(tersimpan);
   rapikanKepala(tersimpan);
+  perbaikiSvgRusak(tersimpan);
 
   /* Dulu di sini ada penyelarasan akun contoh: menambahkan kembali
      pengurus dari seed.js yang belum ada di DB. Itu masuk akal selagi
@@ -284,6 +285,45 @@ const URUT_BERANDA = [
 /* Sempat dipindahkan ke halaman Tentang pada perombakan sebelumnya;
    kini ditarik kembali, berikut suntingan yang menyertainya. */
 const PERNAH_DI_TENTANG = ['tentang-singkat', 'syarah', 'sistem-metode', 'organisasi', 'visi-misi'];
+
+/* Gambar contoh yang tersimpan sebagai data-URI SVG bisa memuat `&`
+   telanjang di dalam teksnya — cacat pembuatnya dulu. XML menganggap
+   itu awal rujukan entitas, berkasnya jadi tak sah, dan peramban hanya
+   menampilkan ikon gambar rusak tanpa satu pun pesan.
+
+   Yang diperbaiki di sini bukan sekadar gambar bawaan: perbaikannya
+   menyunting isi SVG-nya, sehingga berlaku juga pada gambar yang sudah
+   diganti pengurus selama bentuknya SVG. Sudah aman diulang — `&amp;`
+   tidak akan berlipat menjadi `&amp;amp;`. */
+const AWALAN_SVG = 'data:image/svg+xml';
+
+function perbaikiSvgRusak(tersimpan) {
+  const bersihkan = (v) => {
+    if (typeof v !== 'string' || !v.startsWith(AWALAN_SVG)) return v;
+    const koma = v.indexOf(',');
+    if (koma < 0) return v;
+    let isi;
+    try { isi = decodeURIComponent(v.slice(koma + 1)); } catch (_) { return v; }
+    const rapi = isi.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/gi, '&amp;');
+    if (rapi === isi) return v;
+    return v.slice(0, koma + 1) + encodeURIComponent(rapi);
+  };
+
+  const telusur = (o) => {
+    if (Array.isArray(o)) { o.forEach((x, i) => { if (typeof x === 'object' && x) telusur(x); else o[i] = bersihkan(x); }); return; }
+    if (!o || typeof o !== 'object') return;
+    Object.keys(o).forEach((k) => {
+      const v = o[k];
+      if (typeof v === 'object' && v) telusur(v);
+      else o[k] = bersihkan(v);
+    });
+  };
+
+  [tersimpan.cms, tersimpan.cmsDraft].forEach((sisi) => { if (sisi) telusur(sisi); });
+  ['artikel', 'media', 'desain', 'video', 'users'].forEach((k) => {
+    if (Array.isArray(tersimpan[k])) telusur(tersimpan[k]);
+  });
+}
 
 /* Nomor urut dibuang di seluruh halaman, bukan hanya beranda.
 

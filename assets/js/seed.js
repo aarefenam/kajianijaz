@@ -9,6 +9,13 @@
 /* Placeholder gambar berbasis SVG data-URI supaya prototipe
    berjalan penuh tanpa file eksternal / koneksi internet. */
 function ph(label, c1, c2, arab) {
+  /* SVG adalah XML, dan `&` di dalam teks XML membuka rujukan entitas.
+     Tanpa dilindungi, label seperti "KITAB & QALAM" menghasilkan berkas
+     yang tak sah — dan peramban tidak mengeluh, ia hanya menampilkan
+     ikon gambar rusak. Cacat yang mudah luput justru karena diamnya. */
+  const aman = (t) => String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="560" viewBox="0 0 800 560">
     <defs>
       <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
@@ -20,8 +27,8 @@ function ph(label, c1, c2, arab) {
     </defs>
     <rect width="800" height="560" fill="url(#g)"/>
     <rect width="800" height="560" fill="url(#p)"/>
-    <text x="400" y="270" text-anchor="middle" font-family="Amiri, Georgia, serif" font-size="72" fill="rgba(255,255,255,.30)">${arab || ''}</text>
-    <text x="400" y="330" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="21" letter-spacing="3" fill="rgba(255,255,255,.60)">${label}</text>
+    <text x="400" y="270" text-anchor="middle" font-family="Amiri, Georgia, serif" font-size="72" fill="rgba(255,255,255,.30)">${aman(arab)}</text>
+    <text x="400" y="330" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="21" letter-spacing="3" fill="rgba(255,255,255,.60)">${aman(label)}</text>
   </svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/\s+/g, ' '));
 }
