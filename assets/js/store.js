@@ -150,6 +150,7 @@ function migrasiBentuk(tersimpan) {
   /* Domain baru ditambahkan belakangan; DB lama belum mengenalnya. */
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
+  bubuhiIdAnggota(tersimpan);
   petakanRoleLama(tersimpan);
   petakanFontLama(tersimpan);
   rombakHero(tersimpan);
@@ -450,6 +451,18 @@ function susunBeranda(tersimpan) {
   });
 }
 
+/* Anggota yang terlanjur tersimpan tanpa id — lihat catatan di
+   simpanAnggota(). Tanpa id mereka tak dapat masuk, tak dapat disetel
+   ulang sandinya, dan sandinya berganti sendiri tiap penyimpanan.
+
+   Id dibubuhkan di sini supaya akunnya hidup kembali. Server melihat id
+   yang belum dikenalnya, lalu menerbitkan sandi baru sekali dan
+   mengembalikannya — persis yang dibutuhkan orang yang selama ini
+   terkunci. */
+function bubuhiIdAnggota(tersimpan) {
+  (tersimpan.users || []).forEach((u) => { if (!u.id) u.id = uid('u'); });
+}
+
 /* PJ Website dan PJ Media melebur jadi satu peran. Kunci lamanya masih
    tercatat pada anggota buatan pengguna dan pada daftar jabatan di dalam
    CMS — RBAC sudah mengenali keduanya lewat ROLE_LAMA, tapi daftar jabatan
@@ -508,7 +521,20 @@ async function panggil(jalur, opsi = {}) {
     ...opsi,
   });
   let d = {};
-  try { d = await r.json(); } catch (_) {}
+  let utuh = true;
+  try { d = await r.json(); } catch (_) { utuh = false; }
+
+  /* Jawaban 200 yang tak dapat dibaca BUKAN keberhasilan. Sempat
+     terjadi: satu peringatan PHP mendahului JSON, parse gagal, dan
+     karena kegagalannya didiamkan peramban mengira simpanan sudah
+     tersimpan — padahal versi koleksi tak maju dan kata sandi yang
+     diterbitkan server hilang tanpa jejak. */
+  if (r.ok && !utuh) {
+    const e = new Error('Jawaban server tidak dapat dibaca. Coba lagi; bila berulang, periksa log server.');
+    e.kode = 502;
+    throw e;
+  }
+
   if (!r.ok) {
     const e = new Error(d.galat || `Server menjawab ${r.status}.`);
     e.kode = r.status;
@@ -1110,13 +1136,41 @@ function simpanAnggota(user, data) {
        mengembalikannya untuk disampaikan kepada yang bersangkutan.
        Sandi bawaan yang sama untuk semua orang — dulu '123456' —
        sama saja dengan tidak punya kata sandi. */
+    /* `data` memuat `id: undefined` — formulir mengirimkannya apa adanya
+       untuk anggota baru. Disebar SESUDAH id bawaan, nilai undefined itu
+       menimpa id yang baru dibuat, dan anggotanya lahir tanpa id.
+
+       Akibatnya berantai dan senyap: masuk.php menyimpan userId null
+       sehingga orangnya tak pernah bisa masuk dengan sandi apa pun, dan
+       jagaRahasiaPengguna kehilangan jejaknya sehingga sandinya diacak
+       ulang tiap kali data disimpan. Karena itu id dibuang dari data
+       lebih dulu, bukan sekadar ditaruh belakangan. */
+    const { id: _tanpaId, ...bersih } = data;
     const baru = {
       id: uid('u'), status: 'aktif', role: 'anggota',
-      kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'), ...data,
+      kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'), ...bersih,
     };
     db.users.push(baru);
     catat(user, 'anggota.tambah', baru.id, `Menambah anggota ${baru.nama}`);
   }
+  simpan();
+}
+
+/** Hapus anggota beserta akun masuknya. Dua penjagaan, keduanya
+    diperiksa ulang di api/inti.php: akun sendiri tak dapat dihapus —
+    supaya tak ada yang mengunci dirinya di luar, dan Ketua Umum
+    terakhir tak pernah hilang — dan akun pemegang wewenang tertinggi
+    hanya dapat dihapus oleh sesamanya. */
+function hapusAnggota(user, ids) {
+  RBAC.assertCan(user, 'anggota.manage');
+  const buang = new Set(ids);
+  const sasaran = db.users.filter((u) => buang.has(u.id));
+  if (!sasaran.length) return;
+  if (buang.has(user.id)) throw new Error('Anda tidak dapat menghapus akun sendiri.');
+  if (!RBAC.can(user, 'user.manage') && sasaran.some((u) => RBAC.can(u, 'user.manage')))
+    throw new Error('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.');
+  db.users = db.users.filter((u) => !buang.has(u.id));
+  sasaran.forEach((u) => catat(user, 'anggota.hapus', u.id, `Menghapus anggota ${u.nama}`));
   simpan();
 }
 
@@ -1594,7 +1648,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI,
-  simpanAnggota, simpanTransaksi, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, simpanTransaksi, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,

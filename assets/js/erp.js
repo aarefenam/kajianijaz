@@ -1724,17 +1724,53 @@ HAL.anggota = () => {
      bukan Ketua. */
   const bisaSetel = RBAC.canAny(U, ['anggota.manage', 'user.manage']);
 
+  /* Akun sendiri tak dapat dihapus, dan akun pemegang wewenang tertinggi
+     hanya oleh sesamanya — aturan yang sama ditegakkan ulang di server. */
+  const bisaHapus = RBAC.can(U, 'anggota.manage');
+  const bolehHapus = (u) => bisaHapus && u.id !== U.id
+    && (!RBAC.can(u, 'user.manage') || RBAC.can(U, 'user.manage'));
+  const terpilih = new Set();
+
   const box = el(`<div><div class="panel-kepala" style="background:#fff;border:1px solid var(--e-garis);border-radius:var(--e-radius);margin-bottom:18px">
     <h3>Data Keanggotaan</h3><span class="ket">${Store.db.users.length} orang terdaftar</span>
-    <div class="kanan"><button class="btn btn-lime btn-kecil" id="ba">${I.tambah} Tambah Anggota</button></div></div></div>`);
+    <div class="kanan">
+      <button class="btn btn-merah btn-kecil" id="bh" hidden>${I.hapus} <span></span></button>
+      <button class="btn btn-lime btn-kecil" id="ba">${I.tambah} Tambah Anggota</button></div></div></div>`);
   box.querySelector('#ba').onclick = () => formAnggota(null);
 
   const p = el(`<div class="panel"><div class="tabel-bungkus"><table>
-    <thead><tr><th>Nama</th><th>Jabatan / Role</th><th>Angkatan</th><th>Jenjang</th><th>Status</th><th></th></tr></thead>
+    <thead><tr>
+      ${bisaHapus ? `<th class="kol-pilih"><button class="cek-kotak" data-semua title="Pilih semua">${I.cek}</button></th>` : ''}
+      <th class="kol-no">No</th><th>Nama</th><th>Jabatan / Role</th><th>Angkatan</th><th>Jenjang</th><th>Status</th><th></th></tr></thead>
     <tbody></tbody></table></div></div>`);
   const tb = p.querySelector('tbody');
-  Store.db.users.forEach((u) => {
+  const bh = box.querySelector('#bh');
+  const semua = p.querySelector('[data-semua]');
+  const dapatDipilih = Store.db.users.filter(bolehHapus);
+
+  const segarkanPilihan = () => {
+    bh.hidden = !terpilih.size;
+    bh.querySelector('span').textContent = `Hapus Terpilih (${terpilih.size})`;
+    semua?.classList.toggle('on', !!dapatDipilih.length && terpilih.size === dapatDipilih.length);
+    tb.querySelectorAll('[data-pilih]').forEach((b) => b.classList.toggle('on', terpilih.has(b.dataset.pilih)));
+  };
+  if (semua) {
+    semua.disabled = !dapatDipilih.length;
+    semua.onclick = () => {
+      const penuh = terpilih.size === dapatDipilih.length;
+      terpilih.clear();
+      if (!penuh) dapatDipilih.forEach((u) => terpilih.add(u.id));
+      segarkanPilihan();
+    };
+  }
+  bh.onclick = () => hapusAnggota(Store.db.users.filter((u) => terpilih.has(u.id)));
+
+  Store.db.users.forEach((u, i) => {
+    const boleh = bolehHapus(u);
     const tr = el(`<tr>
+      ${bisaHapus ? `<td class="kol-pilih"><button class="cek-kotak" data-pilih="${esc(u.id)}" ${boleh ? '' : 'disabled'}
+        title="${boleh ? 'Pilih' : u.id === U.id ? 'Akun Anda sendiri' : 'Hanya Ketua Umum yang dapat menghapus akun ini'}">${I.cek}</button></td>` : ''}
+      <td class="kol-no">${i + 1}</td>
       <td><div style="display:flex;align-items:center;gap:11px">
         <img src="${u.foto}" style="width:36px;height:36px;border-radius:50%">
         <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:12px">${esc(u.email)}</span></div></div></td>
@@ -1744,16 +1780,36 @@ HAL.anggota = () => {
       <td class="aksi-sel"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Ubah data">${I.sunting}</button>
         ${bisaSetel ? `<button class="ikon-aksi" data-sandi title="Setel ulang kata sandi">${I.gembok}</button>` : ''}
+        ${boleh ? `<button class="ikon-aksi hapus" title="Hapus anggota">${I.hapus}</button>` : ''}
       </div></td>
     </tr>`);
     tr.querySelector('.sunting').onclick = () => formAnggota(u);
     tr.querySelector('[data-sandi]')?.addEventListener('click', () => setelSandiAnggota(u));
+    tr.querySelector('.ikon-aksi.hapus')?.addEventListener('click', () => hapusAnggota([u]));
+    tr.querySelector('[data-pilih]')?.addEventListener('click', () => {
+      terpilih.has(u.id) ? terpilih.delete(u.id) : terpilih.add(u.id);
+      segarkanPilihan();
+    });
     tb.appendChild(tr);
   });
   box.appendChild(p);
   return box;
 };
 HAL.anggota.judul = () => ['Data Anggota', 'Keanggotaan, jenjang kajian, dan penetapan jabatan.'];
+
+/** Hapus satu atau beberapa anggota sekaligus, sesudah ditegaskan. */
+function hapusAnggota(daftar) {
+  if (!daftar.length) return;
+  const siapa = daftar.length === 1 ? daftar[0].nama : `${daftar.length} anggota`;
+  konfirmasi('Hapus anggota',
+    `${siapa} akan dihapus permanen beserta akun masuknya. Tindakan ini tidak dapat dibatalkan.`,
+    () => {
+      if (aman(() => Store.hapusAnggota(U, daftar.map((u) => u.id)))) {
+        toast(daftar.length === 1 ? `${daftar[0].nama} dihapus.` : `${daftar.length} anggota dihapus.`);
+      }
+      gambar();
+    }, 'Ya, hapus');
+}
 
 /**
  * Setel ulang kata sandi seorang anggota, lalu tampilkan sandinya
@@ -6318,16 +6374,30 @@ Store.berlanggananStatus((keadaan, muatan) => {
             kembali ke keadaan terakhir yang tersimpan di server.</p>`,
     });
   } else if (keadaan === 'sandiBaru') {
-    /* Anggota baru memperoleh kata sandi dari server, sekali saja. */
-    Object.values(muatan).forEach((sandi) => {
-      modal({
-        judul: 'Kata sandi awal anggota baru',
-        isi: `<p style="margin:0 0 14px;font-size:14px;color:#44534A">Sampaikan kata sandi ini kepada
-              yang bersangkutan. Ia akan diminta menggantinya saat pertama masuk, dan sandi ini
-              <b>tidak dapat dilihat lagi</b> setelah jendela ini ditutup.</p>
-              <div class="kartu-sandi"><code style="font-size:19px;letter-spacing:1px">${esc(sandi)}</code></div>`,
-      });
-    });
+    /* Anggota baru memperoleh kata sandi dari server, sekali saja.
+       Ditampilkan dalam SATU jendela meski beberapa sekaligus: memanggil
+       modal() berulang hanya menimpa isinya sendiri, dan yang terlihat
+       tinggal sandi terakhir — sisanya hilang tanpa jejak. */
+    const daftar = Object.values(muatan).map((x) =>
+      (typeof x === 'string' ? { sandi: x, nama: '', email: '' } : x));
+    const isi = el(`<div>
+      <p style="margin:0 0 14px;font-size:14px;color:#44534A">Sampaikan kata sandi ini kepada
+        yang bersangkutan. Masing-masing akan diminta menggantinya saat pertama masuk, dan
+        sandi ini <b>tidak dapat dilihat lagi</b> setelah jendela ini ditutup.</p>
+      <div class="kartu-sandi">
+        <table class="tbl-sandi">
+          <thead><tr><th>Nama</th><th>Email</th><th>Sandi</th></tr></thead>
+          <tbody>${daftar.map((x) => `<tr><td>${esc(x.nama || '—')}</td>
+            <td>${esc(x.email || '—')}</td><td><code>${esc(x.sandi)}</code></td></tr>`).join('')}</tbody>
+        </table>
+        <div class="ks-aksi"><button class="btn btn-garis" data-salin>Salin semua</button></div>
+      </div></div>`);
+    modal({ judul: `Kata sandi baru (${daftar.length})`, isi, lebar: daftar.length > 1 });
+    isi.querySelector('[data-salin]').onclick = () => {
+      const teks = daftar.map((x) => `${x.nama}\t${x.email}\t${x.sandi}`).join('\n');
+      navigator.clipboard.writeText(teks).then(() => toast('Disalin ke papan klip.'),
+        () => toast('Peramban menolak menyalin. Salin manual dari tabel.', true));
+    };
   }
 });
 

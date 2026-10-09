@@ -9,6 +9,14 @@
 declare(strict_types=1);
 require_once __DIR__ . '/rbac.php';
 
+/* Jawaban API selalu JSON. Peringatan atau catatan PHP yang ikut
+   tercetak akan mendahului JSON-nya dan membuat seluruh jawaban tak
+   dapat dibaca — dengan status tetap 200, sehingga kegagalannya tampak
+   seperti keberhasilan. Karena itu keluhan PHP dialihkan ke log server,
+   tempatnya memang di sana. */
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 /* ---------- konfigurasi ----------
    Tanpa config.php, situs tetap jalan memakai SQLite di folder data/.
    Ini disengaja: satu berkas yang lupa dibuat tidak boleh menjatuhkan
@@ -269,11 +277,40 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
     galat("Koleksi '$nama' tidak dapat ditulis lewat jalur ini.", 403);
   }
   if ($izin === ['*']) return;                 // cukup sudah masuk
+  if ($nama === 'users') jagaHapusPengguna($user, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
 
   galat("Role \"{$user['role']}\" tidak berwenang mengubah $nama.", 403);
+}
+
+/**
+ * Penjaga penghapusan anggota. Peramban mengirim seluruh koleksi
+ * `users`, jadi "menghapus" hanyalah baris yang tak ikut terkirim —
+ * dan tanpa pemeriksaan ini siapa pun yang boleh menulis `users` dapat
+ * membuang Ketua Umum, atau dirinya sendiri, dengan satu kiriman.
+ */
+function jagaHapusPengguna(array $user, $isiBaru): void {
+  if (!is_array($isiBaru)) return;
+  $tersisa = [];
+  foreach ($isiBaru as $u) {
+    if (is_array($u) && ($u['id'] ?? '') !== '') $tersisa[$u['id']] = true;
+  }
+  foreach (bacaKoleksi('users')['isi'] ?? [] as $u) {
+    $id = $u['id'] ?? '';
+    if ($id === '' || isset($tersisa[$id])) continue;
+
+    if (!bolehSalahSatu($user, ['anggota.manage', 'user.manage'])) {
+      galat('Anda tidak berwenang menghapus anggota.', 403);
+    }
+    if ($id === ($user['id'] ?? null)) {
+      galat('Anda tidak dapat menghapus akun sendiri.', 403);
+    }
+    if (bolehkah($u, 'user.manage') && !bolehkah($user, 'user.manage')) {
+      galat('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.', 403);
+    }
+  }
 }
 
 /** Benarkah perubahan pada `users` hanya menyentuh baris milik sendiri? */
@@ -315,11 +352,24 @@ function hanyaProfilSendiri(array $user, $isiBaru): bool {
 function jagaRahasiaPengguna(array $isiBaru, array &$sandiBaru): array {
   $lama = bacaKoleksi('users')['isi'] ?? [];
   $peta = [];
-  foreach ($lama as $u) $peta[$u['id']] = $u;
+  foreach ($lama as $u) {
+    /* Baris tanpa id pernah tersimpan — lihat catatan di bawah. Tanpa
+       penjaga ini PHP mengeluh "Undefined array key", dan keluhannya
+       tercetak ke badan jawaban sebelum JSON, sehingga peramban
+       menerima 200 dengan isi yang tak dapat dibaca. */
+    $id = $u['id'] ?? '';
+    if ($id !== '') $peta[$id] = $u;
+  }
 
   foreach ($isiBaru as &$u) {
-    $id = $u['id'] ?? null;
-    if ($id !== null && isset($peta[$id]['password'])) {
+    /* Anggota tanpa id tak dapat masuk sama sekali: masuk.php menyimpan
+       userId null, dan penggunaAktif() tak pernah menemukannya kembali.
+       Peramban sempat mengirim bentuk seperti itu, jadi server
+       membubuhkan id sendiri alih-alih menyimpan baris yang mati. */
+    if (($u['id'] ?? '') === '') $u['id'] = 'u' . bin2hex(random_bytes(4));
+
+    $id = $u['id'];
+    if (isset($peta[$id]['password'])) {
       /* Peramban boleh mengusulkan kata sandi baru hanya lewat
          api/sandi.php, bukan lewat simpan biasa. */
       $u['password'] = $peta[$id]['password'];
@@ -328,7 +378,7 @@ function jagaRahasiaPengguna(array $isiBaru, array &$sandiBaru): array {
       $mentah = sandiAcak();
       $u['password'] = password_hash($mentah, PASSWORD_DEFAULT);
       $u['sandiAwal'] = 1;
-      $sandiBaru[$id ?? '?'] = $mentah;
+      $sandiBaru[$id] = ['sandi' => $mentah, 'nama' => $u['nama'] ?? '', 'email' => $u['email'] ?? ''];
     }
   }
   return $isiBaru;

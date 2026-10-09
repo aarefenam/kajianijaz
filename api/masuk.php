@@ -25,6 +25,13 @@ if (($ketemu['status'] ?? '') === 'nonaktif') {
   galat('Akun Anda dinonaktifkan. Hubungi Sekretaris.', 403);
 }
 
+/* Tanpa id, sesi tak punya pegangan dan orangnya akan tampak berhasil
+   masuk lalu langsung terlempar keluar. Lebih baik menolak terang-
+   terangan daripada gagal diam-diam. */
+if (($ketemu['id'] ?? '') === '') {
+  galat('Akun ini rusak: tidak punya id. Minta Sekretaris menyimpan ulang datanya.', 500);
+}
+
 mulaiSesi();
 session_regenerate_id(true);
 $_SESSION['userId'] = $ketemu['id'];
