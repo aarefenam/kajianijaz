@@ -221,6 +221,108 @@ function konfirmasi(judul, pesan, onYa, labelYa = 'Ya, lanjutkan', bahaya = true
   kaki.querySelector('[data-y]').onclick = () => { tutupModal(); onYa(); };
 }
 
+/* ---------------- pilih & hapus massal ----------------
+   Setiap daftar data memakai cetakan yang sama: kotak pilih di tiap
+   baris, "pilih semua", dan tombol hapus yang baru muncul saat ada yang
+   dipilih. Dipasang SESUDAH daftarnya jadi, supaya tak satu pun tabel
+   perlu menata ulang kolomnya sendiri.
+
+   `boleh` menandai baris yang memang dapat dihapus pengguna ini; yang
+   tidak, kotaknya mati dan tak ikut "pilih semua". `hapusSemua` dipakai
+   bila penghapusan harus terjadi dalam satu langkah — kategori, misalnya,
+   yang disimpan sebagai satu larik utuh di draft website. */
+function aturPilih({ bilah, semua, kotak, daftar, satuan, boleh = () => true, hapus, hapusSemua, sesudah = () => gambar() }) {
+  const terpilih = new Set();
+  const dapat = daftar.map((x, i) => (boleh(x) ? i : -1)).filter((i) => i >= 0);
+  const tombol = bilah.querySelector('[data-h]');
+  const batal = bilah.querySelector('[data-b]');
+  const ket = bilah.querySelector('b');
+
+  const segarkan = () => {
+    kotak.forEach((b, i) => b.classList.toggle('on', terpilih.has(i)));
+    semua.classList.toggle('on', !!dapat.length && terpilih.size === dapat.length);
+    bilah.classList.toggle('ada', !!terpilih.size);
+    tombol.hidden = batal.hidden = !terpilih.size;
+    ket.textContent = terpilih.size ? `${terpilih.size} dari ${daftar.length} dipilih` : '';
+  };
+  kotak.forEach((b, i) => {
+    if (!dapat.includes(i)) { b.disabled = true; b.title = 'Tidak dapat dihapus'; return; }
+    b.onclick = () => { terpilih.has(i) ? terpilih.delete(i) : terpilih.add(i); segarkan(); };
+  });
+  semua.disabled = !dapat.length;
+  semua.onclick = () => {
+    const penuh = terpilih.size === dapat.length;
+    terpilih.clear();
+    if (!penuh) dapat.forEach((i) => terpilih.add(i));
+    segarkan();
+  };
+  batal.onclick = () => { terpilih.clear(); segarkan(); };
+  tombol.onclick = () => {
+    const kena = [...terpilih].sort((x, y) => x - y).map((i) => daftar[i]);
+    konfirmasi(`Hapus ${kena.length} ${satuan}`,
+      `${kena.length} ${satuan} yang dipilih akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`,
+      () => {
+        if (aman(() => (hapusSemua ? hapusSemua(kena) : kena.forEach((x) => hapus(x))))) {
+          toast(`${kena.length} ${satuan} dihapus.`);
+        }
+        sesudah();
+      }, 'Ya, hapus');
+  };
+  segarkan();
+}
+
+const tombolBilah = () => `<b></b>
+  <button class="btn btn-merah btn-kecil" data-h hidden>${I.hapus} Hapus Terpilih</button>
+  <button class="btn btn-garis btn-kecil" data-b hidden>Batal</button>`;
+
+/* Untuk tabel. `daftar` harus sejajar dengan baris <tbody> — satu data,
+   satu baris. Bila tidak (ada baris total atau penanda "…"), kotak
+   pilih tidak dipasang sama sekali: lebih baik tanpa fitur daripada
+   menghapus baris yang keliru. */
+function pasangPilih(bungkus, daftar, opsi) {
+  const tabel = bungkus.matches('table') ? bungkus : bungkus.querySelector('table');
+  const baris = tabel ? [...tabel.tBodies[0].rows] : [];
+  if (!daftar.length || baris.length !== daftar.length) return bungkus;
+
+  const bilah = el(`<div class="bilah-pilih">${tombolBilah()}</div>`);
+  tabel.before(bilah);
+
+  const semua = el(`<button class="cek-kotak" title="Pilih semua">${I.cek}</button>`);
+  const th = document.createElement('th');
+  th.className = 'kol-pilih';
+  th.rowSpan = tabel.tHead.rows.length;
+  th.appendChild(semua);
+  tabel.tHead.rows[0].prepend(th);
+
+  const kotak = baris.map((tr) => {
+    const b = el(`<button class="cek-kotak" title="Pilih">${I.cek}</button>`);
+    const td = document.createElement('td');
+    td.className = 'kol-pilih';
+    td.appendChild(b);
+    tr.prepend(td);
+    return b;
+  });
+  aturPilih({ satuan: 'data', ...opsi, bilah, semua, kotak, daftar });
+  return bungkus;
+}
+
+/* Untuk daftar berbentuk kartu (artikel, jadwal kajian lama): nomor dan
+   kotak pilih disisipkan di awal kepala tiap kartu, dan bilahnya selalu
+   tampak sebab di situlah "pilih semua" berada. */
+function pasangPilihKartu(wadah, kartu, daftar, opsi) {
+  if (!daftar.length || kartu.length !== daftar.length) return;
+  const bilah = el(`<div class="bilah-pilih bilah-kartu">
+    <button class="cek-kotak" data-semua title="Pilih semua">${I.cek}</button>
+    <span>Pilih semua</span>${tombolBilah()}</div>`);
+  wadah.prepend(bilah);
+  const kotak = kartu.map((n, i) => {
+    const b = el(`<button class="cek-kotak" title="Pilih">${I.cek}</button>`);
+    n.querySelector('.panel-kepala').prepend(b, el(`<span class="no-kartu">${i + 1}</span>`));
+    return b;
+  });
+  aturPilih({ satuan: 'data', ...opsi, bilah, semua: bilah.querySelector('[data-semua]'), kotak, daftar });
+}
+
 /* ---------------- state ---------------- */
 let U = null;              // pengguna aktif
 let rute = 'dasbor';
@@ -1419,6 +1521,7 @@ function halamanArtikel(kunci) {
       return;
     }
     wadah.innerHTML = '';
+    const kartuArt = [];
     data.forEach((a) => {
       const st = STATUS_ART[a.status];
       const milikSaya = a.penulisId === U.id;
@@ -1473,6 +1576,12 @@ function halamanArtikel(kunci) {
           () => aman(() => { Store.hapusArtikel(U, a.id); toast('Artikel dihapus.'); gambarDaftar(); })));
 
       wadah.appendChild(n);
+      kartuArt.push(n);
+    });
+    pasangPilihKartu(wadah, kartuArt, data, {
+      satuan: 'artikel', sesudah: gambarDaftar,
+      boleh: (a) => bisaTinjau || a.penulisId === U.id,
+      hapus: (a) => Store.hapusArtikel(U, a.id),
     });
   }
 
@@ -1557,6 +1666,7 @@ HAL.kajian = () => {
   const urut = [...Store.db.kajian].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
   if (!urut.length) box.appendChild(el(`<div class="panel"><div class="kosong-erp">${I.kotak}<p>Belum ada jadwal kajian</p></div></div>`));
 
+  const kartuKajian = [];
   urut.forEach((k) => {
     const hadir = (k.presensi || []).filter((x) => x.status !== 'tidak-hadir').length;
     const total = Store.db.users.filter((u) => u.status === 'aktif').length;
@@ -1591,7 +1701,14 @@ HAL.kajian = () => {
         () => aman(() => { Store.hapusKajian(U, k.id); toast('Jadwal dihapus.'); gambar(); })));
     }
     box.appendChild(n);
+    kartuKajian.push(n);
   });
+  if (bisaKelola && kartuKajian.length) {
+    const wadahKajian = el('<div></div>');
+    kartuKajian[0].before(wadahKajian);
+    wadahKajian.append(...kartuKajian);
+    pasangPilihKartu(wadahKajian, kartuKajian, urut, { satuan: 'jadwal kajian', hapus: (k) => Store.hapusKajian(U, k.id) });
+  }
   return box;
 };
 HAL.kajian.judul = () => ['Jadwal Kajian', 'Perencanaan kajian, penugasan pemakalah, absensi, dan notulensi.'];
@@ -1925,8 +2042,9 @@ HAL.surat = () => {
   const p = el(`<div class="panel"><div class="panel-kepala"><h3>Arsip Surat Masuk & Keluar</h3>
     <span class="ket">${Store.db.surat.length} dokumen terarsip</span></div>
     <div class="tabel-bungkus"><table>
-    <thead><tr><th>Nomor</th><th>Jenis</th><th>Perihal</th><th>Tujuan / Asal</th><th>Tanggal</th><th>Status</th></tr></thead>
-    <tbody>${Store.db.surat.map((s) => `<tr>
+    <thead><tr><th class="kol-no">No</th><th>Nomor</th><th>Jenis</th><th>Perihal</th><th>Tujuan / Asal</th><th>Tanggal</th><th>Status</th></tr></thead>
+    <tbody>${Store.db.surat.map((s, i) => `<tr>
+      <td class="kol-no">${i + 1}</td>
       <td><b>${esc(s.nomor)}</b></td>
       <td><span class="lencana ${s.kategori === 'masuk' ? 'l-biru' : s.kategori === 'keputusan' ? 'l-kuning' : 'l-hijau'}">${esc(s.kategori)}</span></td>
       <td>${esc(s.perihal)}</td><td>${esc(s.tujuan)}</td><td>${tgl(s.tanggal)}</td>
@@ -1965,11 +2083,13 @@ HAL.keuangan = () => {
   box.querySelector('#bt')?.addEventListener('click', () => formTransaksi(null));
 
   const p = el(`<div class="panel"><div class="tabel-bungkus"><table>
-    <thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th style="text-align:right">Masuk</th><th style="text-align:right">Keluar</th>${bisa ? '<th></th>' : ''}</tr></thead>
+    <thead><tr><th class="kol-no">No</th><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th style="text-align:right">Masuk</th><th style="text-align:right">Keluar</th>${bisa ? '<th></th>' : ''}</tr></thead>
     <tbody></tbody></table></div></div>`);
   const tb = p.querySelector('tbody');
-  [...d].sort((a, b) => b.tanggal.localeCompare(a.tanggal)).forEach((t) => {
+  const urut = [...d].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  urut.forEach((t, i) => {
     const tr = el(`<tr>
+      <td class="kol-no">${i + 1}</td>
       <td>${tgl(t.tanggal)}</td>
       <td><span class="lencana ${t.jenis === 'masuk' ? 'l-hijau' : 'l-merah'}">${esc(t.kategori)}</span></td>
       <td>${esc(t.ket)}</td>
@@ -1982,6 +2102,7 @@ HAL.keuangan = () => {
       () => aman(() => { Store.hapusTransaksi(U, t.id); toast('Transaksi dihapus.'); gambar(); })));
     tb.appendChild(tr);
   });
+  if (bisa) pasangPilih(p, urut, { satuan: 'transaksi', hapus: (t) => Store.hapusTransaksi(U, t.id) });
   box.appendChild(p);
   return box;
 };
@@ -2470,6 +2591,15 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
     tr.querySelector('.hapus')?.addEventListener('click', () => jalankan(() => hapusOrg(nama, b.x)));
     tb.appendChild(tr);
   });
+  /* Hanya di halaman penuh: kartu dasbor menyembunyikan sebagian besar
+     barisnya, dan memilih dari daftar yang terpangkas berarti menghapus
+     tanpa melihat. */
+  if (!pratinjau && aksi && bisa) {
+    pasangPilih(bungkus, semua, {
+      satuan: `data ${m.satuan.toLowerCase()}`,
+      hapus: (x) => (m.hapus ? m.hapus(x) : Store.hapusKoleksi(U, m.koleksi || nama, x.id)),
+    });
+  }
   return bungkus;
 }
 
@@ -2757,6 +2887,15 @@ function tabelAnggota(daftar, kolomAngkatan) {
     tr.querySelector('.sunting').onclick = () => formAnggota(u);
     tb.appendChild(tr);
   });
+  /* Penjagaannya sama dengan Data Anggota: akun sendiri tidak, dan akun
+     pemegang wewenang tertinggi hanya oleh sesamanya. */
+  if (RBAC.can(U, 'anggota.manage')) {
+    pasangPilih(t, daftar, {
+      satuan: 'anggota',
+      boleh: (u) => u.id !== U.id && (!RBAC.can(u, 'user.manage') || RBAC.can(U, 'user.manage')),
+      hapusSemua: (kena) => Store.hapusAnggota(U, kena.map((u) => u.id)),
+    });
+  }
   return t;
 }
 
@@ -3348,6 +3487,15 @@ HAL['kategori-artikel'] = () => {
     };
     tb.appendChild(tr);
   });
+  /* Kategori yang masih dipakai naskah tak dapat dipilih — aturan yang
+     sama dengan tombol hapus per barisnya. */
+  if (bisa) {
+    pasangPilih(t, kategori, {
+      satuan: 'kategori',
+      boleh: (k) => !Store.db.artikel.some((a) => a.kategori === k),
+      hapusSemua: (kena) => Store.ubahDraft(U, path, kategori.filter((k) => !kena.includes(k)), 'cms.kategori.edit'),
+    });
+  }
   kartu.appendChild(t);
 
   kartu.querySelector('[data-tambah]')?.addEventListener('click', () => {
@@ -3819,6 +3967,7 @@ HAL['buku-perencanaan'] = () => {
       () => aman(() => { Store.hapusBuku(U, b.id); toast('Proyek dihapus.'); gambar(); }));
     tb.appendChild(tr);
   });
+  pasangPilih(t, Store.db.buku, { satuan: 'proyek buku', hapus: (b) => Store.hapusBuku(U, b.id) });
   daftar.appendChild(t);
   daftar.querySelector('[data-baru]').onclick = () => formBuku(null);
   box.appendChild(daftar);
@@ -3854,6 +4003,7 @@ HAL['buku-perencanaan'] = () => {
       () => aman(() => { Store.hapusBagianBuku(U, 'timeline', x.id); toast('Tahapan dihapus.'); gambar(); }));
     tlTb.appendChild(tr);
   });
+  pasangPilih(tlBody, aktif.timeline, { satuan: 'tahapan', hapus: (x) => Store.hapusBagianBuku(U, 'timeline', x.id) });
   kartuTl.querySelector('[data-isi]').appendChild(tlBody);
   kartuTl.querySelector('[data-tl]').onclick = () => formTimeline(null);
   dua.appendChild(kartuTl);
@@ -4038,6 +4188,7 @@ HAL['buku-layout'] = () => {
       () => aman(() => { Store.hapusBagianBuku(U, 'desain', d.id); toast('Desain dihapus.'); gambar(); }));
     tdb.appendChild(tr);
   });
+  pasangPilih(td, b.desain, { satuan: 'berkas desain', hapus: (d) => Store.hapusBagianBuku(U, 'desain', d.id) });
   kd.appendChild(td);
   kd.querySelector('[data-tambah]').onclick = () => formDesain(null);
   box.appendChild(kd);
@@ -4110,6 +4261,7 @@ HAL['buku-produksi'] = () => {
       () => aman(() => { Store.hapusBagianBuku(U, 'produksi', p.id); toast('Kegiatan dihapus.'); gambar(); }));
     tb.appendChild(tr);
   });
+  pasangPilih(t, b.produksi, { satuan: 'kegiatan', hapus: (x) => Store.hapusBagianBuku(U, 'produksi', x.id) });
   kp.appendChild(t);
   kp.querySelector('[data-tambah]').onclick = () => formProduksi(null);
   box.appendChild(kp);
@@ -4134,6 +4286,7 @@ HAL['buku-produksi'] = () => {
       () => aman(() => { Store.hapusBagianBuku(U, 'distribusi', d.id); toast('Wilayah dihapus.'); gambar(); }));
     tdb.appendChild(tr);
   });
+  pasangPilih(td, b.distribusi, { satuan: 'wilayah', hapus: (d) => Store.hapusBagianBuku(U, 'distribusi', d.id) });
   kd.appendChild(td);
   kd.querySelector('[data-tambah]').onclick = () => formDistribusi(null);
   box.appendChild(kd);
@@ -5336,6 +5489,7 @@ HAL['jadwal-kajian'] = () => {
       () => aman(() => { Store.hapusKajian(U, k.id); toast('Jadwal dihapus.'); gambar(); }));
     tb.appendChild(tr);
   });
+  pasangPilih(t, semua, { satuan: 'jadwal kajian', hapus: (k) => Store.hapusKajian(U, k.id) });
   kartu.appendChild(t);
   return kartu;
 };

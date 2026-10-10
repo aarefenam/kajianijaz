@@ -577,6 +577,25 @@ tbody tr:hover { background: #FAFBFA; }
 .cek-kotak:disabled { opacity: .5; cursor: not-allowed; }
 .btn[hidden] { display: none; }
 th.kol-pilih, td.kol-pilih { width: 21px; padding-right: 0; }
+/* Bilah hapus massal. Menempel di kiri supaya tetap terlihat saat
+   tabelnya digulir mendatar di layar sempit. Di atas tabel ia baru
+   mengambil tempat saat ada yang dipilih; di atas daftar kartu ia
+   selalu tampak, sebab "pilih semua" tinggal di sana. */
+.bilah-pilih {
+  position: sticky; left: 0; display: none; align-items: center; gap: 9px; flex-wrap: wrap;
+  padding: 10px 20px; background: rgba(229,83,75,.06); border-bottom: 1px solid var(--e-garis);
+  font-size: 12.8px;
+}
+.bilah-pilih.ada, .bilah-pilih.bilah-kartu { display: flex; }
+.bilah-pilih b { margin-right: auto; }
+.bilah-kartu {
+  background: #fff; border: 1px solid var(--e-garis); border-radius: var(--e-radius);
+  margin-bottom: 14px; padding: 10px 16px; color: var(--e-abu);
+}
+.bilah-kartu.ada { background: rgba(229,83,75,.06); }
+.bilah-kartu b { margin-left: 6px; color: var(--e-teks, #1F2A24); }
+.no-kartu { min-width: 18px; text-align: center; font-size: 12.4px; font-weight: 700; color: var(--e-abu); font-variant-numeric: tabular-nums; }
+.panel-kepala > .cek-kotak { flex: none; }
 th.kol-no, td.kol-no { width: 1%; white-space: nowrap; color: var(--e-abu); font-variant-numeric: tabular-nums; }
 
 .lampiran-mini {
