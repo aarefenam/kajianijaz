@@ -393,6 +393,7 @@ const MENU = [
   { grup: 'Data & Keanggotaan', izin: ['sekretariat.manage'] },
   { id: 'anggota-angkatan', label: 'Data Anggota Perangkatan', ikon: I.grup,   izin: ['sekretariat.manage'] },
   { id: 'alumni',           label: 'Data Alumni',              ikon: I.wisuda, izin: ['sekretariat.manage'] },
+  { id: 'kartu-anggota',    label: 'Kartu Anggota',            ikon: I.qr,     izin: ['anggota.manage'] },
 
   { grup: 'Arsip Penulisan', izin: ['arsip.view'] },
   { id: 'arsip', label: 'Link Arsip Kepenulisan', ikon: I.tautan, izin: ['arsip.view'] },
@@ -531,6 +532,7 @@ const MENU_KETUA = [
   { id: 'laporan' },
   { grup: 'Struktur' },
   { id: 'anggota' },
+  { id: 'kartu-anggota' },
   { id: 'pengurus' },
   { id: 'koordinator' },
   { id: 'akses' },
@@ -578,6 +580,7 @@ const MENU_SEKRETARIS = [
   { grup: 'Keanggotaan' },
   { id: 'anggota-angkatan', label: 'Data Anggota' },
   { id: 'alumni' },
+  { id: 'kartu-anggota' },
   { grup: 'Sistem' },
   { id: 'pengaturan' },
 ];
@@ -1866,7 +1869,10 @@ HAL.kajian = () => {
     const aks = n.querySelector('[data-aksi]');
     const btn = (l, ik, kls, fn) => { const b = el(`<button class="btn ${kls} btn-kecil">${ik} ${l}</button>`); b.onclick = fn; aks.appendChild(b); };
 
-    if (RBAC.can(U, 'kajian.attendance')) btn('Absensi', I.grup, 'btn-garis', () => dialogAbsensi(k));
+    if (RBAC.can(U, 'kajian.attendance')) {
+      btn('Pindai', I.qr, 'btn-lime', () => modePresensi(k));
+      btn('Absensi', I.grup, 'btn-garis', () => dialogAbsensi(k));
+    }
     if (RBAC.can(U, 'kajian.notulensi')) btn('Notulensi', I.dok, 'btn-garis', () => dialogNotulensi(k));
     if (bisaKelola) {
       btn('', I.sunting, 'btn-garis btn-ikon', () => formKajian(k));
@@ -1908,8 +1914,11 @@ function formKajian(k) {
       <div class="grup"><label>Moderator</label><select id="md">${opt(k?.moderatorId)}</select></div>
       <div class="grup"><label>Notulen</label><select id="nt"><option value="">—</option>${opt(k?.notulenId)}</select></div>
     </div>
-    <div class="grid-form">
+    <div class="grid-form-3">
       <div class="grup"><label>Angkatan</label><input id="ak" value="${esc(k?.angkatan || (typeof angkatanAktif === 'function' ? angkatanAktif() : 'Angkatan X'))}"></div>
+      <div class="grup"><label>Batas Terlambat (menit)</label>
+        <input type="number" id="tl" min="0" max="180" step="1" value="${Store.toleransiKajian(k)}">
+        <div class="bantu">Sesudah jam mulai. Lewat batas ini, yang memindai tetap masuk tetapi tercatat terlambat. Isi 0 bila tak ada kelonggaran.</div></div>
       <div class="grup"><label>Kelengkapan Berkas</label>
         <div style="display:flex;gap:18px;padding-top:8px">
           <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin:0">
@@ -1932,6 +1941,7 @@ function formKajian(k) {
         id: k?.id, judul: g('j').trim(), jenis: g('jn'), level: g('lv'), tanggal: g('tg'),
         jam: g('jm'), tempat: g('tp'), pemakalahId: g('pm'), moderatorId: g('md'), materi: g('mt'),
         notulenId: g('nt'), angkatan: g('ak').trim(),
+        toleransi: Math.max(0, Math.round(Number(g('tl')) || 0)),
         ppt: isi.querySelector('#pp').checked, revisi: isi.querySelector('#rv').checked,
       });
       tutupModal(); toast('Jadwal kajian tersimpan.'); gambar();
@@ -2063,7 +2073,7 @@ HAL.anggota = () => {
       <td class="kol-no">${i + 1}</td>
       <td><div style="display:flex;align-items:center;gap:11px">
         <img src="${u.foto}" style="width:36px;height:36px;border-radius:50%">
-        <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:12px">${esc(u.email)}</span></div></div></td>
+        <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:12px">${u.nia ? `<span class="nia">${esc(u.nia)}</span> · ` : ''}${esc(u.email)}</span></div></div></td>
       <td><span class="lencana" style="background:${RBAC.roleColor(u.role)}22;color:${RBAC.roleColor(u.role)}">${esc(RBAC.roleLabel(u.role))}</span></td>
       <td>${esc(u.angkatan)}</td><td>${esc(u.level)}</td>
       <td><span class="lencana ${u.status === 'aktif' ? 'l-hijau' : u.status === 'alumni' ? 'l-biru' : 'l-abu'}">${esc(u.status)}</span></td>
@@ -2149,7 +2159,7 @@ function formAnggota(u) {
     </div>
     <div class="grid-form">
       <div class="grup"><label>Jabatan / Role ERP</label>
-        <select id="r" ${bisaRole ? '' : 'disabled'}>${Object.entries(RBAC.ROLES).map(([k, v]) => `<option value="${k}" ${u?.role === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+        <select id="r" ${bisaRole ? '' : 'disabled'}>${Object.entries(RBAC.ROLES).map(([k, v]) => `<option value="${k}" ${(u?.role || 'anggota') === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
         <div class="bantu">${bisaRole ? 'Menentukan menu dan wewenang orang ini di ERP.' : 'Hanya Ketua Umum yang dapat mengubah role.'}</div></div>
       <div class="grup"><label>Label di Website</label>
         <select id="kt">${['pendiri', 'anggota', 'alumni'].map((x) => `<option ${u?.kategori === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
@@ -3411,7 +3421,7 @@ function tabelAnggota(daftar, kolomAngkatan) {
       <td class="kol-no">${i + 1}</td>
       <td><div style="display:flex;align-items:center;gap:10px">
         <img src="${u.foto}" alt="" style="width:32px;height:32px;border-radius:50%;flex:none">
-        <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:11.6px">${esc(u.email)}</span></div>
+        <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:11.6px">${u.nia ? `<span class="nia">${esc(u.nia)}</span> · ` : ''}${esc(u.email)}</span></div>
       </div></td>
       ${kolomAngkatan ? `<td class="utuh">${esc(u.angkatan)}</td>` : ''}
       <td class="utuh">${esc(u.level)}</td>
@@ -3452,7 +3462,7 @@ HAL['anggota-angkatan'] = () => {
   const isiUlang = () => {
     const q = kepala.querySelector('[data-cari]').value.trim().toLowerCase();
     const cocok = Store.db.users.filter((u) =>
-      !q || `${u.nama} ${u.email} ${u.angkatan} ${u.level}`.toLowerCase().includes(q));
+      !q || `${u.nama} ${u.email} ${u.angkatan} ${u.level} ${u.nia || ''}`.toLowerCase().includes(q));
 
     const grup = {};
     cocok.forEach((u) => { (grup[u.angkatan] ||= []).push(u); });
@@ -5785,7 +5795,7 @@ function dasborKoordinator() {
     const qrPanel = el(`<div class="kj-qr">
       <div class="kj-qr-gambar"><img src="${Store.db.kunjungan ? QR.svgDataUri('AIJZ-' + kHari.id) : ''}" alt="QR kajian"></div>
       <div><h4>Scan QR Code untuk Absen</h4>
-        <p>Pindai QR anggota dengan kamera ponsel, lalu tempelkan hasilnya di sini.</p>
+        <p>Buka Mode Presensi, lalu arahkan kamera ponsel ke QR pada kartu tiap anggota.</p>
         <button class="btn btn-lime btn-kecil" data-scan>${I.qr} Mulai Scan</button></div>
     </div>`);
     qrPanel.querySelector('[data-scan]').onclick = () => dialogScan(kHari);
@@ -5944,45 +5954,204 @@ function unduhQr(u) {
 /** Kotak tempel hasil pindai. Prototipe ini tidak bisa membaca QR lewat
     kamera — itu menuntut pustaka pemindai — tetapi QR-nya sungguhan, jadi
     aplikasi kamera ponsel dapat membacanya dan hasilnya ditempel di sini. */
-function dialogScan(k) {
-  const isi = el(`<div>
-    <div class="notis notis-info" style="margin-bottom:16px">${I.info}<div>
-      <b>Pindai dengan kamera ponsel, tempelkan hasilnya di sini</b>
-      QR tiap anggota berisi kode seperti <code>AIJZ-u16</code>. Aplikasi kamera bawaan
-      ponsel dapat membacanya; prototipe ini yang belum bisa memindai sendiri.
-    </div></div>
-    <div class="grup"><label>Kode Hasil Pindai</label>
-      <input id="kode" placeholder="AIJZ-u16" autocomplete="off">
-      <div class="bantu">Terlambat ditentukan dari jam sesungguhnya terhadap jam mulai kajian (${esc(k.jam)}).</div></div>
-    <div class="daftar-presensi" data-log style="max-height:180px"></div>
-  </div>`);
-  const log = isi.querySelector('[data-log]');
-  const masuk = isi.querySelector('#kode');
+/* ------------------------------------------------------------
+   PEMINDAI KARTU — kamera ponsel membaca QR kartu anggota
+   ------------------------------------------------------------
+   Peramban yang punya BarcodeDetector (Chrome di Android) membacanya
+   sendiri. Yang tidak — iPhone, Firefox — memakai jsQR, yang dimuat
+   baru saat itu juga. Kolom ketik selalu tersedia: untuk kartu yang
+   tertinggal atau lecet, dan untuk alat pemindai yang "mengetik"
+   kodenya lalu menekan Enter.
 
-  const proses = () => {
-    const kode = masuk.value.trim();
-    if (!kode) return;
-    try {
-      const h = Store.presensiDariKode(U, k.id, kode);
-      log.prepend(el(`<div class="presensi-baris">
-        <img src="${h.user.foto}" alt=""><span class="nm">${esc(h.user.nama)}</span>
-        <span class="jm">${esc(h.jam)}</span>
-        <span class="lencana ${PRESENSI[h.status].c}">${PRESENSI[h.status].l}</span></div>`));
-      toast(`${h.user.nama} tercatat ${PRESENSI[h.status].l.toLowerCase()}.`);
-    } catch (e) { toast(e.message, true); }
-    masuk.value = '';
-    masuk.focus();
-  };
-  masuk.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); proses(); } };
-
-  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
-    <button class="btn btn-garis" data-b>Selesai</button>
-    <button class="btn btn-lime" data-s>${I.cek} Catat</button></div>`);
-  modal({ judul: 'Presensi Hasil Pindai', isi, kaki, lebar: true });
-  kaki.querySelector('[data-b]').onclick = () => { tutupModal(); gambar(); };
-  kaki.querySelector('[data-s]').onclick = proses;
-  setTimeout(() => masuk.focus(), 60);
+   Kamera hanya menyala selama layar pindai terbuka, dan dimatikan
+   begitu ditutup — lampu kamera tak boleh tetap menyala diam-diam.
+   ------------------------------------------------------------ */
+function muatJsQR() {
+  if (window.jsQR) return Promise.resolve();
+  return new Promise((jadi, gagal) => {
+    const sk = document.createElement('script');
+    sk.src = 'assets/js/vendor/jsQR.js';
+    sk.onload = jadi;
+    sk.onerror = () => gagal(new Error('Pembaca QR gagal dimuat. Periksa sambungan, atau ketik nomor induknya.'));
+    document.head.appendChild(sk);
+  });
 }
+
+/** Pasang pemindai ke dalam `wadah`. `saatKode(kode)` dipanggil tiap kode
+    terbaca atau diketik. Mengembalikan fungsi untuk mematikan kamera. */
+function pasangPemindai(wadah, saatKode) {
+  const n = el(`<div class="pm">
+    <div class="pm-layar"><video playsinline muted></video><div class="pm-bidik"></div>
+      <div class="pm-pesan" data-pesan>Menyalakan kamera…</div></div>
+    <form class="pm-ketik"><input placeholder="Atau ketik nomor induk — AI-10-007" autocomplete="off" autocapitalize="characters">
+      <button class="btn btn-garis btn-kecil">Catat</button></form></div>`);
+  wadah.appendChild(n);
+  const video = n.querySelector('video');
+  const pesan = n.querySelector('[data-pesan]');
+  const ketik = n.querySelector('input');
+  let hidup = true, aliran = null, terakhir = '', kapan = 0;
+
+  n.querySelector('form').onsubmit = (e) => {
+    e.preventDefault();
+    const kode = ketik.value.trim();
+    if (kode) saatKode(kode);
+    ketik.value = '';
+  };
+
+  const terima = (kode) => {
+    kode = String(kode || '').trim();
+    if (!kode) return;
+    /* Kartu yang masih di depan kamera terbaca berkali-kali per detik.
+       Selama ia terus terlihat, jedanya diperpanjang — kartu yang sama
+       baru dihitung lagi setelah tiga detik benar-benar menghilang.
+       Tanpa ini, layar "HADIR" berganti "SUDAH TERCATAT" di depan mata
+       orang yang kartunya masih terangkat. */
+    const ulang = kode === terakhir && Date.now() - kapan < 3000;
+    terakhir = kode; kapan = Date.now();
+    if (!ulang) saatKode(kode);
+  };
+
+  (async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Peramban ini tidak memberi akses kamera.');
+      aliran = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      if (!hidup) { aliran.getTracks().forEach((t) => t.stop()); return; }
+      video.srcObject = aliran;
+      /* Tidak ditunggu: di sebagian peramban janji play() baru selesai
+         setelah bingkai pertama tampil, dan pembacaan tak perlu menanti itu. */
+      video.muted = true;
+      video.play().catch(() => {});
+
+      let detektor = null;
+      if ('BarcodeDetector' in window) {
+        try {
+          if ((await window.BarcodeDetector.getSupportedFormats()).includes('qr_code'))
+            detektor = new window.BarcodeDetector({ formats: ['qr_code'] });
+        } catch (_) { /* jatuh ke jsQR */ }
+      }
+      if (!detektor) await muatJsQR();
+      pesan.textContent = 'Arahkan kamera ke QR pada kartu anggota';
+
+      const kanvas = document.createElement('canvas');
+      const ctx = kanvas.getContext('2d', { willReadFrequently: true });
+      const putar = async () => {
+        if (!hidup) return;
+        if (video.readyState >= 2 && video.videoWidth) {
+          try {
+            if (detektor) {
+              terima((await detektor.detect(video))[0]?.rawValue);
+            } else {
+              /* Bingkai dikecilkan: 640 piksel cukup untuk QR kartu, dan
+                 membaca bingkai utuh tiap putaran memanaskan ponsel. */
+              const skala = Math.min(1, 640 / video.videoWidth);
+              kanvas.width = Math.round(video.videoWidth * skala);
+              kanvas.height = Math.round(video.videoHeight * skala);
+              ctx.drawImage(video, 0, 0, kanvas.width, kanvas.height);
+              const gbr = ctx.getImageData(0, 0, kanvas.width, kanvas.height);
+              terima(window.jsQR(gbr.data, gbr.width, gbr.height, { inversionAttempts: 'dontInvert' })?.data);
+            }
+          } catch (_) { /* bingkai yang gagal dibaca dilewati saja */ }
+        }
+        setTimeout(putar, 160);
+      };
+      putar();
+    } catch (e) {
+      const ditolak = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
+      pesan.textContent = ditolak ? 'Izin kamera ditolak. Izinkan kamera di peramban, atau ketik nomor induknya.'
+        : e?.name === 'NotFoundError' ? 'Tidak ada kamera di perangkat ini. Ketik nomor induknya.'
+          : /QR gagal dimuat/.test(e?.message || '') ? e.message
+            : 'Kamera tidak dapat dinyalakan di perangkat ini. Ketik nomor induknya.';
+      n.classList.add('tanpa-kamera');
+    }
+  })();
+
+  return () => {
+    hidup = false;
+    aliran?.getTracks().forEach((t) => t.stop());
+    video.srcObject = null;
+  };
+}
+
+/** Layar pindai penuh. `isi(badan, tutup)` mengisi panel kanannya dan
+    mengembalikan penangan kode. */
+function layarPindai(judul, sub, isi) {
+  const n = el(`<div class="layar-pindai">
+    <div class="lp-kepala"><div><h2>${esc(judul)}</h2><span>${esc(sub)}</span></div>
+      <button class="btn btn-garis btn-kecil" data-tutup>${I.tutup} Selesai</button></div>
+    <div class="lp-badan"><div class="lp-kamera" data-kamera></div><div class="lp-sisi" data-sisi></div></div></div>`);
+  document.body.appendChild(n);
+  let matikan = () => {};
+  const esc2 = (e) => { if (e.key === 'Escape' && !document.querySelector('.tirai-erp.buka')) tutup(); };
+  function tutup() {
+    matikan();
+    document.removeEventListener('keydown', esc2);
+    n.remove();
+    gambar();
+  }
+  const saatKode = isi(n.querySelector('[data-sisi]'), tutup);
+  matikan = pasangPemindai(n.querySelector('[data-kamera]'), saatKode);
+  n.querySelector('[data-tutup]').onclick = tutup;
+  document.addEventListener('keydown', esc2);
+  return tutup;
+}
+
+/* Mode Presensi — untuk petugas di pintu kajian. Satu pindaian, satu
+   orang: nama dan statusnya tampil besar, lalu layar siap untuk orang
+   berikutnya tanpa perlu disentuh. */
+function modePresensi(k) {
+  const batas = Store.toleransiKajian(k);
+  layarPindai(k.judul, `${tgl(k.tanggal)} · mulai ${k.jam || '—'} · batas terlambat ${batas} menit · ${k.angkatan || 'semua angkatan'}`, (sisi) => {
+    sisi.innerHTML = `
+      <div class="lp-hitung" data-hitung></div>
+      <div class="lp-hasil" data-hasil><div class="lp-tunggu">${I.qr}<span>Menunggu pindaian pertama</span></div></div>
+      <div class="lp-riwayat" data-riwayat></div>
+      <button class="btn btn-merah btn-kecil" data-tutup-presensi>Tutup Presensi</button>`;
+    const hitung = sisi.querySelector('[data-hitung]');
+    const hasil = sisi.querySelector('[data-hasil]');
+    const riwayat = sisi.querySelector('[data-riwayat]');
+
+    const segarHitung = () => {
+      const peserta = Store.db.users.filter((u) => u.status === 'aktif' && (!k.angkatan || u.angkatan === k.angkatan));
+      const p = k.presensi || [];
+      const jml = (st) => p.filter((x) => x.status === st).length;
+      const belum = Math.max(0, peserta.length - p.length);
+      hitung.innerHTML = [['Hadir', jml('hadir'), 'hijau'], ['Terlambat', jml('terlambat'), 'merah'],
+        ['Tidak Hadir', jml('tidak-hadir'), 'abu'], ['Belum Absen', belum, 'abu']]
+        .map(([l, n, c]) => `<div class="lp-sel ${c}"><b>${n}</b><span>${l}</span></div>`).join('');
+    };
+    const tampil = (kelas, kepala, nama, ket, foto) => {
+      hasil.className = `lp-hasil ${kelas}`;
+      hasil.innerHTML = `${foto ? `<img src="${foto}" alt="">` : ''}<div class="lp-status">${esc(kepala)}</div>
+        <div class="lp-nama">${esc(nama)}</div><div class="lp-ket">${esc(ket)}</div>`;
+    };
+
+    sisi.querySelector('[data-tutup-presensi]').onclick = () => konfirmasi('Tutup presensi',
+      'Semua peserta yang belum memindai akan dicatat tidak hadir. Yang datang sesudahnya tetap dapat memindai dan tercatat terlambat.',
+      () => aman(() => { const n = Store.tutupPresensi(U, k.id); toast(`Presensi ditutup. ${n} orang dicatat tidak hadir.`); segarHitung(); }),
+      'Ya, tutup presensi');
+
+    segarHitung();
+    return (kode) => {
+      try {
+        const h = Store.presensiDariKode(U, k.id, kode);
+        const telat = h.status === 'terlambat';
+        tampil(h.sudah ? 'sudah' : telat ? 'telat' : 'hadir',
+          h.sudah ? 'SUDAH TERCATAT' : telat ? 'TERLAMBAT' : 'HADIR',
+          h.user.nama, `${h.user.nia || ''} · pukul ${h.jam}${h.sudah ? ` · ${PRESENSI[h.status].l.toLowerCase()}` : ''}`, h.user.foto);
+        if (!h.sudah) riwayat.prepend(el(`<div class="presensi-baris"><img src="${h.user.foto}" alt="">
+          <span class="nm">${esc(h.user.nama)}</span><span class="jm">${esc(h.jam)}</span>
+          <span class="lencana ${PRESENSI[h.status].c}">${PRESENSI[h.status].l}</span></div>`));
+        navigator.vibrate?.(telat ? [90, 60, 90] : 70);
+        segarHitung();
+      } catch (e) {
+        tampil('galat', 'DITOLAK', e.message, `Kode: ${kode}`, '');
+        navigator.vibrate?.([200, 80, 200]);
+      }
+    };
+  });
+}
+/* Nama lama dipertahankan: halaman Presensi dan dasbor memanggilnya. */
+function dialogScan(k) { modePresensi(k); }
 
 /* ---------------- halaman ---------------- */
 HAL['jadwal-kajian'] = () => {
@@ -6133,6 +6302,55 @@ HAL['kartu-qr'] = () => {
 };
 HAL['kartu-qr'].judul = () => ['Kartu QR Anggota', 'Kartu presensi yang dapat dicetak dan dipindai.'];
 
+/* Kartu Anggota — milik Sekretaris. Satu kartu per orang, memuat nomor
+   induk dan QR-nya; kartu yang sama dipakai presensi kajian dan
+   penerimaan iuran. */
+let saringKartu = { angkatan: '', status: 'aktif' };
+HAL['kartu-anggota'] = () => {
+  const angkatan = [...new Set(Store.db.users.map((u) => u.angkatan).filter(Boolean))]
+    .sort((a, b) => urutAngkatan(a) - urutAngkatan(b));
+  if (!angkatan.includes(saringKartu.angkatan)) saringKartu.angkatan = '';
+  const data = Store.db.users
+    .filter((u) => (!saringKartu.angkatan || u.angkatan === saringKartu.angkatan)
+      && (!saringKartu.status || u.status === saringKartu.status))
+    .sort((a, b) => String(a.nia || '').localeCompare(String(b.nia || '')));
+  const tanpa = Store.db.users.filter((u) => !u.nia).length;
+
+  const box = el(`<div><div class="notis notis-info">${I.info}<div>
+    <b>Satu kartu untuk presensi dan iuran</b>
+    QR pada kartu memuat nomor induk anggota — bukan nama atau surel, supaya kartu yang tercecer tidak
+    membocorkan apa pun. Petugas presensi memindainya di pintu kajian; Bendahara memindainya saat menerima iuran.
+    Nomor induk tidak berubah, jadi kartu yang sudah dicetak tetap berlaku.
+  </div></div></div>`);
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Kartu Anggota</h3><span class="hitung">(${data.length} kartu${tanpa ? ` · ${tanpa} belum bernomor` : ''})</span>
+    <div class="kanan">
+      <select class="pilih-saring" data-angkatan><option value="">Semua Angkatan</option>
+        ${angkatan.map((a) => `<option ${a === saringKartu.angkatan ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+      <select class="pilih-saring" data-status>
+        ${[['aktif', 'Anggota aktif'], ['alumni', 'Alumni'], ['', 'Semua status']].map(([v, l]) =>
+          `<option value="${v}" ${v === saringKartu.status ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="btn btn-kecil" data-cetak>${I.unduh} Cetak Kartu</button>
+    </div></div><div class="panel-isi"><div class="ka-kisi"></div></div></div>`);
+  kartu.querySelector('[data-angkatan]').onchange = (e) => { saringKartu.angkatan = e.target.value; gambar(); };
+  kartu.querySelector('[data-status]').onchange = (e) => { saringKartu.status = e.target.value; gambar(); };
+  kartu.querySelector('[data-cetak]').onclick = () => window.print();
+  const kisi = kartu.querySelector('.ka-kisi');
+  if (!data.length) kisi.replaceWith(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada anggota pada saringan ini</p></div>`));
+  data.forEach((u) => {
+    kisi.appendChild(el(`<div class="ka-kartu">
+      <div class="ka-atas">${lambang(22)}<span>${esc(Store.cms.situs.nama)}<small>Kartu Anggota</small></span></div>
+      <img class="ka-qr" src="${QR.svgDataUri(Store.kodeQr(u.id))}" alt="QR ${esc(u.nama)}">
+      <div class="ka-nia">${esc(Store.kodeQr(u.id))}</div>
+      <div class="ka-nama">${esc(u.nama)}</div>
+      <div class="ka-ket">${esc(u.angkatan || '—')}</div>
+    </div>`));
+  });
+  box.appendChild(kartu);
+  return box;
+};
+HAL['kartu-anggota'].judul = () => ['Kartu Anggota', 'Nomor induk dan QR tiap anggota, siap dicetak.'];
+
 HAL.presensi = () => {
   const semua = kajianAktif();
   const box = el('<div></div>');
@@ -6165,7 +6383,7 @@ HAL.presensi = () => {
         <b style="font-size:12.2px">${r.persen}%</b></div></td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Isi presensi">${I.daftarCek}</button>
-        <button class="ikon-aksi" data-scan title="Presensi hasil pindai">${I.qr}</button></div></td></tr>`);
+        <button class="ikon-aksi" data-scan title="Mode Presensi — pindai kartu">${I.qr}</button></div></td></tr>`);
     tr.querySelector('.sunting').onclick = () => dialogAbsensi(k);
     tr.querySelector('[data-scan]').onclick = () => dialogScan(k);
     tb.appendChild(tr);
@@ -7477,11 +7695,13 @@ HAL['pantau-kajian'] = () => {
       <td class="kol-tengah">${tandaLengkap(!!k.notulensi)}</td>
       <td>${lencanaKajian(k)}</td>
       <td class="kol-aksi"><div class="sel-aksi">
-        ${RBAC.can(U, 'kajian.attendance') ? `<button class="ikon-aksi" data-absen title="Absensi">${I.grup}</button>` : ''}
+        ${RBAC.can(U, 'kajian.attendance') ? `<button class="ikon-aksi" data-pindai title="Mode Presensi — pindai kartu">${I.qr}</button>
+          <button class="ikon-aksi" data-absen title="Absensi manual">${I.grup}</button>` : ''}
         ${RBAC.can(U, 'kajian.notulensi') ? `<button class="ikon-aksi" data-notulen title="Notulensi">${I.dok}</button>` : ''}
         ${bisaKelola ? `<button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
           <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>` : ''}
       </div></td></tr>`);
+    tr.querySelector('[data-pindai]')?.addEventListener('click', () => modePresensi(k));
     tr.querySelector('[data-absen]')?.addEventListener('click', () => dialogAbsensi(k));
     tr.querySelector('[data-notulen]')?.addEventListener('click', () => dialogNotulensi(k));
     tr.querySelector('.sunting')?.addEventListener('click', () => formKajian(k));

@@ -524,6 +524,35 @@ function hubungkanOrang(tersimpan) {
   });
 }
 
+/* --- nomor induk anggota ---
+   Tiap anggota bernomor tetap berpola AI-ANGKATAN-URUT — "AI-10-007",
+   anggota ketujuh Angkatan X. Nomor inilah isi QR pada kartu anggota:
+   dipindai saat presensi kajian dan saat Bendahara menerima iuran.
+
+   Nomor diberikan sekali dan tak pernah berubah, sekalipun angkatan
+   atau statusnya kelak disunting — kartu yang sudah dicetak harus
+   tetap sah. Karena itu ia dihitung dari nomor tertinggi yang pernah
+   ada pada angkatannya, bukan dari jumlah anggota saat ini. */
+const ROMAWI_ANGKA = { I:1, II:2, III:3, IV:4, V:5, VI:6, VII:7, VIII:8, IX:9, X:10,
+  XI:11, XII:12, XIII:13, XIV:14, XV:15, XVI:16, XVII:17, XVIII:18, XIX:19, XX:20 };
+function kodeAngkatan(angkatan) {
+  if (/pendiri/i.test(angkatan || '')) return '00';
+  const m = String(angkatan || '').trim().match(/([IVX]+|\d+)$/i);
+  const n = m && (ROMAWI_ANGKA[m[1].toUpperCase()] || Number(m[1]));
+  return n ? String(n).padStart(2, '0') : '99';       // 99: angkatan tak terbaca
+}
+function niaBerikut(users, angkatan) {
+  const awalan = `AI-${kodeAngkatan(angkatan)}-`;
+  const tertinggi = (users || []).reduce((maks, u) => {
+    const nia = String(u.nia || '').toUpperCase();
+    return nia.startsWith(awalan) ? Math.max(maks, Number(nia.slice(awalan.length)) || 0) : maks;
+  }, 0);
+  return awalan + String(tertinggi + 1).padStart(3, '0');
+}
+function nomoriAnggota(tersimpan) {
+  (tersimpan.users || []).forEach((u) => { if (!u.nia) u.nia = niaBerikut(tersimpan.users, u.angkatan); });
+}
+
 /* Evaluasi dahulu berhenti sebagai catatan. Kini ia berstatus dan
    berpenanggung jawab; catatan lama dianggap masih terbuka, sebab tak
    ada yang pernah mencatat bahwa ia sudah ditindaklanjuti. */
@@ -680,6 +709,11 @@ async function muat() {
   bayangan = ambilBayangan(db);
   if (penggunaSesi) {
     lengkapiDB(db);
+    /* Nomor induk hanya dibubuhkan oleh yang berwenang mengelola anggota.
+       Bagi yang lain, menambahkannya berarti mengubah baris orang lain di
+       `users` — yang pasti ditolak server, dan gagalnya akan tampak
+       sebagai galat simpan yang bukan salah siapa pun. */
+    if (RBAC.canAny(userAktif(), ['anggota.manage', 'user.manage'])) nomoriAnggota(db);
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -1140,10 +1174,28 @@ function simpanKajian(user, data) {
 
 const STATUS_PRESENSI = ['hadir', 'terlambat', 'tidak-hadir'];
 
-/** Kode QR anggota. Sengaja hanya membawa id, bukan nama atau surel:
-    QR ini dicetak dan ditempel, jadi ia tidak boleh membocorkan apa pun
-    kepada siapa saja yang kebetulan memindainya. */
-const kodeQr = (userId) => 'AIJZ-' + userId;
+/** Isi QR pada kartu anggota: nomor induknya. Sengaja bukan nama atau
+    surel — kartu dicetak dan dibawa-bawa, jadi yang tercecer tak boleh
+    membocorkan apa pun. Anggota yang belum bernomor memakai kode lama. */
+const kodeQr = (userId) => getUser(userId)?.nia || 'AIJZ-' + userId;
+
+/** Anggota pemilik sebuah kode hasil pindai atau ketikan. Menerima nomor
+    induk maupun kode lama "AIJZ-…", agar kartu yang sudah beredar tetap
+    terbaca. */
+function anggotaDariKode(kode) {
+  const k = String(kode || '').trim().toUpperCase();
+  if (!k) return null;
+  return db.users.find((u) => String(u.nia || '').toUpperCase() === k)
+    || db.users.find((u) => `AIJZ-${u.id}`.toUpperCase() === k || String(u.id).toUpperCase() === k)
+    || null;
+}
+
+/** Tanggal hari ini menurut jam setempat — bukan UTC. Presensi diputuskan
+    di pintu kajian, dan menjelang tengah malam keduanya berbeda hari. */
+function hariIni() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function setPresensi(user, idKajian, userId, status, jam) {
   RBAC.assertCan(user, 'kajian.attendance');
@@ -1161,23 +1213,64 @@ function setPresensi(user, idKajian, userId, status, jam) {
   return k.presensi.find((p) => p.userId === userId);
 }
 
-/** Catat presensi dari kode hasil pindai. Terlambat ditentukan jam
-    sesungguhnya terhadap jam mulai kajian, bukan ditebak petugas. */
+/** Batas terlambat sebuah kajian, dalam menit sesudah jam mulainya.
+    Ditentukan koordinator saat menjadwalkan; bawaannya 10 menit. */
+const toleransiKajian = (k) => {
+  const n = Number(k?.toleransi);
+  return Number.isFinite(n) && n >= 0 && k.toleransi !== '' && k.toleransi != null ? n : 10;
+};
+
+/** Catat presensi dari kode hasil pindai. Hadir atau terlambat ditentukan
+    jam sesungguhnya terhadap jam mulai dan batas terlambat kajiannya —
+    bukan ditebak petugas.
+
+    Yang terlambat TETAP boleh masuk; ia hanya tercatat terlambat. Yang
+    sudah tercatat hadir tidak ditimpa bila kartunya terpindai lagi, agar
+    jam datangnya yang pertama tidak bergeser. */
 function presensiDariKode(user, idKajian, kode) {
   RBAC.assertCan(user, 'kajian.attendance');
   const k = db.kajian.find((x) => x.id === idKajian);
   if (!k) throw new Error('Kajian tidak ditemukan.');
-  const userId = String(kode || '').trim().replace(/^AIJZ-/i, '');
-  const u = db.users.find((x) => x.id === userId);
+  const u = anggotaDariKode(kode);
   if (!u) throw new Error(`Kode "${kode}" tidak dikenali sebagai anggota.`);
-  if (u.angkatan !== k.angkatan)
+  if (k.angkatan && u.angkatan !== k.angkatan)
     throw new Error(`${u.nama} bukan peserta ${k.angkatan}.`);
+  if (u.status !== 'aktif') throw new Error(`${u.nama} tidak berstatus aktif.`);
+
+  const tanggal = hariIni();
+  if (tanggal < k.tanggal)
+    throw new Error(`Kajian ini dijadwalkan ${new Date(`${k.tanggal}T00:00`).toLocaleDateString('id-ID',
+      { day: 'numeric', month: 'long', year: 'numeric' })}. Presensi dibuka pada harinya.`);
+
+  const lama = (k.presensi || []).find((p) => p.userId === u.id);
+  if (lama && lama.status !== 'tidak-hadir')
+    return { user: u, status: lama.status, jam: lama.jam, sudah: true };
 
   const sekarang = new Date().toTimeString().slice(0, 5);
   const menit = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
-  const status = menit(sekarang) > menit(k.jam) + 10 ? 'terlambat' : 'hadir';
-  setPresensi(user, idKajian, userId, status, sekarang);
-  return { user: u, status, jam: sekarang };
+  /* Dipindai sesudah harinya lewat selalu terlambat, pukul berapa pun. */
+  const telat = tanggal > k.tanggal || menit(sekarang) > menit(k.jam || '00:00') + toleransiKajian(k);
+  const status = telat ? 'terlambat' : 'hadir';
+  setPresensi(user, idKajian, u.id, status, sekarang);
+  return { user: u, status, jam: sekarang, sudah: false };
+}
+
+/** Tutup presensi: setiap peserta yang belum tercatat ditulis tidak
+    hadir, supaya tak seorang pun menggantung tanpa keterangan. Yang
+    datang sesudahnya tetap dapat memindai dan berubah menjadi terlambat. */
+function tutupPresensi(user, idKajian) {
+  RBAC.assertCan(user, 'kajian.attendance');
+  const k = db.kajian.find((x) => x.id === idKajian);
+  if (!k) throw new Error('Kajian tidak ditemukan.');
+  k.presensi = k.presensi || [];
+  const sudah = new Set(k.presensi.map((p) => p.userId));
+  const absen = db.users.filter((u) => u.status === 'aktif'
+    && (!k.angkatan || u.angkatan === k.angkatan) && !sudah.has(u.id));
+  absen.forEach((u) => k.presensi.push({ userId: u.id, status: 'tidak-hadir', jam: '' }));
+  k.presensiTutup = new Date().toISOString();
+  catat(user, 'kajian.presensi', idKajian, `Menutup presensi "${k.judul}" — ${absen.length} orang dicatat tidak hadir`);
+  simpan();
+  return absen.length;
 }
 
 /** Penyuntingan anggota versi koordinator: terbatas pada jenjang,
@@ -1211,8 +1304,12 @@ function hapusKajian(user, id) {
 
 function simpanAnggota(user, data) {
   RBAC.assertCan(user, 'anggota.manage');
-  if (data.role && data.role !== db.users.find(u => u.id === data.id)?.role)
-    RBAC.assertCan(user, 'user.manage'); // ganti role butuh izin lebih tinggi
+  /* Mengganti role butuh izin lebih tinggi. Anggota baru lahir sebagai
+     'anggota', jadi menambah orang tanpa menyentuh rolenya tidak
+     menuntut izin itu — dulu pembandingnya `undefined`, sehingga
+     Sekretaris tak pernah bisa menambah anggota sama sekali. */
+  const roleLama = data.id ? db.users.find((u) => u.id === data.id)?.role : 'anggota';
+  if (data.role && data.role !== roleLama) RBAC.assertCan(user, 'user.manage');
   if (data.id) {
     const u = db.users.find((x) => x.id === data.id);
     Object.assign(u, data);
@@ -1236,8 +1333,9 @@ function simpanAnggota(user, data) {
       id: uid('u'), status: 'aktif', role: 'anggota',
       kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'), ...bersih,
     };
+    baru.nia = niaBerikut(db.users, baru.angkatan);
     db.users.push(baru);
-    catat(user, 'anggota.tambah', baru.id, `Menambah anggota ${baru.nama}`);
+    catat(user, 'anggota.tambah', baru.id, `Menambah anggota ${baru.nama} (${baru.nia})`);
   }
   simpan();
 }
@@ -1734,7 +1832,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
-  simpanAnggotaKajian, kodeQr, STATUS_PRESENSI,
+  simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
   simpanAnggota, hapusAnggota, simpanTransaksi, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,

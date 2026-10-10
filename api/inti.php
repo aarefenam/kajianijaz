@@ -333,7 +333,7 @@ function hanyaProfilSendiri(array $user, $isiBaru): bool {
 
     /* Pada barisnya sendiri pun, hanya kolom ini yang boleh berubah —
        peran dan status bukan urusan pemilik akun. */
-    foreach (['role', 'status', 'angkatan', 'level', 'kelompok'] as $kunci) {
+    foreach (['role', 'status', 'angkatan', 'level', 'kelompok', 'nia'] as $kunci) {
       if (($a[$kunci] ?? null) !== ($b[$kunci] ?? null)) return false;
     }
   }

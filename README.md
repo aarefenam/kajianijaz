@@ -260,6 +260,31 @@ menulis "belum ada pembanding" alih-alih mengarang kenaikan dari nol.
 tetap milik PJ Artikel, akun dan peran tetap milik Ketua. Melihat boleh, mengubah
 tidak — ditegakkan di lapisan data, bukan sekadar disembunyikan tombolnya.
 
+### Kartu anggota, presensi, dan pemindai
+
+Tiap anggota bernomor induk tetap berpola `AI-ANGKATAN-URUT` — `AI-10-007`,
+anggota ketujuh Angkatan X; pendiri memakai `00`. Nomor diberikan sekali saat
+anggota ditambahkan dan tidak berubah, jadi kartu yang sudah dicetak tetap sah.
+Sekretaris mencetaknya dari **Kartu Anggota**: QR-nya memuat nomor induk saja,
+bukan nama atau surel. Kode lama `AIJZ-…` tetap terbaca.
+
+**Mode Presensi** adalah layar penuh untuk petugas di pintu kajian. Kamera
+ponsel membaca QR kartu, lalu nama dan statusnya tampil besar:
+
+- *Hadir* atau *Terlambat* ditentukan jam sesungguhnya terhadap jam mulai dan
+  **batas terlambat** kajian itu — diatur koordinator saat menjadwalkan,
+  bawaannya 10 menit.
+- Yang terlambat tetap boleh masuk; ia hanya tercatat terlambat.
+- Kartu yang terpindai lagi tidak menggeser jam datangnya yang pertama.
+- **Tutup Presensi** mencatat tidak hadir semua peserta yang belum memindai.
+  Yang datang sesudahnya masih dapat memindai dan berubah menjadi terlambat.
+
+Peramban yang punya `BarcodeDetector` (Chrome di Android) membaca QR sendiri.
+Yang tidak — iPhone, Firefox — memakai `assets/js/vendor/jsQR.js`, satu-satunya
+pustaka luar di proyek ini, dimuat hanya saat kamera dipakai. Kolom ketik
+nomor induk selalu tersedia sebagai cadangan. Kamera menuntut HTTPS dan izin
+dari pengguna.
+
 ### Ruang kerja PJ Koordinator Kajian
 
 Seluruh halamannya terikat pada **Angkatan & Level** yang dipilih di kanan atas —
