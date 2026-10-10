@@ -117,9 +117,17 @@ function migrasiBentuk(tersimpan) {
   /* Arsip surat dahulu hanya mengenal `jenis: masuk|keluar`. Sekarang ia
      terbagi lima kategori. Petakan bentuk lamanya alih-alih membuangnya —
      nomor surat yang sudah terarsip tidak boleh hilang. */
-  (tersimpan.surat || []).forEach((x) => {
-    if (x.kategori === undefined) x.kategori = x.jenis === 'masuk' ? 'masuk' : 'keluar';
-  });
+  /* Kategori "Surat Keluar" dilebur: surat yang diterbitkan organisasi
+     cukup dibedakan Internal dan Eksternal. Isi kategori lamanya hanya
+     data contoh, jadi dibuang — atas keputusan pengurus, bukan asumsi.
+     Surat tanpa kategori dari bentuk data paling lama dianggap surat
+     masuk atau eksternal, mengikuti jenisnya. */
+  if (Array.isArray(tersimpan.surat)) {
+    tersimpan.surat.forEach((x) => {
+      if (x.kategori === undefined) x.kategori = x.jenis === 'masuk' ? 'masuk' : 'eksternal';
+    });
+    tersimpan.surat = tersimpan.surat.filter((x) => x.kategori !== 'keluar');
+  }
 
   /* Absensi dahulu hanya larik id — kehadiran cuma punya dua keadaan.
      Sekarang ia berstatus dan berjam. Yang sudah tercatat dipetakan

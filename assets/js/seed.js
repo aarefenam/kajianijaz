@@ -629,8 +629,8 @@ const SEED = {
   ],
 
   /* Arsip persuratan — modul Sekretaris.
-     Satu koleksi untuk lima kategori (internal, eksternal, keputusan,
-     masuk, keluar) agar penomoran dan arsipnya tetap satu kesatuan.
+     Satu koleksi untuk empat kategori (internal, eksternal, keputusan,
+     masuk) agar penomoran dan arsipnya tetap satu kesatuan.
      Khusus kategori 'keputusan', `jenisSk` menentukan jenis SK-nya. */
   surat: [
     { id:'sr1', nomor:'001/AI/I/2025', kategori:'internal', perihal:'Undangan Rapat Koordinasi Pengurus', tujuan:'Seluruh Pengurus', tanggal:'2025-01-03', status:'terkirim' },
@@ -680,26 +680,6 @@ const SEED = {
     { id:'sr45', nomor:'013/MSK/V/2025', kategori:'masuk', perihal:'Undangan Buka Puasa Bersama', tujuan:'Keluarga Mahasiswa Jawa Barat', tanggal:'2025-05-27', status:'ditindaklanjuti' },
     { id:'sr46', nomor:'014/MSK/VI/2025', kategori:'masuk', perihal:'Pemberitahuan Hasil Verifikasi Lembaga', tujuan:'KBRI Kairo', tanggal:'2025-06-02', status:'ditindaklanjuti' },
     { id:'sr47', nomor:'015/MSK/VI/2025', kategori:'masuk', perihal:'Permohonan Kesediaan Menjadi Juri', tujuan:'Forum Studi Islam Kairo', tanggal:'2025-06-04', status:'diterima' },
-    { id:'sr48', nomor:'001/KLR/I/2025', kategori:'keluar', perihal:'Balasan Undangan Rapat Koordinasi', tujuan:'IKPM Kairo', tanggal:'2025-01-04', status:'terkirim' },
-    { id:'sr49', nomor:'002/KLR/I/2025', kategori:'keluar', perihal:'Permohonan Peminjaman Proyektor', tujuan:'Sekretariat IKPM', tanggal:'2025-01-05', status:'terkirim' },
-    { id:'sr50', nomor:'003/KLR/I/2025', kategori:'keluar', perihal:'Pengajuan Proposal Seminar Ulumul Quran', tujuan:'Atase Pendidikan KBRI', tanggal:'2025-01-06', status:'terkirim' },
-    { id:'sr51', nomor:'004/KLR/II/2025', kategori:'keluar', perihal:'Permohonan Dana Kegiatan Tatsqif', tujuan:'Bendahara IKPM', tanggal:'2025-02-07', status:'terkirim' },
-    { id:'sr52', nomor:'005/KLR/II/2025', kategori:'keluar', perihal:'Undangan Pemateri Kajian Reguler', tujuan:'Dr. Ahmad Syauqi', tanggal:'2025-02-08', status:'diarsipkan' },
-    { id:'sr53', nomor:'006/KLR/II/2025', kategori:'keluar', perihal:'Laporan Kegiatan Triwulan I', tujuan:'Ketua IKPM Kairo', tanggal:'2025-02-09', status:'terkirim' },
-    { id:'sr54', nomor:'007/KLR/III/2025', kategori:'keluar', perihal:'Permohonan Publikasi Kegiatan', tujuan:'Divisi Media IKPM', tanggal:'2025-03-10', status:'terkirim' },
-    { id:'sr55', nomor:'008/KLR/III/2025', kategori:'keluar', perihal:'Balasan Permohonan Rubrik Tafsir', tujuan:'Redaksi Buletin IKPM', tanggal:'2025-03-11', status:'terkirim' },
-    { id:'sr56', nomor:'009/KLR/III/2025', kategori:'keluar', perihal:'Permohonan Izin Penggunaan Aula', tujuan:'Sekretariat IKPM', tanggal:'2025-03-12', status:'terkirim' },
-    { id:'sr57', nomor:'010/KLR/III/2025', kategori:'keluar', perihal:'Ucapan Terima Kasih Bantuan Buku', tujuan:'Perpustakaan Al-Azhar', tanggal:'2025-03-13', status:'diarsipkan' },
-    { id:'sr58', nomor:'011/KLR/IV/2025', kategori:'keluar', perihal:'Pengajuan Nama Delegasi Lomba', tujuan:'PPI Dunia', tanggal:'2025-04-14', status:'terkirim' },
-    { id:'sr59', nomor:'012/KLR/IV/2025', kategori:'keluar', perihal:'Undangan Halal Bihalal Anggota', tujuan:'Seluruh Alumni', tanggal:'2025-04-15', status:'terkirim' },
-    { id:'sr60', nomor:'013/KLR/IV/2025', kategori:'keluar', perihal:'Laporan Pertanggungjawaban Seminar', tujuan:'Ketua IKPM Kairo', tanggal:'2025-04-16', status:'terkirim' },
-    { id:'sr61', nomor:'014/KLR/V/2025', kategori:'keluar', perihal:'Permohonan Cetak Sertifikat Kegiatan', tujuan:'Percetakan Nasr City', tanggal:'2025-05-17', status:'terkirim' },
-    { id:'sr62', nomor:'015/KLR/V/2025', kategori:'keluar', perihal:'Balasan Undangan Musyawarah Besar', tujuan:'IKPM Kairo', tanggal:'2025-05-18', status:'diarsipkan' },
-    { id:'sr63', nomor:'016/KLR/V/2025', kategori:'keluar', perihal:'Permohonan Rekomendasi Studi Banding', tujuan:'KBRI Kairo', tanggal:'2025-05-19', status:'terkirim' },
-    { id:'sr64', nomor:'017/KLR/V/2025', kategori:'keluar', perihal:'Undangan Rapat Evaluasi Koordinator', tujuan:'Seluruh Koordinator', tanggal:'2025-05-20', status:'terkirim' },
-    { id:'sr65', nomor:'018/KLR/VI/2025', kategori:'keluar', perihal:'Laporan Kegiatan Triwulan II', tujuan:'Ketua IKPM Kairo', tanggal:'2025-06-21', status:'terkirim' },
-    { id:'sr66', nomor:'019/KLR/VI/2025', kategori:'keluar', perihal:'Permohonan Perpanjangan Sekretariat', tujuan:'Sekretariat IKPM', tanggal:'2025-06-22', status:'terkirim' },
-    { id:'sr67', nomor:'020/KLR/VI/2025', kategori:'keluar', perihal:'Undangan Penutupan Kajian Periode', tujuan:'Seluruh Anggota', tanggal:'2025-06-23', status:'diarsipkan' },
   ],
   /* Sertifikat — anggota, pemateri, dan kegiatan. */
   sertifikat: [

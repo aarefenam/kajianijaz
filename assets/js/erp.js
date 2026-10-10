@@ -383,7 +383,6 @@ const MENU = [
       { id: 'sk-alumni',         label: 'SK Alumni'         },
     ] },
   { id: 'surat-masuk',  label: 'Surat Masuk',  ikon: I.baki,   izin: ['sekretariat.manage'] },
-  { id: 'surat-keluar', label: 'Surat Keluar', ikon: I.kirim,  izin: ['sekretariat.manage'] },
 
   { grup: 'Dokumen & Arsip', izin: ['sertifikat.manage', 'ttd.manage'] },
   { id: 'sertifikat', label: 'Sertifikat',            ikon: I.dok,  izin: ['sertifikat.manage'] },
@@ -568,7 +567,6 @@ const MENU_SEKRETARIS = [
   { id: 'surat-internal' },
   { id: 'surat-eksternal' },
   { id: 'surat-keputusan' },
-  { id: 'surat-keluar' },
   { grup: 'Dokumen' },
   { id: 'sertifikat' },
   { id: 'ttd' },
@@ -2596,7 +2594,7 @@ const MODUL = {
 /* ============================================================
    RUANG KERJA SEKRETARIS — persuratan, dokumen, keanggotaan
    ------------------------------------------------------------
-   Lima modul surat hidup di satu koleksi `db.surat` yang sama dan
+   Empat modul surat hidup di satu koleksi `db.surat` yang sama dan
    hanya berbeda irisan kategorinya, jadi seluruhnya dibangun dari
    satu cetakan `modulSurat()`. Penomoran dan arsipnya tetap satu
    kesatuan; menambah kategori cukup satu baris.
@@ -2619,6 +2617,49 @@ const JENIS_SK = {
   'alumni'        : 'SK Alumni',
 };
 
+/* --- penomoran ---
+   Nomor surat berpola URUT/KODE/BULAN-ROMAWI/TAHUN — "013/AI/VI/2025".
+   Dulu diketik tangan, sehingga bisa kembar atau terlompat tanpa ada
+   yang tahu. Kini nomor berikutnya dihitung dari arsip: urutan
+   tertinggi untuk kode dan tahun yang sama, ditambah satu.
+
+   Nomor tetap boleh diubah — surat lama yang baru diarsipkan punya
+   nomornya sendiri — tetapi nomor yang sudah dipakai ditolak. */
+const KODE_SURAT = { internal: 'AI', eksternal: 'AI-E', keputusan: 'SK-AI', masuk: 'MSK' };
+const KODE_SERTIFIKAT = { anggota: 'SRT-A/AI', pemateri: 'SRT-P/AI', kegiatan: 'SRT-K/AI' };
+const ROMAWI_BULAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+const nomorBaku = (n) => String(n || '').trim().toUpperCase().replace(/\s+/g, '');
+
+function nomorBerikut(daftar, kode, tanggal) {
+  const t = tanggal || nowTanggal();
+  const tahun = t.slice(0, 4);
+  const lolos = (teks) => teks.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+  const pola = new RegExp(`^(\\d+)/${lolos(kode)}/[IVXLC]+/${tahun}$`);
+  const tertinggi = daftar.reduce((maks, x) => {
+    const m = nomorBaku(x.nomor).match(pola);
+    return m ? Math.max(maks, Number(m[1])) : maks;
+  }, 0);
+  return `${String(tertinggi + 1).padStart(3, '0')}/${kode}/${ROMAWI_BULAN[Number(t.slice(5, 7)) - 1]}/${tahun}`;
+}
+/** Tolak nomor yang sudah dipakai baris lain di daftar yang sama. */
+function tolakNomorKembar(daftar, d, sebutan) {
+  const kembar = daftar.find((x) => x.id !== d.id && nomorBaku(x.nomor) === nomorBaku(d.nomor));
+  if (kembar) throw new Error(`Nomor ${d.nomor} sudah dipakai ${sebutan} lain. Gunakan nomor berikutnya.`);
+  return d;
+}
+/** Selama nomor belum disentuh tangan, ia mengikuti tanggal (dan, untuk
+    sertifikat, jenis) yang dipilih. Sekali diubah pengguna, dibiarkan. */
+function ikatNomor(isi, item, hitung) {
+  if (item) return;                       // menyunting: nomor lama tak diutak-atik
+  const nomor = isi.querySelector('[data-k="nomor"]');
+  let otomatis = nomor.value;
+  const segarkan = () => {
+    if (nomor.value !== otomatis) return;
+    otomatis = nomor.value = hitung(isi);
+  };
+  ['tanggal', 'jenis'].forEach((k) => isi.querySelector(`[data-k="${k}"]`)?.addEventListener('change', segarkan));
+}
+
 const lencanaStatus = (v) =>
   `<span class="lencana ${STATUS_SURAT[v]?.c || 'l-abu'}">${esc(STATUS_SURAT[v]?.l || v)}</span>`;
 
@@ -2629,6 +2670,9 @@ function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, sarin
     judul, satuan, sub: ket, ket, ikon, warna,
     sumber: () => Store.db.surat.filter(saring),
     bawaanBaru,
+    sesudahForm: (isi, item) => ikatNomor(isi, item, (f) =>
+      nomorBerikut(Store.db.surat, KODE_SURAT[bawaanBaru.kategori], f.querySelector('[data-k="tanggal"]').value)),
+    rapikan: (d) => tolakNomorKembar(Store.db.surat, d, 'surat'),
     cari: (x) => `${x.nomor} ${x.perihal} ${x.tujuan}`,
     tajuk: (x) => x.perihal,
     pratinjau: { awal: 3, akhir: 1 },
@@ -2641,7 +2685,9 @@ function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, sarin
       { l: 'Status',  isi: (x) => lencanaStatus(x.status) },
     ],
     form: [
-      { k: 'nomor',   l: 'Nomor Surat', wajib: true, ph: '001/AI/VI/2025' },
+      { k: 'nomor',   l: 'Nomor Surat', wajib: true, ph: '001/AI/VI/2025',
+        bawaan: () => nomorBerikut(Store.db.surat, KODE_SURAT[bawaanBaru.kategori]),
+        bantu: 'Terisi otomatis dari nomor terakhir di arsip. Boleh diubah; nomor yang sudah dipakai ditolak.' },
       { k: 'perihal', l: 'Perihal', wajib: true, jenis: 'area', ph: 'Undangan Rapat Koordinasi Pengurus' },
       ...(kolomSk ? [{ k: 'jenisSk', l: 'Jenis Surat Keputusan', jenis: 'pilih', bawaan: 'mulai',
         pilihan: Object.entries(JENIS_SK).map(([v, l]) => ({ v, l })) }] : []),
@@ -2684,13 +2730,6 @@ Object.assign(MODUL, {
     status: ['diterima', 'ditindaklanjuti', 'diarsipkan'],
     saring: kat('masuk'), bawaanBaru: { kategori: 'masuk' },
   }),
-  'surat-keluar': modulSurat({
-    judul: 'Surat Keluar', satuan: 'Surat Keluar', ikon: I.kirim,
-    ket: 'Arsip surat keluar yang telah dikirimkan',
-    warna: ['rgba(217,83,111,.13)', '#B23E5F'], labelPihak: 'Tujuan',
-    status: ['terkirim', 'draft', 'diarsipkan'],
-    saring: kat('keluar'), bawaanBaru: { kategori: 'keluar' },
-  }),
 
   sertifikat: {
     ruang: 'sekretaris', izin: 'sertifikat.manage',
@@ -2700,6 +2739,9 @@ Object.assign(MODUL, {
     warna: ['rgba(47,169,140,.14)', '#1F7A64'],
     cari: (x) => `${x.nomor} ${x.judul} ${x.penerima} ${x.jenis}`,
     tajuk: (x) => x.judul, pratinjau: { awal: 3, akhir: 1 },
+    sesudahForm: (isi, item) => ikatNomor(isi, item, (f) => nomorBerikut(Store.db.sertifikat,
+      KODE_SERTIFIKAT[f.querySelector('[data-k="jenis"]').value], f.querySelector('[data-k="tanggal"]').value)),
+    rapikan: (d) => tolakNomorKembar(Store.db.sertifikat, d, 'sertifikat'),
     kolom: [
       { l: 'Nomor',    kelas: 'utuh', isi: (x) => `<b>${esc(x.nomor)}</b>` },
       { l: 'Judul Sertifikat', isi: (x) => esc(x.judul) },
@@ -2709,7 +2751,9 @@ Object.assign(MODUL, {
       { l: 'Tanggal',  kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
     ],
     form: [
-      { k: 'nomor',    l: 'Nomor Sertifikat', wajib: true, ph: '001/SRT-A/AI/VI/2025' },
+      { k: 'nomor',    l: 'Nomor Sertifikat', wajib: true, ph: '001/SRT-A/AI/VI/2025',
+        bawaan: () => nomorBerikut(Store.db.sertifikat, KODE_SERTIFIKAT.anggota),
+        bantu: 'Terisi otomatis menurut jenis dan tanggal. Boleh diubah; nomor yang sudah dipakai ditolak.' },
       { k: 'judul',    l: 'Judul Sertifikat', wajib: true, jenis: 'area', ph: 'Sertifikat Pemateri — Balaghah dalam al-Quran' },
       { k: 'jenis',    l: 'Jenis', jenis: 'pilih', bawaan: 'anggota',
         pilihan: [{ v: 'anggota', l: 'Anggota' }, { v: 'pemateri', l: 'Pemateri' }, { v: 'kegiatan', l: 'Kegiatan' }] },
@@ -3156,7 +3200,6 @@ const KARTU_SEK = [
   { modul: 'surat-eksternal' },
   { modul: 'surat-keputusan', satuan: 'Kategori', hitung: () => Object.keys(JENIS_SK).length, anak: true },
   { modul: 'surat-masuk'  },
-  { modul: 'surat-keluar' },
   { modul: 'sertifikat'   },
   { modul: 'ttd', satuan: 'Divisi' },
   { modul: 'anggota-angkatan', judul: 'Data Anggota & Alumni', ikon: I.grup,
@@ -7076,8 +7119,8 @@ HAL['pantau-kas'] = () => {
 };
 HAL['pantau-kas'].judul = () => ['Kas & Saldo', 'Saldo per akun, arus kas bulanan, laporan, dan buku besar.'];
 
-const KATEGORI_SURAT = { internal: 'Internal', eksternal: 'Eksternal', keputusan: 'Keputusan', masuk: 'Masuk', keluar: 'Keluar' };
-const WARNA_SURAT = { masuk: 'l-biru', keputusan: 'l-kuning', internal: 'l-hijau', eksternal: 'l-abu', keluar: 'l-hijau' };
+const KATEGORI_SURAT = { internal: 'Internal', eksternal: 'Eksternal', keputusan: 'Keputusan', masuk: 'Masuk' };
+const WARNA_SURAT = { masuk: 'l-biru', keputusan: 'l-kuning', internal: 'l-hijau', eksternal: 'l-abu' };
 
 HAL['pantau-surat'] = () => {
   const semua = [...Store.db.surat].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
@@ -7113,7 +7156,7 @@ HAL['pantau-surat'] = () => {
   isiUlang();
   return kartu;
 };
-HAL['pantau-surat'].judul = () => ['Arsip Surat', 'Seluruh surat dari lima kategori, dapat dicari dan disaring.'];
+HAL['pantau-surat'].judul = () => ['Arsip Surat', 'Seluruh surat dari empat kategori, dapat dicari dan disaring.'];
 
 /* ============================================================
    RENDER UTAMA

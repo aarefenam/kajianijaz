@@ -72,7 +72,7 @@ ruang kerja tiap PJ, tetapi dari sudut pemantau:
   menyunting, mengabsen, dan menghapus dari sini.
 - **Kas & Saldo** — saldo rupiah dan pound, saldo per akun, arus kas bulanan,
   unduhan laporan, dan buku besar. Hanya baca.
-- **Arsip Surat** — lima kategori surat dalam satu tabel yang dapat dicari dan
+- **Arsip Surat** — empat kategori surat dalam satu tabel yang dapat dicari dan
   disaring. Hanya baca.
 
 Alamat lama tiap modul (`#cms`, `#kajian`, `#keuangan`, dan seterusnya) tetap
@@ -130,7 +130,7 @@ tugas:
 | Kelompok | Pertanyaan | Isi |
 |----------|------------|-----|
 | **Tindak Lanjuti** | Apa yang menunggu saya? | Kotak Masuk, Surat Masuk, Notulen & Presensi |
-| **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan, Keluar |
+| **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan |
 | **Dokumen** | Dokumen resmi apa yang kami pegang? | Sertifikat, Tanda Tangan, Arsip Kepenulisan |
 | **Keanggotaan** | Siapa anggota kami? | Data Anggota, Data Alumni |
 | **Sistem** | Yang jarang disentuh | Pengaturan (Editor Halaman, Persetujuan, Log) |
@@ -139,15 +139,27 @@ Dasbornya dibuka dengan **Perlu Ditindaklanjuti**: pesan belum dibaca, surat
 masuk yang baru diterima, surat yang masih draft, kajian selesai tanpa notulen,
 dan akun aktif yang belum mengganti sandi awalnya.
 
-Di bawahnya, Sekretaris memakai dasbor berupa **ubin pintasan**: sembilan modul persuratan,
+Di bawahnya, Sekretaris memakai dasbor berupa **ubin pintasan**: delapan modul persuratan,
 dokumen, dan keanggotaan, masing-masing memampangkan jumlah dokumennya sebagai
 isyarat beban kerja. Menekan ubin membuka halaman modulnya — sama seperti dasbor
 Ketua, tidak ada data yang ditulis dari dasbor.
 
-Persuratan terbagi lima kategori — **Internal**, **Eksternal**, **Keputusan**,
-**Masuk**, dan **Keluar** — yang semuanya hidup di satu koleksi `db.surat` agar
+Persuratan terbagi empat kategori — **Internal**, **Eksternal**, **Keputusan**,
+dan **Masuk** — yang semuanya hidup di satu koleksi `db.surat` agar
 penomoran dan arsipnya tetap satu kesatuan. Surat Keputusan punya cabang lagi
 berupa lima jenis SK, yang bisa dibentangkan dari sidebar maupun dari ubinnya.
+
+Kategori *Surat Keluar* dilebur: surat yang diterbitkan organisasi cukup
+dibedakan Internal dan Eksternal. Isi kategori lamanya hanya data contoh dan
+dibuang saat data dimuat.
+
+**Nomor surat dan sertifikat terisi otomatis.** Polanya
+`URUT/KODE/BULAN-ROMAWI/TAHUN` — `013/AI/VI/2025` — dengan kode `AI` (internal),
+`AI-E` (eksternal), `SK-AI` (keputusan), `MSK` (masuk), dan `SRT-A/AI`,
+`SRT-P/AI`, `SRT-K/AI` untuk sertifikat anggota, pemateri, dan kegiatan. Urutan
+dihitung dari arsip — tertinggi untuk kode dan tahun yang sama, ditambah satu —
+dan mengikuti tanggal yang dipilih selama nomornya belum diubah tangan. Nomor
+boleh diubah; nomor yang sudah dipakai ditolak.
 
 **Data Anggota Perangkatan** dan **Data Alumni** bukan daftar baru, melainkan
 tampilan atas `db.users` yang sudah ada — dikelompokkan per angkatan dan disaring
