@@ -360,10 +360,11 @@ const MENU = [
   /* --- ruang kerja Ketua Umum --- */
   { id: 'pengurus',    label: 'Data Pengurus',                ikon: I.grup,    izin: ['organisasi.manage'] },
   { id: 'koordinator', label: 'Koordinator Kajian',           ikon: I.orang,   izin: ['organisasi.manage'] },
-  { id: 'kaleidoskop', label: 'Kaleidoskop Kegiatan & Program',ikon: I.agenda, izin: ['organisasi.manage'] },
+  { id: 'kaleidoskop', label: 'Program Kerja',                ikon: I.agenda,  izin: ['organisasi.manage'] },
   { id: 'pencapaian',  label: 'Pencapaian / Achievement',     ikon: I.piala,   izin: ['organisasi.manage'] },
   { id: 'evaluasi',    label: 'Evaluasi & Masukan',           ikon: I.obrolan, izin: ['organisasi.manage'] },
   { id: 'laporan',     label: 'Laporan & Ringkasan',          ikon: I.bagan,   izin: ['organisasi.report'] },
+  { id: 'pantau-divisi', label: 'Pantau Divisi',              ikon: I.ukur,    izin: ['organisasi.manage'] },
 
   /* --- ruang kerja Sekretaris --- */
   { grup: 'Pengelolaan Surat', izin: ['sekretariat.manage'] },
@@ -489,9 +490,77 @@ const nilai = (v) => (typeof v === 'function' ? v() : v);
 const kunciRoleU = () => RBAC.kunciRole(U?.role);
 const bolehMenu = (m) => {
   if (m.pensiun?.includes(U?.role)) return false;   // digantikan modul yang lebih rinci
+  if (ruangKetua()) return !m.id || (idKetua().has(m.id) && (!m.izin || RBAC.canAny(U, m.izin)));
   if (m.lipat && ruangKhusus()) return false;       // sudah jadi tab di Pengaturan
   return !m.izin || RBAC.canAny(U, m.izin);
 };
+
+/* ============================================================
+   SIDEBAR KETUA UMUM — disusun menurut tugas, bukan menurut modul
+   ------------------------------------------------------------
+   Empat kelompok, masing-masing menjawab satu pertanyaan:
+     Putuskan  — apa yang menunggu keputusan saya?
+     Pantau    — bagaimana jalannya organisasi?
+     Struktur  — siapa memegang apa?
+     Sistem    — pengaturan yang jarang disentuh.
+
+   Dulu pekerjaan harian Ketua (persetujuan, tinjauan artikel, kotak
+   masuk) terselip sebagai tab di Pengaturan, sejajar dengan tema dan
+   log. Kini ia berdiri di sidebar; yang tinggal sebagai tab hanyalah
+   yang memang jarang dibuka.
+
+   Tidak ada modul yang hilang: setiap id di sini tetap entri MENU yang
+   sama, dengan izin yang sama. Yang berubah hanya letaknya.
+   ============================================================ */
+const MENU_KETUA = [
+  { id: 'dasbor' },
+  { grup: 'Putuskan' },
+  { id: 'pengajuan', label: 'Persetujuan Website' },
+  { id: 'artikel',   label: 'Tinjau Artikel' },
+  { id: 'pesan' },
+  { grup: 'Pantau' },
+  { id: 'kaleidoskop' },
+  { id: 'evaluasi' },
+  { id: 'pencapaian' },
+  { id: 'pantau-divisi' },
+  { id: 'laporan' },
+  { grup: 'Struktur' },
+  { id: 'anggota' },
+  { id: 'pengurus' },
+  { id: 'koordinator' },
+  { id: 'akses' },
+  { grup: 'Sistem' },
+  { id: 'pengaturan' },
+];
+
+/** Halaman bertab milik Ketua beserta modul yang menjadi tabnya. */
+const TAB_KETUA = {
+  'pantau-divisi': ['kajian', 'keuangan', 'surat'],
+  pengaturan: ['cms', 'tema', 'versi', 'kategori-artikel', 'log'],
+};
+const tabAktif = { 'pantau-divisi': 'kajian', pengaturan: 'pengajuan' };
+
+const idKetua = () => new Set([
+  ...MENU_KETUA.map((m) => m.id).filter(Boolean),
+  ...Object.values(TAB_KETUA).flat(),
+]);
+/** Halaman bertab yang menaungi sebuah modul — atau undefined. */
+const indukTabKetua = (id) => Object.keys(TAB_KETUA).find((k) => TAB_KETUA[k].includes(id));
+
+/** Entri sidebar Ketua: entri MENU aslinya, ditimpa label bila ada. */
+const menuKetua = () => MENU_KETUA.map((k) => {
+  if (k.grup) return k;
+  const asli = MENU.find((m) => m.id === k.id);
+  return asli && (!asli.izin || RBAC.canAny(U, asli.izin)) ? { ...asli, ...k } : null;
+}).filter(Boolean)
+  /* Judul kelompok yang seluruh isinya tak tersedia ikut dibuang. */
+  .filter((m, i, arr) => !m.grup || (arr[i + 1] && !arr[i + 1].grup));
+
+/** Modul yang menjadi tab pada sebuah halaman bertab. */
+const daftarTab = (kunci) => (ruangKetua()
+  ? (TAB_KETUA[kunci] || []).map((id) => MENU.find((m) => m.id === id))
+      .filter((m) => m && HAL[m.id] && (!m.izin || RBAC.canAny(U, m.izin)))
+  : menuTerlipat());
 
 /** Modul yang dilipat ke Pengaturan — dipakai menyusun daftar tabnya. */
 const menuTerlipat = () => MENU.filter((m) =>
@@ -668,7 +737,8 @@ function kerangka() {
 
   /* Judul grup memakai gabungan izin anak-anaknya, sehingga grup yang
      seluruh menunya tersembunyi ikut hilang dengan sendirinya. */
-  const menuHtml = MENU.filter(bolehMenu).filter((m) =>
+  const daftarMenu = ketua ? menuKetua() : MENU.filter(bolehMenu);
+  const menuHtml = daftarMenu.filter((m) =>
     !m.tersembunyi && !m.tersembunyiBila?.()).map((m) => {
     if (m.grup) return `<div class="sb-grup">${esc(m.grup)}</div>`;
     const n = m.lonceng?.() || 0;
@@ -2245,7 +2315,7 @@ const MODUL = {
 
   kaleidoskop: {
     ruang: 'ketua', izin: 'organisasi.manage',
-    urut: 3, judul: 'Kaleidoskop Kegiatan & Program', satuan: 'Kegiatan', ikon: I.agenda,
+    urut: 3, judul: 'Program Kerja', satuan: 'Kegiatan', ikon: I.agenda,
     sub: 'Rekam jejak program kerja sepanjang periode.',
     pratinjau: { awal: 5, akhir: 0 }, aksiDiKartu: false,
     cari: (x) => `${x.kegiatan} ${x.waktu} ${x.status}`, tajuk: (x) => x.kegiatan,
@@ -2626,10 +2696,96 @@ function kartuOrg(nama) {
   return kartu;
 }
 
+/* --- antrean keputusan ---
+   Dasbor dibuka dengan jawaban atas "apa yang menunggu saya?", sebelum
+   daftar apa pun. Tiga antrean ini sama persis dengan kelompok Putuskan
+   di sidebar, dan angkanya dihitung dengan cara yang sama dengan lonceng
+   di sana — keduanya tak boleh menyebut jumlah yang berbeda.
+
+   Seperti seluruh dasbor, ia hanya pintasan: tak ada yang disetujui,
+   diterbitkan, atau ditandai dari sini. */
+function antreanKetua() {
+  const menunggu = Store.db.pengajuan.filter((p) => p.status === 'menunggu');
+  const naskah = Store.db.artikel.filter((a) => a.status === 'review');
+  const pesan = Store.db.pesan.filter((p) => !p.dibaca);
+
+  const daftar = [
+    { rute: 'pengajuan', ikon: I.cek, judul: 'Persetujuan Website', n: menunggu.length,
+      satuan: 'pengajuan menunggu', kosong: 'Tidak ada pengajuan menunggu',
+      rinci: menunggu[0] && `${menunggu[0].jumlahPerubahan} perubahan dari ${menunggu[0].olehNama}` },
+    { rute: 'artikel', ikon: I.dok, judul: 'Tinjau Artikel', n: naskah.length,
+      satuan: 'naskah menunggu tinjauan', kosong: 'Tidak ada naskah menunggu',
+      rinci: naskah[0] && `"${naskah[0].judul}"` },
+    { rute: 'pesan', ikon: I.surat, judul: 'Kotak Masuk', n: pesan.length,
+      satuan: 'pesan belum dibaca', kosong: 'Semua pesan sudah dibaca',
+      rinci: pesan[0] && `${pesan[0].subjek} — ${pesan[0].nama}` },
+  ].filter((a) => bolehMenu(MENU.find((m) => m.id === a.rute)));
+
+  const total = daftar.reduce((j, a) => j + a.n, 0);
+  const box = el(`<section class="antre">
+    <div class="antre-kepala"><h2>Menunggu Keputusan Anda</h2>
+      <span class="hitung">${total ? `${total} hal perlu ditindak` : 'Tidak ada yang tertunda'}</span></div>
+    <div class="antre-grid"></div>
+  </section>`);
+  const grid = box.querySelector('.antre-grid');
+  daftar.forEach((a) => {
+    const k = el(`<button class="antre-kartu${a.n ? ' ada' : ''}">
+      <span class="antre-ik">${a.n ? a.ikon : I.cekBulat}</span>
+      <span class="antre-isi">
+        <span class="antre-judul">${esc(a.judul)}</span>
+        <span class="antre-angka">${a.n ? `<b>${a.n}</b> ${esc(a.satuan)}` : esc(a.kosong)}</span>
+        ${a.n && a.rinci ? `<span class="antre-rinci">${esc(a.rinci)}${a.n > 1 ? ` · dan ${a.n - 1} lainnya` : ''}</span>` : ''}
+      </span>
+      <span class="antre-panah">${I.kanan}</span>
+    </button>`);
+    k.onclick = () => bukaModul(a.rute);
+    grid.appendChild(k);
+  });
+  return box;
+}
+
+/* --- program kerja yang belum rampung ---
+   Ringkasan satu kartu: seberapa jauh periode ini berjalan, dan apa saja
+   yang masih terbuka. Yang sedang berjalan didahulukan dari yang baru
+   direncanakan. */
+function ringkasProgram() {
+  const semua = Store.db.kaleidoskop;
+  const rampung = semua.filter((k) => k.status === 'selesai').length;
+  const urutan = { proses: 0, rencana: 1 };
+  const sisa = semua.filter((k) => k.status !== 'selesai')
+    .sort((a, b) => (urutan[a.status] ?? 2) - (urutan[b.status] ?? 2));
+  const persen = semua.length ? Math.round((rampung / semua.length) * 100) : 0;
+  const tampil = sisa.slice(0, 4);
+
+  const kartu = el(`<div class="kartu ringkas-program">
+    <div class="kartu-kepala">
+      <button class="kartu-tautan" data-buka title="Buka Program Kerja">
+        <h3>Program Kerja Berjalan</h3>
+        <span class="hitung">(${rampung} dari ${semua.length} selesai)</span>
+        <span class="panah">${I.kanan}</span>
+      </button>
+      <div class="kanan"><div class="bar-maju" title="${persen}% terlaksana"><span style="width:${persen}%"></span></div>
+        <b class="rp-persen">${persen}%</b></div>
+    </div>
+    ${tampil.length ? `<ul class="rp-daftar">${tampil.map((k) => `<li>
+        <span class="lencana ${STATUS_KEG[k.status]?.c || 'l-abu'}">${esc(STATUS_KEG[k.status]?.l || k.status)}</span>
+        <span class="rp-nama">${esc(k.kegiatan)}</span>
+        <span class="rp-waktu">${esc(k.waktu || '—')}</span></li>`).join('')}
+      ${sisa.length > tampil.length ? `<li class="rp-lain"><button data-buka>dan ${sisa.length - tampil.length} program lainnya</button></li>` : ''}
+    </ul>` : `<div class="rp-kosong">${I.cekBulat} ${semua.length ? 'Seluruh program kerja sudah terlaksana.' : 'Belum ada program kerja yang dicatat.'}</div>`}
+  </div>`);
+  kartu.querySelectorAll('[data-buka]').forEach((b) => { b.onclick = () => bukaModul('kaleidoskop'); });
+  return kartu;
+}
+
 function dasborKetua() {
-  const box = el('<div class="k-grid"></div>');
+  const box = el('<div></div>');
+  box.appendChild(antreanKetua());
+  box.appendChild(ringkasProgram());
+  const grid = el('<div class="k-grid"></div>');
   Object.keys(MODUL).filter((n) => MODUL[n].ruang === 'ketua')
-    .forEach((nama) => box.appendChild(kartuOrg(nama)));
+    .forEach((nama) => grid.appendChild(kartuOrg(nama)));
+  box.appendChild(grid);
   return box;
 }
 
@@ -6407,48 +6563,63 @@ HAL.laporan = () => {
 HAL.laporan.judul = () => ['Laporan & Ringkasan', 'Rekapitulasi kepengurusan, program kerja, dan evaluasi.'];
 
 /* ============================================================
-   PENGATURAN — rumah bagi modul yang dilipat dari sidebar Ketua
+   HALAMAN BERTAB — Pengaturan dan Pantau Divisi
    ------------------------------------------------------------
-   Daftar tabnya diturunkan dari MENU itu sendiri, jadi modul yang
-   kelak ditambahkan dengan tanda `lipat` otomatis muncul di sini
-   tanpa perlu didaftarkan dua kali.
+   Satu cetakan untuk keduanya. Tab Ketua ditentukan TAB_KETUA; peran
+   lain tetap memakai modul yang dilipat dari sidebar, seperti semula.
    ============================================================ */
-let tabPengaturan = 'pengajuan';
+/** Tab yang sedang terbuka. Bila yang tersimpan bukan milik pengguna
+    ini, jatuh ke tab pertama — dipanggil judul maupun isi halaman,
+    supaya keduanya tak pernah menyebut tab yang berbeda. */
+function tabKini(kunci) {
+  const tabs = daftarTab(kunci);
+  if (!tabs.some((t) => t.id === tabAktif[kunci])) tabAktif[kunci] = tabs[0]?.id;
+  return tabAktif[kunci];
+}
 
-HAL.pengaturan = () => {
-  const tabs = menuTerlipat();
-  if (!tabs.some((t) => t.id === tabPengaturan)) tabPengaturan = tabs[0]?.id;
+function halamanTab(kunci, notis) {
+  const tabs = daftarTab(kunci);
+  const aktif = tabKini(kunci);
 
   const box = el('<div></div>');
   if (!tabs.length) {
-    box.appendChild(el(`<div class="panel"><div class="kosong-erp">${I.kotak}<p>Tidak ada pengaturan tersedia</p></div></div>`));
+    box.appendChild(el(`<div class="panel"><div class="kosong-erp">${I.kotak}<p>Tidak ada modul tersedia</p></div></div>`));
     return box;
   }
 
   box.appendChild(el(`<div class="notis notis-info">${I.perisai}<div>
-    <b>Modul lanjutan organisasi</b>
-    Persetujuan website, arsip, keuangan, dan sistem dikumpulkan di sini agar dasbor tetap ringkas.
-    Alur dua kunci tetap berlaku: perubahan PJ Website baru tayang setelah Anda menyetujuinya pada tab Persetujuan.
-  </div></div>`));
+    <b>${esc(notis[0])}</b>${esc(notis[1])}</div></div>`));
 
   const bar = el(`<div class="tab-bar">${tabs.map((t) => {
     const n = t.lonceng?.() || 0;
-    return `<button data-tab="${t.id}" class="${t.id === tabPengaturan ? 'aktif' : ''}">
+    return `<button data-tab="${t.id}" class="${t.id === aktif ? 'aktif' : ''}">
       ${nilai(t.ikon)}<span>${esc(nilai(t.label))}</span>${n ? `<span class="tab-lonceng">${n}</span>` : ''}</button>`;
   }).join('')}
     <a class="btn btn-garis btn-kecil" style="margin-left:auto" href="index.html" target="_blank">${I.mata} Lihat Website</a>
   </div>`);
   bar.querySelectorAll('[data-tab]').forEach((b) => {
-    b.onclick = () => { tabPengaturan = b.dataset.tab; gambar(); };
+    b.onclick = () => { tabAktif[kunci] = b.dataset.tab; gambar(); };
   });
   box.appendChild(bar);
-  box.appendChild(HAL[tabPengaturan]());
+  box.appendChild(HAL[aktif]());
   return box;
+}
+const judulTab = (kunci, nama, cadangan) => () => {
+  const t = MENU.find((m) => m.id === tabKini(kunci));
+  return [nama, t && HAL[t.id] ? `${nilai(t.label)} — ${HAL[t.id].judul()[1]}` : cadangan];
 };
-HAL.pengaturan.judul = () => {
-  const t = MENU.find((m) => m.id === tabPengaturan);
-  return ['Pengaturan', t ? `${nilai(t.label)} — ${HAL[t.id].judul()[1]}` : 'Modul lanjutan organisasi.'];
-};
+
+HAL.pengaturan = () => halamanTab('pengaturan', ruangKetua()
+  ? ['Pengaturan sistem',
+     'Tampilan website, riwayat versi, kategori artikel, dan log aktivitas. Pekerjaan harian — persetujuan, tinjauan artikel, kotak masuk — kini ada di kelompok Putuskan pada sidebar.']
+  : ['Modul lanjutan organisasi',
+     'Persetujuan website, arsip, keuangan, dan sistem dikumpulkan di sini agar dasbor tetap ringkas. Alur dua kunci tetap berlaku: perubahan PJ Website baru tayang setelah Ketua Umum menyetujuinya.']);
+HAL.pengaturan.judul = judulTab('pengaturan', 'Pengaturan', 'Modul lanjutan organisasi.');
+
+HAL['pantau-divisi'] = () => halamanTab('pantau-divisi',
+  ['Pantau lintas divisi',
+   'Jadwal kajian, kas, dan arsip surat yang dikelola tiap penanggung jawab. Anda tetap dapat mengubah jadwal kajian dari sini; kas dan arsip surat hanya dapat dibaca.']);
+HAL['pantau-divisi'].judul = judulTab('pantau-divisi', 'Pantau Divisi', 'Jadwal kajian, kas, dan arsip surat.');
 
 /* ============================================================
    RENDER UTAMA
@@ -6467,13 +6638,21 @@ function gambar() {
   if (!U) { app.appendChild(layarLogin()); return; }
   if (Store.perluGantiSandi()) { app.appendChild(layarGantiSandi()); return; }
 
+  /* Alamat modul yang bagi Ketua kini berupa tab tetap berlaku: ia
+     dialihkan ke halaman induknya dengan tab itu terbuka. */
+  const induk = ruangKetua() && indukTabKetua(rute);
+  if (induk) { tabAktif[induk] = rute; rute = induk; }
+
   const entri = MENU.find((m) => m.id === rute);
   if (entri && !bolehMenu(entri)) rute = 'dasbor';   // penjaga rute
   if (!HAL[rute]) rute = 'dasbor';
 
   app.appendChild(kerangka());
   const [j, s] = HAL[rute].judul();
-  app.querySelector('#judulHal').textContent = j;
+  /* Judul halaman mengikuti nama di sidebar Ketua, supaya yang diklik
+     dan yang terbuka menyebut hal yang sama. */
+  const namaKetua = ruangKetua() && MENU_KETUA.find((m) => m.id === rute)?.label;
+  app.querySelector('#judulHal').textContent = namaKetua || j;
   app.querySelector('#subHal').textContent = s;
   app.querySelector('#isiHal').appendChild(HAL[rute]());
 }

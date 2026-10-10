@@ -52,20 +52,35 @@ Bila kedua tab terbuka bersamaan, halaman publik memperbarui dirinya sendiri.
 
 ### Ruang kerja Ketua Umum
 
-Ketua Umum masuk ke panel yang berbeda dari peran lain: sebuah dasbor berisi lima
-daftar kepengurusan — **Data Pengurus**, **Koordinator Kajian**, **Kaleidoskop
-Kegiatan & Program**, **Pencapaian**, dan **Evaluasi & Masukan** — masing-masing
-punya halamannya sendiri di sidebar, lengkap dengan pencarian.
+Sidebar Ketua Umum disusun menurut **tugas**, bukan menurut modul — empat
+kelompok yang masing-masing menjawab satu pertanyaan:
 
-Dasbor sendiri **hanya etalase pintasan**; tidak ada data yang ditulis dari sana.
-Kartunya memangkas isi (beberapa baris awal, tanda `…`, lalu baris terakhir), dan
-setiap aksi — Tambah Data, sunting, hapus, maupun centang Selesai — membuka dulu
-halaman modulnya, baru melanjutkan maksud aksi itu di daftar penuh. Judul kartu
-dan tanda `…` juga merupakan pintasan ke halaman yang sama.
+| Kelompok | Pertanyaan | Isi |
+|----------|------------|-----|
+| **Putuskan** | Apa yang menunggu keputusan saya? | Persetujuan Website, Tinjau Artikel, Kotak Masuk |
+| **Pantau** | Bagaimana jalannya organisasi? | Program Kerja, Evaluasi & Masukan, Pencapaian, Pantau Divisi, Laporan |
+| **Struktur** | Siapa memegang apa? | Data Anggota, Data Pengurus, Koordinator Kajian, Hak Akses |
+| **Sistem** | Pengaturan yang jarang disentuh | Pengaturan |
 
-Modul lanjutan — Persetujuan website, Riwayat Versi, Editor Halaman, Kas, Hak
-Akses, Log, dan lainnya — tidak hilang, melainkan dikumpulkan sebagai tab di
-halaman **Pengaturan**, agar dasbor tetap ringkas tanpa memutus aturan dua kunci.
+**Pantau Divisi** dan **Pengaturan** adalah halaman bertab. Yang pertama memuat
+Jadwal Kajian, Kas & Iuran, dan Arsip Surat; yang kedua Editor Halaman, Tema &
+Identitas, Riwayat Versi, Kategori Artikel, dan Log Aktivitas. Alamat lama tiap
+modul (`#cms`, `#kajian`, dan seterusnya) tetap berlaku dan membuka tabnya.
+
+**Program Kerja** adalah nama baru Kaleidoskop Kegiatan & Program; datanya tetap
+di koleksi `kaleidoskop`.
+
+Dasbor dibuka dengan **Menunggu Keputusan Anda** — tiga antrean kelompok
+Putuskan beserta jumlahnya, dihitung dengan cara yang sama dengan lonceng di
+sidebar — lalu **Program Kerja Berjalan**: kemajuan periode dan program yang
+belum rampung.
+
+Di bawahnya lima daftar kepengurusan — Data Pengurus, Koordinator Kajian,
+Program Kerja, Pencapaian, dan Evaluasi & Masukan. Seluruh dasbor **hanya etalase
+pintasan**; tidak ada data yang ditulis dari sana. Kartunya memangkas isi
+(beberapa baris awal, tanda `…`, lalu baris terakhir), dan setiap aksi — Tambah
+Data, sunting, hapus, maupun centang Selesai — membuka dulu halaman modulnya,
+baru melanjutkan maksud aksi itu di daftar penuh.
 
 ### Ruang kerja Sekretaris
 
