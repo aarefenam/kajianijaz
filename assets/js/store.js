@@ -57,6 +57,7 @@ function dbAwal() {
     /* Keuangan — ruang kerja Bendahara */
     akunKas         : clone(s.akunKas),
     kategoriKeuangan: clone(s.kategoriKeuangan),
+    aturKas         : clone(s.aturKas),
     /* Media & Website — ruang kerja PJ Media & Website */
     event      : clone(s.event),
     sosmed     : clone(s.sosmed),
@@ -1401,6 +1402,52 @@ function simpanTransaksi(user, data) {
   simpan();
 }
 
+/* --- iuran anggota ---
+   Iuran dicatat sebagai transaksi kas biasa yang bertaut ke anggotanya
+   (`userId`) dan ke bulan yang dibayarnya (`bulanIuran`, "2026-10").
+   Dengan begitu buku kas tetap satu, sementara siapa sudah membayar
+   bulan apa dapat dihitung — bukan dicatat terpisah lalu berselisih. */
+function aturIuran(user, { rp, egp }) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const bersih = (n) => Math.max(0, Math.round(Number(n) || 0));
+  db.aturKas = { ...(db.aturKas || {}), iuranRp: bersih(rp), iuranEgp: bersih(egp) };
+  catat(user, 'keuangan.iuran', 'aturKas',
+    `Menetapkan iuran bulanan Rp ${db.aturKas.iuranRp.toLocaleString('id-ID')} / EGP ${db.aturKas.iuranEgp.toLocaleString('id-ID')}`);
+  simpan();
+}
+
+/** Iuran seorang anggota untuk satu bulan: jumlah yang sudah dibayar
+    dan statusnya terhadap nominal yang ditetapkan.
+
+    Lunas bila rupiahnya ATAU poundnya mencapai nominal — anggota
+    membayar dengan salah satu mata uang, bukan keduanya. Bila nominal
+    belum ditetapkan, pembayaran berapa pun dianggap lunas. */
+function iuranAnggota(userId, bulan) {
+  const bayar = db.keuangan.filter((t) => t.jenis === 'masuk' && t.userId === userId && t.bulanIuran === bulan);
+  const rp = bayar.reduce((j, t) => j + Number(t.rp || 0), 0);
+  const egp = bayar.reduce((j, t) => j + Number(t.egp || 0), 0);
+  const a = db.aturKas || {};
+  const perluRp = Number(a.iuranRp || 0), perluEgp = Number(a.iuranEgp || 0);
+  let status = 'belum';
+  if (rp || egp) {
+    const lunas = (!perluRp && !perluEgp) || (perluRp && rp >= perluRp) || (perluEgp && egp >= perluEgp);
+    status = lunas ? 'lunas' : 'kurang';
+  }
+  return { rp, egp, status, kali: bayar.length };
+}
+
+/** Catat penerimaan iuran dari seorang anggota. */
+function terimaIuran(user, { userId, bulan, rp, egp, akunId, tanggal, ket }) {
+  const u = getUser(userId);
+  if (!u) throw new Error('Anggota tidak ditemukan.');
+  if (!/^\d{4}-\d{2}$/.test(bulan || '')) throw new Error('Bulan iuran belum dipilih.');
+  simpanTransaksi(user, {
+    jenis: 'masuk', arus: 'internal', kategori: 'Iuran Anggota',
+    sumber: u.nama, userId: u.id, bulanIuran: bulan,
+    rp, egp, akunId: akunId || 'ak1', tanggal: tanggal || hariIni(), ket: ket || `Iuran ${bulan}`,
+  });
+}
+
 const nominalGabung = (t) => [
   t.rp ? 'Rp ' + Number(t.rp).toLocaleString('id-ID') : '',
   t.egp ? 'EGP ' + Number(t.egp).toLocaleString('id-ID') : '',
@@ -1833,7 +1880,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
-  simpanAnggota, hapusAnggota, simpanTransaksi, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,

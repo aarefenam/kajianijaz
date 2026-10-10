@@ -285,6 +285,18 @@ pustaka luar di proyek ini, dimuat hanya saat kamera dipakai. Kolom ketik
 nomor induk selalu tersedia sebagai cadangan. Kamera menuntut HTTPS dan izin
 dari pengguna.
 
+**Iuran lewat kartu yang sama.** Bendahara menekan *Pindai Kartu* di Pemasukan
+Internal atau di **Iuran per Anggota**: kartu dipindai, nama dan nominal iuran
+terisi, tinggal disimpan — lalu layar siap untuk kartu berikutnya. Iuran
+tersimpan sebagai transaksi kas biasa yang bertaut ke anggotanya (`userId`) dan
+ke bulan yang dibayarnya (`bulanIuran`), jadi buku kas tetap satu.
+
+Nominal iuran bulanan — rupiah, pound, atau keduanya — ditetapkan Bendahara dan
+disimpan di koleksi `aturKas`. Anggota lunas bila rupiah **atau** poundnya
+mencapai nominal; ia membayar dengan salah satu. Halaman Iuran per Anggota
+menampilkan siapa lunas, bayar sebagian, atau belum untuk bulan yang dipilih,
+dapat disaring dan diunduh sebagai CSV.
+
 ### Ruang kerja PJ Koordinator Kajian
 
 Seluruh halamannya terikat pada **Angkatan & Level** yang dipilih di kanan atas —

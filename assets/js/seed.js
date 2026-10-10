@@ -1227,6 +1227,10 @@ SEED.users.forEach((u, i) => {
    kedua mata uang sekaligus, sehingga satu setoran yang berisi
    rupiah dan pound tidak perlu dipecah jadi dua catatan.
    ========================================================== */
+/* Pengaturan kas. Nominal iuran bulanan ditetapkan Bendahara; nol
+   berarti belum ditetapkan, dan pembayaran berapa pun dianggap lunas. */
+SEED.aturKas = { iuranRp: 0, iuranEgp: 0 };
+
 SEED.akunKas = [
   { id:'ak1', nama:'Kas Tunai Sekretariat', jenis:'tunai', saldoAwalRp:  500000, saldoAwalEgp: 400, ket:'Uang tunai yang dipegang di sekretariat.' },
   { id:'ak2', nama:'Rekening Bank BSI',     jenis:'bank',  saldoAwalRp: 1500000, saldoAwalEgp:   0, ket:'Rekening atas nama kepengurusan.' },
