@@ -369,6 +369,9 @@ const MENU = [
   { id: 'pantau-kajian', label: 'Kajian',       ikon: I.kalender, izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-kas',    label: 'Kas & Saldo',  ikon: I.uang,     izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-surat',  label: 'Arsip Surat',  ikon: I.arsip,    izin: ['organisasi.manage'], tersembunyi: true },
+  /* Tabel kajian yang sama, sebagai halaman kerja Sekretaris. */
+  { id: 'notulen-presensi', label: 'Notulen & Presensi', ikon: I.kalender, izin: ['kajian.notulensi', 'kajian.attendance'],
+    lonceng: () => Store.db.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi).length },
 
   /* --- ruang kerja Sekretaris --- */
   { grup: 'Pengelolaan Surat', izin: ['sekretariat.manage'] },
@@ -567,7 +570,7 @@ const MENU_SEKRETARIS = [
   { grup: 'Tindak Lanjuti' },
   { id: 'pesan' },
   { id: 'surat-masuk' },
-  { id: 'kajian', label: 'Notulen & Presensi' },
+  { id: 'notulen-presensi' },
   { grup: 'Persuratan' },
   { id: 'surat-internal' },
   { id: 'surat-eksternal' },
@@ -592,7 +595,7 @@ const TAB_SEKRETARIS = { pengaturan: ['cms', 'pengajuan', 'log'] };
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
 const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
-  sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan' } },
+  sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
 };
 const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris : null);
 
@@ -2420,11 +2423,15 @@ const urutProgram = (a, b) => (a.tglMulai || '9999').localeCompare(b.tglMulai ||
    nama yang tersimpan di baris hanya cadangan bila tautannya putus
    (anggotanya dihapus) atau memang orang luar. */
 const orangTerhubung = (x) => (x.userId ? Store.getUser(x.userId) : null);
-const namaOrang = (x) => orangTerhubung(x)?.nama || x.nama || '—';
-const selOrang = (x) => {
+/* `kunci` adalah kolom yang menyimpan namanya — `nama` pada pengurus,
+   koordinator, dan tanda tangan; `penerima` pada sertifikat. */
+const namaOrang = (x, kunci = 'nama') => orangTerhubung(x)?.nama || x[kunci] || '—';
+/** Sel nama. `tandai` menyalakan peringatan bagi yang tak terhubung —
+    dimatikan pada sertifikat, yang penerimanya boleh sebuah kelompok. */
+const selOrang = (x, kunci = 'nama', tandai = true) => {
   const u = orangTerhubung(x);
-  return u ? selAnggota(u)
-    : `${esc(x.nama || '—')}<br><span class="sub-sel perlu">belum terhubung ke Data Anggota</span>`;
+  if (u) return selAnggota(u);
+  return `${esc(x[kunci] || '—')}${tandai ? '<br><span class="sub-sel perlu">belum terhubung ke Data Anggota</span>' : ''}`;
 };
 const kolomPilihOrang = {
   k: 'userId', l: 'Anggota', jenis: 'pilih',
@@ -2436,9 +2443,9 @@ const kolomPilihOrang = {
 const kolomNamaOrang = { k: 'nama', l: 'Nama Lengkap', ph: 'Nama lengkap',
   bantu: 'Diisi hanya bila orangnya tidak ada di Data Anggota.' };
 /** Memilih anggota mengisi dan mengunci kolom nama; melepasnya membuka lagi. */
-function kunciNamaOrang(isi) {
+function kunciNamaOrang(isi, kunci = 'nama') {
   const pilih = isi.querySelector('[data-k="userId"]');
-  const nama = isi.querySelector('[data-k="nama"]');
+  const nama = isi.querySelector(`[data-k="${kunci}"]`);
   const selaras = () => {
     const u = Store.getUser(pilih.value);
     nama.disabled = !!u;
@@ -2447,13 +2454,13 @@ function kunciNamaOrang(isi) {
   pilih.onchange = selaras;
   selaras();
 }
-function rapikanOrang(d) {
+function rapikanOrang(d, kunci = 'nama', pesan = 'Pilih anggota, atau isi nama lengkapnya.') {
   if (d.userId) {
     const u = Store.getUser(d.userId);
     if (!u) throw new Error('Anggota yang dipilih tidak ditemukan.');
-    return { ...d, nama: u.nama };
+    return { ...d, [kunci]: u.nama };
   }
-  if (!d.nama) throw new Error('Pilih anggota, atau isi nama lengkapnya.');
+  if (!d[kunci]) throw new Error(pesan);
   return d;
 }
 
@@ -2482,10 +2489,10 @@ const MODUL = {
     urut: 1, judul: 'Data Pengurus', satuan: 'Pengurus', ikon: I.grup, hitung: true,
     sub: 'Struktur kepengurusan beserta kontak setiap jabatan.',
     pratinjau: { awal: 3, akhir: 1 },
-    cari: (x) => `${namaOrang(x)} ${x.jabatan}`, tajuk: namaOrang,
-    sesudahForm: kunciNamaOrang, rapikan: rapikanOrang,
+    cari: (x) => `${namaOrang(x)} ${x.jabatan}`, tajuk: (x) => namaOrang(x),
+    sesudahForm: (isi) => kunciNamaOrang(isi), rapikan: (d) => rapikanOrang(d),
     kolom: [
-      { l: 'Nama',    isi: selOrang },
+      { l: 'Nama',    isi: (x) => selOrang(x) },
       { l: 'Jabatan', isi: (x) => esc(x.jabatan) },
       { l: 'No. WA',  kelas: 'wa', isi: (x) => esc(samarWa(x.wa)) },
     ],
@@ -2502,10 +2509,10 @@ const MODUL = {
     urut: 2, judul: 'Data Koordinator Kajian', satuan: 'Koordinator', ikon: I.orang, hitung: true,
     sub: 'Penanggung jawab kajian pada setiap angkatan.',
     pratinjau: { awal: 3, akhir: 1 },
-    cari: (x) => `${namaOrang(x)} ${x.angkatan}`, tajuk: namaOrang,
-    sesudahForm: kunciNamaOrang, rapikan: rapikanOrang,
+    cari: (x) => `${namaOrang(x)} ${x.angkatan}`, tajuk: (x) => namaOrang(x),
+    sesudahForm: (isi) => kunciNamaOrang(isi), rapikan: (d) => rapikanOrang(d),
     kolom: [
-      { l: 'Nama',       isi: selOrang },
+      { l: 'Nama',       isi: (x) => selOrang(x) },
       { l: 'Koordinator',isi: (x) => esc(x.angkatan) },
       { l: 'No. WA',     kelas: 'wa', isi: (x) => esc(samarWa(x.wa)) },
     ],
@@ -2813,17 +2820,21 @@ Object.assign(MODUL, {
     ket: 'Kelola sertifikat anggota, pemateri, dan kegiatan',
     sub: 'Sertifikat anggota, pemateri, dan kegiatan kajian.',
     warna: ['rgba(47,169,140,.14)', '#1F7A64'],
-    cari: (x) => `${x.nomor} ${x.judul} ${x.penerima} ${x.jenis}`,
+    cari: (x) => `${x.nomor} ${x.judul} ${namaOrang(x, 'penerima')} ${x.jenis} ${orangTerhubung(x)?.nia || ''}`,
     tajuk: (x) => x.judul, pratinjau: { awal: 3, akhir: 1 },
-    sesudahForm: (isi, item) => ikatNomor(isi, item, (f) => nomorBerikut(Store.db.sertifikat,
-      KODE_SERTIFIKAT[f.querySelector('[data-k="jenis"]').value], f.querySelector('[data-k="tanggal"]').value)),
-    rapikan: (d) => tolakNomorKembar(Store.db.sertifikat, d, 'sertifikat'),
+    sesudahForm: (isi, item) => {
+      ikatNomor(isi, item, (f) => nomorBerikut(Store.db.sertifikat,
+        KODE_SERTIFIKAT[f.querySelector('[data-k="jenis"]').value], f.querySelector('[data-k="tanggal"]').value));
+      kunciNamaOrang(isi, 'penerima');
+    },
+    rapikan: (d) => rapikanOrang(tolakNomorKembar(Store.db.sertifikat, d, 'sertifikat'), 'penerima',
+      'Pilih anggota penerimanya, atau isi nama penerima.'),
     kolom: [
       { l: 'Nomor',    kelas: 'utuh', isi: (x) => `<b>${esc(x.nomor)}</b>` },
       { l: 'Judul Sertifikat', isi: (x) => esc(x.judul) },
       { l: 'Jenis',    isi: (x) => `<span class="lencana ${
         x.jenis === 'pemateri' ? 'l-biru' : x.jenis === 'kegiatan' ? 'l-kuning' : 'l-hijau'}">${esc(x.jenis)}</span>` },
-      { l: 'Penerima', isi: (x) => esc(x.penerima) },
+      { l: 'Penerima', isi: (x) => selOrang(x, 'penerima', false) },
       { l: 'Tanggal',  kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
     ],
     form: [
@@ -2833,7 +2844,11 @@ Object.assign(MODUL, {
       { k: 'judul',    l: 'Judul Sertifikat', wajib: true, jenis: 'area', ph: 'Sertifikat Pemateri — Balaghah dalam al-Quran' },
       { k: 'jenis',    l: 'Jenis', jenis: 'pilih', bawaan: 'anggota',
         pilihan: [{ v: 'anggota', l: 'Anggota' }, { v: 'pemateri', l: 'Pemateri' }, { v: 'kegiatan', l: 'Kegiatan' }] },
-      { k: 'penerima', l: 'Penerima', wajib: true, ph: 'Nama penerima atau "Seluruh Peserta"' },
+      { ...kolomPilihOrang, l: 'Penerima (Anggota)',
+        pilihan: () => [{ v: '', l: '— bukan seorang anggota (isi penerima di bawah) —' }, ...kolomPilihOrang.pilihan().slice(1)],
+        bantu: 'Pilih bila penerimanya seorang anggota; sertifikatnya lalu tercatat atas namanya.' },
+      { k: 'penerima', l: 'Penerima', ph: 'Nama penerima atau "Seluruh Peserta"',
+        bantu: 'Diisi bila penerimanya orang luar atau sebuah kelompok.' },
       { k: 'tanggal',  l: 'Tanggal Terbit', jenis: 'tanggal', wajib: true },
     ],
   },
@@ -2844,18 +2859,21 @@ Object.assign(MODUL, {
     ket: 'Kumpulan tanda tangan setiap divisi kepengurusan',
     sub: 'Tanda tangan pemegang jabatan untuk membubuhi surat dan sertifikat.',
     warna: ['rgba(62,127,184,.14)', '#2C6091'],
-    cari: (x) => `${x.divisi} ${x.jabatan} ${x.nama}`,
-    tajuk: (x) => x.nama, pratinjau: { awal: 3, akhir: 1 },
+    cari: (x) => `${x.divisi} ${x.jabatan} ${namaOrang(x)}`,
+    tajuk: (x) => namaOrang(x), pratinjau: { awal: 3, akhir: 1 },
+    sesudahForm: (isi) => kunciNamaOrang(isi),
+    rapikan: (d) => rapikanOrang(d, 'nama', 'Pilih anggota pemilik tanda tangan, atau isi namanya.'),
     kolom: [
       { l: 'Divisi',  isi: (x) => `<b>${esc(x.divisi)}</b>` },
       { l: 'Jabatan', isi: (x) => esc(x.jabatan) },
-      { l: 'Nama',    isi: (x) => esc(x.nama) },
+      { l: 'Nama',    isi: (x) => selOrang(x) },
       { l: 'Tanda Tangan', isi: () => '', pasang: selGambar('gambar', 'nama', (x) => `${x.jabatan} · ${x.divisi}`, 'utuh') },
     ],
     form: [
       { k: 'divisi',  l: 'Divisi / Unit', wajib: true, ph: 'Divisi Media' },
       { k: 'jabatan', l: 'Jabatan', wajib: true, ph: 'Kepala Divisi' },
-      { k: 'nama',    l: 'Nama Pemilik', wajib: true, ph: 'Nama lengkap' },
+      { ...kolomPilihOrang, l: 'Pemilik Tanda Tangan' },
+      { ...kolomNamaOrang, l: 'Nama Pemilik' },
       { k: 'gambar',  l: 'Berkas Tanda Tangan', jenis: 'gambar',
         bantu: 'Pindai tanda tangan berlatar transparan (PNG) agar rapi saat dibubuhkan pada surat.' },
     ],
@@ -3069,7 +3087,7 @@ function kartuAntrean(judul, daftar) {
       </span>
       <span class="antre-panah">${I.kanan}</span>
     </button>`);
-    k.onclick = () => bukaModul(a.rute);
+    k.onclick = () => { a.sebelum?.(); bukaModul(a.rute); };
     grid.appendChild(k);
   });
   return box;
@@ -3114,10 +3132,12 @@ function antreanSekretaris() {
     { rute: draft[0] ? `surat-${draft[0].kategori}` : 'surat-internal', ikon: I.sunting, judul: 'Surat Masih Draft', n: draft.length,
       satuan: 'surat belum dikirim', kosong: 'Tidak ada surat yang tertahan di draft',
       rinci: draft[0] && `${draft[0].nomor} · ${draft[0].perihal}` },
-    { rute: 'kajian', ikon: I.dok, judul: 'Notulen Kajian', n: tanpaNotulen.length,
+    { rute: 'notulen-presensi', sebelum: () => { saringPantau.perlu = 'notulen'; },
+      ikon: I.dok, judul: 'Notulen Kajian', n: tanpaNotulen.length,
       satuan: 'kajian selesai tanpa notulen', kosong: 'Semua kajian selesai sudah bernotulen',
       rinci: tanpaNotulen[0] && `${tanpaNotulen[0].judul} (${tgl(tanpaNotulen[0].tanggal)})` },
-    { rute: 'anggota-angkatan', ikon: I.gembok, judul: 'Sandi Awal', n: sandiAwal.length,
+    { rute: 'anggota-angkatan', sebelum: () => { saringAnggota = { cari: '', status: '', level: '', sandi: 'awal' }; },
+      ikon: I.gembok, judul: 'Sandi Awal', n: sandiAwal.length,
       satuan: 'akun belum mengganti sandi awal', kosong: 'Semua akun aktif sudah mengganti sandinya',
       rinci: sandiAwal[0] && sandiAwal[0].nama },
   ]);
@@ -3413,10 +3433,13 @@ const urutAngkatan = (a) => {
 };
 
 function tabelAnggota(daftar, kolomAngkatan) {
+  /* Layar masuk menyuruh orang yang lupa sandi menghubungi Sekretaris,
+     jadi tombolnya ada di tiap baris — bukan tersembunyi di dalam form. */
+  const bisaSetel = RBAC.canAny(U, ['anggota.manage', 'user.manage']);
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Nama</th>
       ${kolomAngkatan ? '<th>Angkatan</th>' : ''}
-      <th>Jenjang</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead>
+      <th>Jenjang</th><th>Status</th><th class="kol-aksi${bisaSetel ? ' lebar' : ''}">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   daftar.forEach((u, i) => {
@@ -3428,11 +3451,14 @@ function tabelAnggota(daftar, kolomAngkatan) {
       </div></td>
       ${kolomAngkatan ? `<td class="utuh">${esc(u.angkatan)}</td>` : ''}
       <td class="utuh">${esc(u.level)}</td>
-      <td><span class="lencana ${u.status === 'aktif' ? 'l-hijau' : u.status === 'alumni' ? 'l-biru' : 'l-abu'}">${esc(u.status)}</span></td>
-      <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button></div></td>
+      <td><span class="lencana ${u.status === 'aktif' ? 'l-hijau' : u.status === 'alumni' ? 'l-biru' : 'l-abu'}">${esc(u.status)}</span>${
+        Number(u.sandiAwal) === 1 && u.status === 'aktif' ? '<br><span class="sub-sel perlu" title="Akun ini belum pernah mengganti sandi yang diberikan">sandi awal</span>' : ''}</td>
+      <td class="kol-aksi${bisaSetel ? ' lebar' : ''}"><div class="sel-aksi">
+        <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
+        ${bisaSetel ? `<button class="ikon-aksi" data-sandi title="Setel ulang kata sandi">${I.gembok}</button>` : ''}</div></td>
     </tr>`);
     tr.querySelector('.sunting').onclick = () => formAnggota(u);
+    tr.querySelector('[data-sandi]')?.addEventListener('click', () => setelSandiAnggota(u));
     tb.appendChild(tr);
   });
   /* Penjagaannya sama dengan Data Anggota: akun sendiri tidak, dan akun
@@ -3447,13 +3473,35 @@ function tabelAnggota(daftar, kolomAngkatan) {
   return t;
 }
 
+let saringAnggota = { cari: '', status: '', level: '', sandi: '' };
 HAL['anggota-angkatan'] = () => {
-  const box = el('<div></div>');
+  const semua = Store.db.users;
+  const jml = (st) => semua.filter((u) => u.status === st).length;
+  const sandiAwal = semua.filter((u) => Number(u.sandiAwal) === 1 && u.status === 'aktif').length;
+  const jenjang = [...new Set(semua.map((u) => u.level).filter((x) => x && x !== '-'))].sort();
+
+  const box = el(`<div><div class="grid-stat">
+    ${[
+      { ik: I.grup,     n: jml('aktif'),    l: 'Anggota aktif',            w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+      { ik: I.wisuda,   n: jml('alumni'),   l: 'Alumni',                   w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.orang,    n: jml('nonaktif'), l: 'Nonaktif',                 w: 'rgba(120,130,125,.14)', wc: '#5E6B64' },
+      { ik: I.gembok,   n: sandiAwal,       l: 'Belum ganti sandi awal',   w: 'rgba(229,83,75,.12)',  wc: '#B23E37' },
+    ].map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
+      <div class="stat-nilai">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}
+  </div></div>`);
+
   const kepala = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
-    <h3>Data Anggota Perangkatan</h3>
-    <span class="hitung">(${Store.db.users.length} Data)</span>
+    <h3>Data Anggota</h3>
+    <span class="hitung" data-hitung></span>
     <div class="kanan">
-      <input class="cari-org" placeholder="Cari anggota…" data-cari>
+      <select class="pilih-saring" data-status>
+        ${[['', 'Semua status'], ['aktif', 'Aktif'], ['alumni', 'Alumni'], ['nonaktif', 'Nonaktif']]
+          .map(([v, l]) => `<option value="${v}" ${v === saringAnggota.status ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <select class="pilih-saring" data-level><option value="">Semua jenjang</option>
+        ${jenjang.map((x) => `<option ${x === saringAnggota.level ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select class="pilih-saring" data-sandi>
+        <option value="">Semua akun</option><option value="awal" ${saringAnggota.sandi === 'awal' ? 'selected' : ''}>Belum ganti sandi awal</option></select>
+      <input class="cari-org" placeholder="Cari nama, surel, nomor induk…" data-cari value="${esc(saringAnggota.cari)}">
       <button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Anggota</button>
     </div></div></div>`);
   kepala.querySelector('[data-tambah]').onclick = () => formAnggota(null);
@@ -3463,9 +3511,13 @@ HAL['anggota-angkatan'] = () => {
   box.appendChild(wadah);
 
   const isiUlang = () => {
-    const q = kepala.querySelector('[data-cari]').value.trim().toLowerCase();
-    const cocok = Store.db.users.filter((u) =>
-      !q || `${u.nama} ${u.email} ${u.angkatan} ${u.level} ${u.nia || ''}`.toLowerCase().includes(q));
+    const q = saringAnggota.cari.trim().toLowerCase();
+    const cocok = semua.filter((u) =>
+      (!saringAnggota.status || u.status === saringAnggota.status)
+      && (!saringAnggota.level || u.level === saringAnggota.level)
+      && (!saringAnggota.sandi || (Number(u.sandiAwal) === 1 && u.status === 'aktif'))
+      && (!q || `${u.nama} ${u.email} ${u.angkatan} ${u.level} ${u.nia || ''}`.toLowerCase().includes(q)));
+    kepala.querySelector('[data-hitung]').textContent = `(${cocok.length} dari ${semua.length} orang)`;
 
     const grup = {};
     cocok.forEach((u) => { (grup[u.angkatan] ||= []).push(u); });
@@ -3474,7 +3526,7 @@ HAL['anggota-angkatan'] = () => {
     wadah.innerHTML = '';
     if (!urutan.length) {
       wadah.appendChild(el(`<div class="kartu"><div class="kosong-erp">${I.kotak}
-        <p>Tidak ada anggota yang cocok</p><small>Coba kata kunci lain.</small></div></div>`));
+        <p>Tidak ada anggota yang cocok</p><small>Ubah saringan atau kata kunci.</small></div></div>`));
       return;
     }
     urutan.forEach((ang) => {
@@ -3486,11 +3538,14 @@ HAL['anggota-angkatan'] = () => {
       wadah.appendChild(kartu);
     });
   };
-  kepala.querySelector('[data-cari]').oninput = isiUlang;
+  [['status', 'status'], ['level', 'level'], ['sandi', 'sandi']].forEach(([attr, kunci]) => {
+    kepala.querySelector(`[data-${attr}]`).onchange = (e) => { saringAnggota[kunci] = e.target.value; isiUlang(); };
+  });
+  kepala.querySelector('[data-cari]').oninput = (e) => { saringAnggota.cari = e.target.value; isiUlang(); };
   isiUlang();
   return box;
 };
-HAL['anggota-angkatan'].judul = () => ['Data Anggota Perangkatan', 'Keanggotaan kajian dikelompokkan menurut angkatan.'];
+HAL['anggota-angkatan'].judul = () => ['Data Anggota', 'Seluruh anggota per angkatan — saring menurut status, jenjang, dan sandi awal.'];
 
 HAL.alumni = () => {
   const alumni = Store.db.users.filter((u) => u.status === 'alumni')
@@ -7551,7 +7606,7 @@ const BLOK_SURAT = {
       return `<div class="ls-ttd ls-ttd-${esc(b.rata || 'kanan')}">${orang.map((t) => `<div class="ls-ttd-orang">
         <div>${esc(t.jabatan)}${t.divisi && t.divisi !== t.jabatan ? `<br>${esc(t.divisi)}` : ''}</div>
         ${t.gambar ? `<img src="${esc(t.gambar)}" alt="">` : '<div class="ls-ttd-ruang"></div>'}
-        <div class="ls-ttd-nama">${esc(t.nama)}</div></div>`).join('')}</div>`;
+        <div class="ls-ttd-nama">${esc(namaOrang(t))}</div></div>`).join('')}</div>`;
     },
   },
   garis: { l: 'Garis Pemisah', baru: () => ({}), bidang: [], gambar: () => '<hr class="ls-garis">' },
@@ -7687,7 +7742,7 @@ HAL['susun-surat'] = () => {
       const daftar = el('<div class="ss-penanda"></div>');
       if (!Store.db.tandaTangan.length) daftar.appendChild(el('<span class="sub-sel">Kumpulan Tanda Tangan masih kosong.</span>'));
       Store.db.tandaTangan.forEach((t) => {
-        const baris = el(`<label><input type="checkbox"> <span><b>${esc(t.nama)}</b> · ${esc(t.jabatan)}</span></label>`);
+        const baris = el(`<label><input type="checkbox"> <span><b>${esc(namaOrang(t))}</b> · ${esc(t.jabatan)}</span></label>`);
         const c = baris.querySelector('input');
         c.checked = (b[f.k] || []).includes(t.id);
         c.onchange = () => {
@@ -7837,7 +7892,7 @@ HAL['pantau-divisi'].judul = judulTab('pantau-divisi', 'Pantau Divisi', 'Kajian,
    angkatan dan lintas kategori, bukan satu angkatan yang sedang
    dikerjakan.
    ------------------------------------------------------------ */
-let saringPantau = { angkatan: '', surat: '', cariSurat: '' };
+let saringPantau = { angkatan: '', perlu: '', surat: '', cariSurat: '' };
 
 /** Kehadiran satu kajian terhadap anggota aktif angkatannya sendiri. */
 function hadirKajian(k) {
@@ -7851,13 +7906,18 @@ HAL['pantau-kajian'] = () => {
   const semua = [...Store.db.kajian].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
   const angkatan = angkatanTersedia();
   if (!angkatan.includes(saringPantau.angkatan)) saringPantau.angkatan = '';
-  const data = semua.filter((k) => !saringPantau.angkatan || k.angkatan === saringPantau.angkatan);
+  /* "Perlu" menyaring yang masih menuntut kerja: kajian yang sudah lewat
+     tetapi belum bernotulen, atau belum punya satu pun catatan presensi. */
+  const lewat = (k) => statusKajian(k) === 'selesai';
+  const perlu = { notulen: (k) => lewat(k) && !k.notulensi, presensi: (k) => lewat(k) && !(k.presensi || []).length };
+  const seAngkatan = semua.filter((k) => !saringPantau.angkatan || k.angkatan === saringPantau.angkatan);
+  const data = seAngkatan.filter((k) => !perlu[saringPantau.perlu] || perlu[saringPantau.perlu](k));
 
-  const selesai = data.filter((k) => statusKajian(k) === 'selesai');
+  const selesai = seAngkatan.filter(lewat);
   const rata = selesai.length ? Math.round(selesai.reduce((j, k) => j + hadirKajian(k).persen, 0) / selesai.length) : 0;
   const box = el(`<div><div class="grid-stat">
     ${[
-      { ik: I.kalender,  n: data.length,                      l: 'Kajian terjadwal',          w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.kalender,  n: seAngkatan.length,                l: 'Kajian terjadwal',          w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
       { ik: I.cekBulat,  n: selesai.length,                   l: 'Sudah terlaksana',          w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
       { ik: I.grup,      n: selesai.length ? `${rata}%` : '—', l: 'Rata-rata kehadiran',       w: 'rgba(240,149,30,.14)', wc: '#B87310' },
       { ik: I.dok,       n: `${selesai.filter((k) => k.notulensi).length}/${selesai.length}`, l: 'Kajian selesai bernotulen', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
@@ -7870,13 +7930,18 @@ HAL['pantau-kajian'] = () => {
     <div class="kanan">
       <select class="pilih-saring" data-angkatan><option value="">Semua Angkatan</option>
         ${angkatan.map((a) => `<option ${a === saringPantau.angkatan ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+      <select class="pilih-saring" data-perlu>
+        ${[['', 'Semua kajian'], ['notulen', `Belum bernotulen (${seAngkatan.filter(perlu.notulen).length})`], ['presensi', `Belum ada presensi (${seAngkatan.filter(perlu.presensi).length})`]]
+          .map(([v, l]) => `<option value="${v}" ${v === saringPantau.perlu ? 'selected' : ''}>${l}</option>`).join('')}</select>
       ${bisaKelola ? `<button class="btn btn-kecil" data-tambah>${I.tambah} Jadwalkan Kajian</button>` : ''}
     </div></div></div>`);
   kartu.querySelector('[data-angkatan]').onchange = (e) => { saringPantau.angkatan = e.target.value; gambar(); };
+  kartu.querySelector('[data-perlu]').onchange = (e) => { saringPantau.perlu = e.target.value; gambar(); };
   kartu.querySelector('[data-tambah]')?.addEventListener('click', () => formKajian(null));
 
   if (!data.length) {
-    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada jadwal kajian</p></div>`));
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>${saringPantau.perlu ? 'Tidak ada kajian yang menunggu' : 'Belum ada jadwal kajian'}</p>
+      ${saringPantau.perlu ? '<small>Semua kajian pada saringan ini sudah lengkap.</small>' : ''}</div>`));
     box.appendChild(kartu);
     return box;
   }
@@ -7919,6 +7984,12 @@ HAL['pantau-kajian'] = () => {
   return box;
 };
 HAL['pantau-kajian'].judul = () => ['Kajian', 'Jadwal, kehadiran, dan notulen seluruh angkatan.'];
+
+/* Halaman kerja Sekretaris: tabel yang sama. Tombol jadwal, sunting, dan
+   hapus tak tampil baginya — itu wewenang koordinator — sehingga yang
+   tersisa persis tugasnya: memindai presensi dan menulis notulen. */
+HAL['notulen-presensi'] = () => HAL['pantau-kajian']();
+HAL['notulen-presensi'].judul = () => ['Notulen & Presensi', 'Kehadiran dan notulen tiap kajian, seluruh angkatan.'];
 
 /* Kas: saldo dan arus kas milik Bendahara, lalu laporan serta buku
    besarnya. Keduanya halaman baca — tak ada tombol tulis di dalamnya —

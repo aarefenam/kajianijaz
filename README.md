@@ -132,8 +132,25 @@ tugas:
 | **Tindak Lanjuti** | Apa yang menunggu saya? | Kotak Masuk, Surat Masuk, Notulen & Presensi |
 | **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan, Templat Surat |
 | **Dokumen** | Dokumen resmi apa yang kami pegang? | Sertifikat, Tanda Tangan, Arsip Kepenulisan |
-| **Keanggotaan** | Siapa anggota kami? | Data Anggota, Data Alumni |
+| **Keanggotaan** | Siapa anggota kami? | Data Anggota, Data Alumni, Kartu Anggota |
 | **Sistem** | Yang jarang disentuh | Pengaturan (Editor Halaman, Persetujuan, Log) |
+
+**Notulen & Presensi** memakai tabel kajian yang sama dengan Pantau Divisi milik
+Ketua — seluruh angkatan, dengan angka kehadiran dan tanda notulen — tetapi
+tanpa tombol jadwal, sunting, dan hapus: yang tersisa persis tugas Sekretaris,
+yakni memindai presensi dan menulis notulen. Saringan *Belum bernotulen* dan
+*Belum ada presensi* menampilkan yang masih menuntut kerja.
+
+**Data Anggota** adalah satu pintu keanggotaan: seluruh anggota per angkatan,
+dapat disaring menurut status, jenjang, dan *belum ganti sandi awal*, serta
+dicari dengan nama, surel, atau nomor induk. Tombol **setel ulang kata sandi**
+ada di tiap baris — layar masuk memang menyuruh orang yang lupa sandi
+menghubungi Sekretaris.
+
+**Sertifikat** dan **Tanda Tangan** terhubung ke Data Anggota seperti Data
+Pengurus: pemilik tanda tangan dan penerima sertifikat dipilih dari sana, dan
+namanya mengikuti. Penerima sertifikat boleh tetap berupa teks — orang luar
+atau "Seluruh Peserta" — tanpa dianggap keliru.
 
 Dasbornya dibuka dengan **Perlu Ditindaklanjuti**: pesan belum dibaca, surat
 masuk yang baru diterima, surat yang masih draft, kajian selesai tanpa notulen,

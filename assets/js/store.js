@@ -517,12 +517,16 @@ function hubungkanOrang(tersimpan) {
     const k = namaBaku(u.nama);
     if (k) peta.set(k, peta.has(k) ? null : u.id);          // null = nama kembar
   });
-  ['pengurus', 'koordinator'].forEach((koleksi) => {
-    (tersimpan[koleksi] || []).forEach((x) => {
-      if (x.userId !== undefined) return;
-      x.userId = peta.get(namaBaku(x.nama)) || '';
+  /* Tanda tangan dan sertifikat menyusul dengan cara yang sama. Pada
+     sertifikat namanya ada di `penerima`, dan yang tak cocok memang
+     wajar — "Seluruh Peserta" bukan seorang anggota. */
+  [['pengurus', 'nama'], ['koordinator', 'nama'], ['tandaTangan', 'nama'], ['sertifikat', 'penerima']]
+    .forEach(([koleksi, kunci]) => {
+      (tersimpan[koleksi] || []).forEach((x) => {
+        if (x.userId !== undefined) return;
+        x.userId = peta.get(namaBaku(x[kunci])) || '';
+      });
     });
-  });
 }
 
 /* --- nomor induk anggota ---
