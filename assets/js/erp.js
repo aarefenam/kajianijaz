@@ -365,6 +365,10 @@ const MENU = [
   { id: 'evaluasi',    label: 'Evaluasi & Tindak Lanjut',     ikon: I.obrolan, izin: ['organisasi.manage'] },
   { id: 'laporan',     label: 'Laporan & Ringkasan',          ikon: I.bagan,   izin: ['organisasi.report'] },
   { id: 'pantau-divisi', label: 'Pantau Divisi',              ikon: I.ukur,    izin: ['organisasi.manage'] },
+  /* Tab Pantau Divisi — tak pernah tampil sendiri di sidebar. */
+  { id: 'pantau-kajian', label: 'Kajian',       ikon: I.kalender, izin: ['organisasi.manage'], tersembunyi: true },
+  { id: 'pantau-kas',    label: 'Kas & Saldo',  ikon: I.uang,     izin: ['organisasi.manage'], tersembunyi: true },
+  { id: 'pantau-surat',  label: 'Arsip Surat',  ikon: I.arsip,    izin: ['organisasi.manage'], tersembunyi: true },
 
   /* --- ruang kerja Sekretaris --- */
   { grup: 'Pengelolaan Surat', izin: ['sekretariat.manage'] },
@@ -535,10 +539,12 @@ const MENU_KETUA = [
 
 /** Halaman bertab milik Ketua beserta modul yang menjadi tabnya. */
 const TAB_KETUA = {
-  'pantau-divisi': ['kajian', 'keuangan', 'surat'],
+  'pantau-divisi': ['pantau-kajian', 'pantau-kas', 'pantau-surat'],
   pengaturan: ['cms', 'tema', 'versi', 'kategori-artikel', 'log'],
 };
-const tabAktif = { 'pantau-divisi': 'kajian', pengaturan: 'pengajuan' };
+const tabAktif = { 'pantau-divisi': 'pantau-kajian', pengaturan: 'pengajuan' };
+/** Alamat modul lama yang bagi Ketua digantikan tab Pantau Divisi. */
+const ALIAS_KETUA = { kajian: 'pantau-kajian', keuangan: 'pantau-kas', surat: 'pantau-surat' };
 
 const idKetua = () => new Set([
   ...MENU_KETUA.map((m) => m.id).filter(Boolean),
@@ -6800,8 +6806,152 @@ HAL.pengaturan.judul = judulTab('pengaturan', 'Pengaturan', 'Modul lanjutan orga
 
 HAL['pantau-divisi'] = () => halamanTab('pantau-divisi',
   ['Pantau lintas divisi',
-   'Jadwal kajian, kas, dan arsip surat yang dikelola tiap penanggung jawab. Anda tetap dapat mengubah jadwal kajian dari sini; kas dan arsip surat hanya dapat dibaca.']);
-HAL['pantau-divisi'].judul = judulTab('pantau-divisi', 'Pantau Divisi', 'Jadwal kajian, kas, dan arsip surat.');
+   'Kajian, kas, dan arsip surat yang dikelola tiap penanggung jawab — seluruh angkatan dan seluruh kategori dalam satu tempat. Jadwal kajian tetap dapat Anda ubah dari sini; kas dan arsip surat hanya dapat dibaca.']);
+HAL['pantau-divisi'].judul = judulTab('pantau-divisi', 'Pantau Divisi', 'Kajian, kas, dan arsip surat.');
+
+/* ------------------------------------------------------------
+   TAB PANTAU DIVISI
+   ------------------------------------------------------------
+   Ketua dulu memantau lewat modul versi lama, yang tertinggal dari
+   ruang kerja tiap PJ: jadwal kajian berupa kartu tanpa angka
+   kehadiran, kas tanpa saldo per akun, arsip surat tanpa pencarian.
+
+   Ketiga tab ini membaca data yang SAMA dengan ruang kerja PJ dan
+   memakai hitungan yang sama, tetapi dari sudut pemantau: lintas
+   angkatan dan lintas kategori, bukan satu angkatan yang sedang
+   dikerjakan.
+   ------------------------------------------------------------ */
+let saringPantau = { angkatan: '', surat: '', cariSurat: '' };
+
+/** Kehadiran satu kajian terhadap anggota aktif angkatannya sendiri. */
+function hadirKajian(k) {
+  const total = Store.db.users.filter((u) => u.status === 'aktif' && (!k.angkatan || u.angkatan === k.angkatan)).length;
+  const hadir = (k.presensi || []).filter((x) => x.status === 'hadir' || x.status === 'terlambat').length;
+  return { hadir, total, persen: total ? Math.round((hadir / total) * 100) : 0 };
+}
+
+HAL['pantau-kajian'] = () => {
+  const bisaKelola = RBAC.can(U, 'kajian.manage');
+  const semua = [...Store.db.kajian].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  const angkatan = angkatanTersedia();
+  if (!angkatan.includes(saringPantau.angkatan)) saringPantau.angkatan = '';
+  const data = semua.filter((k) => !saringPantau.angkatan || k.angkatan === saringPantau.angkatan);
+
+  const selesai = data.filter((k) => statusKajian(k) === 'selesai');
+  const rata = selesai.length ? Math.round(selesai.reduce((j, k) => j + hadirKajian(k).persen, 0) / selesai.length) : 0;
+  const box = el(`<div><div class="grid-stat">
+    ${[
+      { ik: I.kalender,  n: data.length,                      l: 'Kajian terjadwal',          w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.cekBulat,  n: selesai.length,                   l: 'Sudah terlaksana',          w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+      { ik: I.grup,      n: selesai.length ? `${rata}%` : '—', l: 'Rata-rata kehadiran',       w: 'rgba(240,149,30,.14)', wc: '#B87310' },
+      { ik: I.dok,       n: `${selesai.filter((k) => k.notulensi).length}/${selesai.length}`, l: 'Kajian selesai bernotulen', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
+    ].map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
+      <div class="stat-nilai">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}
+  </div></div>`);
+
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Jadwal & Kehadiran Kajian</h3><span class="hitung">(${data.length} Kajian)</span>
+    <div class="kanan">
+      <select class="pilih-saring" data-angkatan><option value="">Semua Angkatan</option>
+        ${angkatan.map((a) => `<option ${a === saringPantau.angkatan ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
+      ${bisaKelola ? `<button class="btn btn-kecil" data-tambah>${I.tambah} Jadwalkan Kajian</button>` : ''}
+    </div></div></div>`);
+  kartu.querySelector('[data-angkatan]').onchange = (e) => { saringPantau.angkatan = e.target.value; gambar(); };
+  kartu.querySelector('[data-tambah]')?.addEventListener('click', () => formKajian(null));
+
+  if (!data.length) {
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada jadwal kajian</p></div>`));
+    box.appendChild(kartu);
+    return box;
+  }
+  const t = el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Angkatan</th><th>Pemakalah</th>
+      <th>Kehadiran</th><th class="kol-tengah">Notulen</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead>
+    <tbody></tbody></table></div>`);
+  const tb = t.querySelector('tbody');
+  data.forEach((k, i) => {
+    const h = hadirKajian(k);
+    const sudah = statusKajian(k) === 'selesai';
+    const tr = el(`<tr>
+      <td class="kol-no">${i + 1}</td>
+      <td class="utuh">${tgl(k.tanggal)}<br><span class="sub-sel">${esc(k.jam || '')}</span></td>
+      <td><b>${esc(k.judul)}</b>${k.tempat ? `<br><span class="sub-sel">${esc(k.tempat)}</span>` : ''}</td>
+      <td class="utuh">${esc(k.angkatan || '—')}<br><span class="sub-sel">${esc(k.level || '')}</span></td>
+      <td>${esc(namaPendek(k.pemakalahId))}</td>
+      <td class="utuh">${sudah || h.hadir ? `${h.hadir}/${h.total} · ${h.persen}%` : '—'}</td>
+      <td class="kol-tengah">${tandaLengkap(!!k.notulensi)}</td>
+      <td>${lencanaKajian(k)}</td>
+      <td class="kol-aksi"><div class="sel-aksi">
+        ${RBAC.can(U, 'kajian.attendance') ? `<button class="ikon-aksi" data-absen title="Absensi">${I.grup}</button>` : ''}
+        ${RBAC.can(U, 'kajian.notulensi') ? `<button class="ikon-aksi" data-notulen title="Notulensi">${I.dok}</button>` : ''}
+        ${bisaKelola ? `<button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
+          <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>` : ''}
+      </div></td></tr>`);
+    tr.querySelector('[data-absen]')?.addEventListener('click', () => dialogAbsensi(k));
+    tr.querySelector('[data-notulen]')?.addEventListener('click', () => dialogNotulensi(k));
+    tr.querySelector('.sunting')?.addEventListener('click', () => formKajian(k));
+    tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus jadwal kajian',
+      `"${k.judul}" beserta presensinya akan dihapus.`,
+      () => aman(() => { Store.hapusKajian(U, k.id); toast('Jadwal dihapus.'); gambar(); })));
+    tb.appendChild(tr);
+  });
+  if (bisaKelola) pasangPilih(t, data, { satuan: 'jadwal kajian', hapus: (k) => Store.hapusKajian(U, k.id) });
+  kartu.appendChild(t);
+  box.appendChild(kartu);
+  return box;
+};
+HAL['pantau-kajian'].judul = () => ['Kajian', 'Jadwal, kehadiran, dan notulen seluruh angkatan.'];
+
+/* Kas: saldo dan arus kas milik Bendahara, lalu laporan serta buku
+   besarnya. Keduanya halaman baca — tak ada tombol tulis di dalamnya —
+   jadi cukup disusun berurutan, bukan ditulis ulang. */
+HAL['pantau-kas'] = () => {
+  const box = el('<div></div>');
+  box.appendChild(HAL.saldo());
+  box.appendChild(el('<div style="height:20px"></div>'));
+  box.appendChild(HAL['laporan-kas']());
+  return box;
+};
+HAL['pantau-kas'].judul = () => ['Kas & Saldo', 'Saldo per akun, arus kas bulanan, laporan, dan buku besar.'];
+
+const KATEGORI_SURAT = { internal: 'Internal', eksternal: 'Eksternal', keputusan: 'Keputusan', masuk: 'Masuk', keluar: 'Keluar' };
+const WARNA_SURAT = { masuk: 'l-biru', keputusan: 'l-kuning', internal: 'l-hijau', eksternal: 'l-abu', keluar: 'l-hijau' };
+
+HAL['pantau-surat'] = () => {
+  const semua = [...Store.db.surat].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+  const hitung = (k) => semua.filter((x) => x.kategori === k).length;
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Arsip Surat</h3><span class="hitung" data-hitung></span>
+    <div class="kanan">
+      <select class="pilih-saring" data-kategori><option value="">Semua Kategori (${semua.length})</option>
+        ${Object.entries(KATEGORI_SURAT).map(([k, l]) => `<option value="${k}" ${k === saringPantau.surat ? 'selected' : ''}>${l} (${hitung(k)})</option>`).join('')}</select>
+      <input class="cari-org" placeholder="Cari nomor, perihal, tujuan…" data-cari value="${esc(saringPantau.cariSurat)}">
+    </div></div><div data-wadah></div></div>`);
+  const wadah = kartu.querySelector('[data-wadah]');
+  const isiUlang = () => {
+    const q = saringPantau.cariSurat.trim().toLowerCase();
+    const data = semua.filter((x) => (!saringPantau.surat || x.kategori === saringPantau.surat)
+      && (!q || `${x.nomor} ${x.perihal} ${x.tujuan}`.toLowerCase().includes(q)));
+    kartu.querySelector('[data-hitung]').textContent = `(${data.length} dari ${semua.length} dokumen)`;
+    if (!data.length) {
+      wadah.replaceChildren(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada surat yang cocok</p><small>Ubah kategori atau kata kunci.</small></div>`));
+      return;
+    }
+    wadah.replaceChildren(el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Nomor</th><th>Kategori</th><th>Perihal</th><th>Tujuan / Asal</th>
+        <th>Tanggal</th><th>Status</th></tr></thead>
+      <tbody>${data.map((x, i) => `<tr>
+        <td class="kol-no">${i + 1}</td><td class="utuh"><b>${esc(x.nomor)}</b></td>
+        <td><span class="lencana ${WARNA_SURAT[x.kategori] || 'l-abu'}">${esc(KATEGORI_SURAT[x.kategori] || x.kategori)}</span></td>
+        <td>${esc(x.perihal)}</td><td>${esc(x.tujuan || '—')}</td><td class="utuh">${tgl(x.tanggal)}</td>
+        <td><span class="lencana l-abu">${esc(x.status || '—')}</span></td></tr>`).join('')}</tbody></table></div>`));
+  };
+  kartu.querySelector('[data-kategori]').onchange = (e) => { saringPantau.surat = e.target.value; isiUlang(); };
+  kartu.querySelector('[data-cari]').oninput = (e) => { saringPantau.cariSurat = e.target.value; isiUlang(); };
+  isiUlang();
+  return kartu;
+};
+HAL['pantau-surat'].judul = () => ['Arsip Surat', 'Seluruh surat dari lima kategori, dapat dicari dan disaring.'];
 
 /* ============================================================
    RENDER UTAMA
@@ -6822,6 +6972,7 @@ function gambar() {
 
   /* Alamat modul yang bagi Ketua kini berupa tab tetap berlaku: ia
      dialihkan ke halaman induknya dengan tab itu terbuka. */
+  if (ruangKetua() && ALIAS_KETUA[rute]) rute = ALIAS_KETUA[rute];
   const induk = ruangKetua() && indukTabKetua(rute);
   if (induk) { tabAktif[induk] = rute; rute = induk; }
 

@@ -62,10 +62,21 @@ kelompok yang masing-masing menjawab satu pertanyaan:
 | **Struktur** | Siapa memegang apa? | Data Anggota, Data Pengurus, Koordinator Kajian, Hak Akses |
 | **Sistem** | Pengaturan yang jarang disentuh | Pengaturan |
 
-**Pantau Divisi** dan **Pengaturan** adalah halaman bertab. Yang pertama memuat
-Jadwal Kajian, Kas & Iuran, dan Arsip Surat; yang kedua Editor Halaman, Tema &
-Identitas, Riwayat Versi, Kategori Artikel, dan Log Aktivitas. Alamat lama tiap
-modul (`#cms`, `#kajian`, dan seterusnya) tetap berlaku dan membuka tabnya.
+**Pantau Divisi** dan **Pengaturan** adalah halaman bertab. Pengaturan memuat
+Editor Halaman, Tema & Identitas, Riwayat Versi, Kategori Artikel, dan Log
+Aktivitas. Pantau Divisi memuat tiga tab yang membaca data yang sama dengan
+ruang kerja tiap PJ, tetapi dari sudut pemantau:
+
+- **Kajian** — seluruh angkatan dalam satu tabel, dengan angka kehadiran,
+  tanda notulen, dan saringan angkatan. Ketua tetap dapat menjadwalkan,
+  menyunting, mengabsen, dan menghapus dari sini.
+- **Kas & Saldo** — saldo rupiah dan pound, saldo per akun, arus kas bulanan,
+  unduhan laporan, dan buku besar. Hanya baca.
+- **Arsip Surat** — lima kategori surat dalam satu tabel yang dapat dicari dan
+  disaring. Hanya baca.
+
+Alamat lama tiap modul (`#cms`, `#kajian`, `#keuangan`, dan seterusnya) tetap
+berlaku dan membuka tabnya.
 
 **Program Kerja** adalah nama baru Kaleidoskop Kegiatan & Program; datanya tetap
 di koleksi `kaleidoskop`.
