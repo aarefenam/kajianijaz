@@ -509,12 +509,13 @@ tbody tr:hover { background: #FAFBFA; }
 .sb-kutipan .sumber { display: block; font-style: normal; color: rgba(255,255,255,.38); margin-top: 4px; }
 .sb-masjid { display: block; width: 100%; opacity: .22; margin-bottom: -4px; }
 
-/* Sidebar Ketua memuat lima belas menu dalam empat kelompok tugas.
-   Jaraknya dirapatkan, dan hiasan kartu bawah mengalah lebih dulu di
-   layar pendek — menu tak boleh tergulung demi kutipan dan siluet. */
-.sidebar.ketua .sb-nav { padding-top: 10px; padding-bottom: 12px; }
-.sidebar.ketua .sb-item { padding-top: 7.5px; padding-bottom: 7.5px; }
-.sidebar.ketua .sb-grup { padding-top: 11px; padding-bottom: 4px; }
+/* Sidebar yang disusun menurut tugas (Ketua, Sekretaris) memuat belasan
+   menu dalam beberapa kelompok. Jaraknya dirapatkan, dan pada Ketua
+   hiasan kartu bawah mengalah lebih dulu di layar pendek — menu tak
+   boleh tergulung demi kutipan dan siluet. */
+.sidebar.tugas .sb-nav { padding-top: 10px; padding-bottom: 12px; }
+.sidebar.tugas .sb-item { padding-top: 7.5px; padding-bottom: 7.5px; }
+.sidebar.tugas .sb-grup { padding-top: 11px; padding-bottom: 4px; }
 @media (max-height: 1120px) { .sidebar.ketua .sb-masjid { display: none; } }
 @media (max-height: 1010px) { .sidebar.ketua .sb-kutipan { display: none; } .sidebar.ketua .sb-kartu .sb-user { padding-bottom: 13px; } }
 

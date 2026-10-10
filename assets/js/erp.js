@@ -494,7 +494,7 @@ const nilai = (v) => (typeof v === 'function' ? v() : v);
 const kunciRoleU = () => RBAC.kunciRole(U?.role);
 const bolehMenu = (m) => {
   if (m.pensiun?.includes(U?.role)) return false;   // digantikan modul yang lebih rinci
-  if (ruangKetua()) return !m.id || (idKetua().has(m.id) && (!m.izin || RBAC.canAny(U, m.izin)));
+  if (tugas()) return !m.id || (idTugas().has(m.id) && (!m.izin || RBAC.canAny(U, m.izin)));
   if (m.lipat && ruangKhusus()) return false;       // sudah jadi tab di Pengaturan
   return !m.izin || RBAC.canAny(U, m.izin);
 };
@@ -546,15 +546,59 @@ const tabAktif = { 'pantau-divisi': 'pantau-kajian', pengaturan: 'pengajuan' };
 /** Alamat modul lama yang bagi Ketua digantikan tab Pantau Divisi. */
 const ALIAS_KETUA = { kajian: 'pantau-kajian', keuangan: 'pantau-kas', surat: 'pantau-surat' };
 
-const idKetua = () => new Set([
-  ...MENU_KETUA.map((m) => m.id).filter(Boolean),
-  ...Object.values(TAB_KETUA).flat(),
+/* ============================================================
+   SIDEBAR SEKRETARIS — cetakan yang sama dengan Ketua
+   ------------------------------------------------------------
+     Tindak Lanjuti — apa yang menunggu saya?
+     Persuratan     — surat apa yang kami terbitkan?
+     Dokumen        — dokumen resmi apa yang kami pegang?
+     Keanggotaan    — siapa anggota kami?
+     Sistem         — yang jarang disentuh.
+
+   Kotak masuk serta notulen dan presensi kajian dulu terselip sebagai
+   tab Pengaturan. Keduanya pekerjaan harian, jadi kini di sidebar.
+   ============================================================ */
+const MENU_SEKRETARIS = [
+  { id: 'dasbor' },
+  { grup: 'Tindak Lanjuti' },
+  { id: 'pesan' },
+  { id: 'surat-masuk' },
+  { id: 'kajian', label: 'Notulen & Presensi' },
+  { grup: 'Persuratan' },
+  { id: 'surat-internal' },
+  { id: 'surat-eksternal' },
+  { id: 'surat-keputusan' },
+  { id: 'surat-keluar' },
+  { grup: 'Dokumen' },
+  { id: 'sertifikat' },
+  { id: 'ttd' },
+  { id: 'arsip', label: 'Arsip Kepenulisan' },
+  { grup: 'Keanggotaan' },
+  { id: 'anggota-angkatan', label: 'Data Anggota' },
+  { id: 'alumni' },
+  { grup: 'Sistem' },
+  { id: 'pengaturan' },
+];
+const TAB_SEKRETARIS = { pengaturan: ['cms', 'pengajuan', 'log'] };
+
+/* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
+   sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
+   modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
+const RUANG_TUGAS = {
+  ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
+  sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan' } },
+};
+const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris : null);
+
+const idTugas = () => new Set([
+  ...tugas().menu.map((m) => m.id).filter(Boolean),
+  ...Object.values(tugas().tab).flat(),
 ]);
 /** Halaman bertab yang menaungi sebuah modul — atau undefined. */
-const indukTabKetua = (id) => Object.keys(TAB_KETUA).find((k) => TAB_KETUA[k].includes(id));
+const indukTab = (id) => Object.keys(tugas().tab).find((k) => tugas().tab[k].includes(id));
 
-/** Entri sidebar Ketua: entri MENU aslinya, ditimpa label bila ada. */
-const menuKetua = () => MENU_KETUA.map((k) => {
+/** Entri sidebar: entri MENU aslinya, ditimpa label bila ada. */
+const menuTugas = () => tugas().menu.map((k) => {
   if (k.grup) return k;
   const asli = MENU.find((m) => m.id === k.id);
   return asli && (!asli.izin || RBAC.canAny(U, asli.izin)) ? { ...asli, ...k } : null;
@@ -563,8 +607,8 @@ const menuKetua = () => MENU_KETUA.map((k) => {
   .filter((m, i, arr) => !m.grup || (arr[i + 1] && !arr[i + 1].grup));
 
 /** Modul yang menjadi tab pada sebuah halaman bertab. */
-const daftarTab = (kunci) => (ruangKetua()
-  ? (TAB_KETUA[kunci] || []).map((id) => MENU.find((m) => m.id === id))
+const daftarTab = (kunci) => (tugas()
+  ? (tugas().tab[kunci] || []).map((id) => MENU.find((m) => m.id === id))
       .filter((m) => m && HAL[m.id] && (!m.izin || RBAC.canAny(U, m.izin)))
   : menuTerlipat());
 
@@ -757,7 +801,7 @@ function kerangka() {
 
   /* Judul grup memakai gabungan izin anak-anaknya, sehingga grup yang
      seluruh menunya tersembunyi ikut hilang dengan sendirinya. */
-  const daftarMenu = (ketua ? menuKetua() : MENU.filter(bolehMenu))
+  const daftarMenu = (tugas() ? menuTugas() : MENU.filter(bolehMenu))
     .filter((m) => !m.tersembunyi && !m.tersembunyiBila?.());
 
   /* Tiap judul kelompok adalah tombol lipat. Anggotanya: semua menu
@@ -854,7 +898,7 @@ function kerangka() {
            <a class="btn btn-garis btn-kecil" href="index.html" target="_blank">${I.mata} Lihat Website</a>
          </div>`;
 
-  const kelasRuang = (khusus ? ' ruang' : '') + (ketua ? ' ketua' : '');
+  const kelasRuang = (khusus ? ' ruang' : '') + (ketua ? ' ketua' : '') + (tugas() ? ' tugas' : '');
   const tagMerek = ketua || ruangRedaksi() ? Store.cms.situs.tagline
     : ruangSekretaris() ? RBAC.roleLabel(U.role) : 'ERP ORGANISASI';
 
@@ -2882,26 +2926,11 @@ function kartuOrg(nama) {
 
    Seperti seluruh dasbor, ia hanya pintasan: tak ada yang disetujui,
    diterbitkan, atau ditandai dari sini. */
-function antreanKetua() {
-  const menunggu = Store.db.pengajuan.filter((p) => p.status === 'menunggu');
-  const naskah = Store.db.artikel.filter((a) => a.status === 'review');
-  const pesan = Store.db.pesan.filter((p) => !p.dibaca);
-
-  const daftar = [
-    { rute: 'pengajuan', ikon: I.cek, judul: 'Persetujuan Website', n: menunggu.length,
-      satuan: 'pengajuan menunggu', kosong: 'Tidak ada pengajuan menunggu',
-      rinci: menunggu[0] && `${menunggu[0].jumlahPerubahan} perubahan dari ${menunggu[0].olehNama}` },
-    { rute: 'artikel', ikon: I.dok, judul: 'Tinjau Artikel', n: naskah.length,
-      satuan: 'naskah menunggu tinjauan', kosong: 'Tidak ada naskah menunggu',
-      rinci: naskah[0] && `"${naskah[0].judul}"` },
-    { rute: 'pesan', ikon: I.surat, judul: 'Kotak Masuk', n: pesan.length,
-      satuan: 'pesan belum dibaca', kosong: 'Semua pesan sudah dibaca',
-      rinci: pesan[0] && `${pesan[0].subjek} — ${pesan[0].nama}` },
-  ].filter((a) => bolehMenu(MENU.find((m) => m.id === a.rute)));
-
+function kartuAntrean(judul, daftar) {
+  daftar = daftar.filter((a) => bolehMenu(MENU.find((m) => m.id === a.rute)));
   const total = daftar.reduce((j, a) => j + a.n, 0);
   const box = el(`<section class="antre">
-    <div class="antre-kepala"><h2>Menunggu Keputusan Anda</h2>
+    <div class="antre-kepala"><h2>${esc(judul)}</h2>
       <span class="hitung">${total ? `${total} hal perlu ditindak` : 'Tidak ada yang tertunda'}</span></div>
     <div class="antre-grid"></div>
   </section>`);
@@ -2920,6 +2949,54 @@ function antreanKetua() {
     grid.appendChild(k);
   });
   return box;
+}
+
+function antreanKetua() {
+  const menunggu = Store.db.pengajuan.filter((p) => p.status === 'menunggu');
+  const naskah = Store.db.artikel.filter((a) => a.status === 'review');
+  const pesan = Store.db.pesan.filter((p) => !p.dibaca);
+  return kartuAntrean('Menunggu Keputusan Anda', [
+    { rute: 'pengajuan', ikon: I.cek, judul: 'Persetujuan Website', n: menunggu.length,
+      satuan: 'pengajuan menunggu', kosong: 'Tidak ada pengajuan menunggu',
+      rinci: menunggu[0] && `${menunggu[0].jumlahPerubahan} perubahan dari ${menunggu[0].olehNama}` },
+    { rute: 'artikel', ikon: I.dok, judul: 'Tinjau Artikel', n: naskah.length,
+      satuan: 'naskah menunggu tinjauan', kosong: 'Tidak ada naskah menunggu',
+      rinci: naskah[0] && `"${naskah[0].judul}"` },
+    { rute: 'pesan', ikon: I.surat, judul: 'Kotak Masuk', n: pesan.length,
+      satuan: 'pesan belum dibaca', kosong: 'Semua pesan sudah dibaca',
+      rinci: pesan[0] && `${pesan[0].subjek} — ${pesan[0].nama}` },
+  ]);
+}
+
+/* Antrean Sekretaris. Tiap kartu menghitung hal yang memang menuntut
+   tindakannya: pesan yang belum dibaca, surat masuk yang baru diterima,
+   surat yang masih draft, kajian yang sudah lewat tanpa notulen, dan
+   akun yang belum pernah mengganti sandi awalnya. */
+function antreanSekretaris() {
+  const d = Store.db;
+  const pesan = d.pesan.filter((p) => !p.dibaca);
+  const masuk = d.surat.filter((x) => x.kategori === 'masuk' && x.status === 'diterima');
+  const draft = d.surat.filter((x) => x.status === 'draft');
+  const tanpaNotulen = d.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi)
+    .sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  const sandiAwal = d.users.filter((u) => Number(u.sandiAwal) === 1 && u.status === 'aktif');
+  return kartuAntrean('Perlu Ditindaklanjuti', [
+    { rute: 'pesan', ikon: I.surat, judul: 'Kotak Masuk', n: pesan.length,
+      satuan: 'pesan belum dibaca', kosong: 'Semua pesan sudah dibaca',
+      rinci: pesan[0] && `${pesan[0].subjek} — ${pesan[0].nama}` },
+    { rute: 'surat-masuk', ikon: I.baki, judul: 'Surat Masuk', n: masuk.length,
+      satuan: 'surat belum ditindaklanjuti', kosong: 'Semua surat masuk sudah ditindak',
+      rinci: masuk[0] && `${masuk[0].perihal} — ${masuk[0].tujuan}` },
+    { rute: draft[0] ? `surat-${draft[0].kategori}` : 'surat-internal', ikon: I.sunting, judul: 'Surat Masih Draft', n: draft.length,
+      satuan: 'surat belum dikirim', kosong: 'Tidak ada surat yang tertahan di draft',
+      rinci: draft[0] && `${draft[0].nomor} · ${draft[0].perihal}` },
+    { rute: 'kajian', ikon: I.dok, judul: 'Notulen Kajian', n: tanpaNotulen.length,
+      satuan: 'kajian selesai tanpa notulen', kosong: 'Semua kajian selesai sudah bernotulen',
+      rinci: tanpaNotulen[0] && `${tanpaNotulen[0].judul} (${tgl(tanpaNotulen[0].tanggal)})` },
+    { rute: 'anggota-angkatan', ikon: I.gembok, judul: 'Sandi Awal', n: sandiAwal.length,
+      satuan: 'akun belum mengganti sandi awal', kosong: 'Semua akun aktif sudah mengganti sandinya',
+      rinci: sandiAwal[0] && sandiAwal[0].nama },
+  ]);
 }
 
 /* --- program kerja yang belum rampung ---
@@ -3170,6 +3247,7 @@ const hiasRehal = () => `<svg class="hias" viewBox="0 0 200 150" fill="none" ari
 
 function dasborSekretaris() {
   const box = el('<div></div>');
+  box.appendChild(antreanSekretaris());
   const grid = el('<div class="pintas-grid"></div>');
   KARTU_SEK.forEach((k, i) => {
     const kartu = kartuPintas(k, i + 1);
@@ -6884,8 +6962,8 @@ const judulTab = (kunci, nama, cadangan) => () => {
 HAL.pengaturan = () => halamanTab('pengaturan', ruangKetua()
   ? ['Pengaturan sistem',
      'Tampilan website, riwayat versi, kategori artikel, dan log aktivitas. Pekerjaan harian — persetujuan, tinjauan artikel, kotak masuk — kini ada di kelompok Putuskan pada sidebar.']
-  : ['Modul lanjutan organisasi',
-     'Persetujuan website, arsip, keuangan, dan sistem dikumpulkan di sini agar dasbor tetap ringkas. Alur dua kunci tetap berlaku: perubahan PJ Website baru tayang setelah Ketua Umum menyetujuinya.']);
+  : ['Pengaturan sistem',
+     'Editor halaman, persetujuan, dan log aktivitas. Pekerjaan harian — kotak masuk, surat masuk, notulen dan presensi — kini ada di kelompok Tindak Lanjuti pada sidebar. Alur dua kunci tetap berlaku: perubahan website baru tayang setelah Ketua Umum menyetujuinya.']);
 HAL.pengaturan.judul = judulTab('pengaturan', 'Pengaturan', 'Modul lanjutan organisasi.');
 
 HAL['pantau-divisi'] = () => halamanTab('pantau-divisi',
@@ -7054,10 +7132,10 @@ function gambar() {
   if (!U) { app.appendChild(layarLogin()); return; }
   if (Store.perluGantiSandi()) { app.appendChild(layarGantiSandi()); return; }
 
-  /* Alamat modul yang bagi Ketua kini berupa tab tetap berlaku: ia
+  /* Alamat modul yang kini berupa tab tetap berlaku: ia
      dialihkan ke halaman induknya dengan tab itu terbuka. */
-  if (ruangKetua() && ALIAS_KETUA[rute]) rute = ALIAS_KETUA[rute];
-  const induk = ruangKetua() && indukTabKetua(rute);
+  if (tugas()?.alias[rute]) rute = tugas().alias[rute];
+  const induk = tugas() && indukTab(rute);
   if (induk) { tabAktif[induk] = rute; rute = induk; }
 
   const entri = MENU.find((m) => m.id === rute);
@@ -7066,10 +7144,10 @@ function gambar() {
 
   app.appendChild(kerangka());
   const [j, s] = HAL[rute].judul();
-  /* Judul halaman mengikuti nama di sidebar Ketua, supaya yang diklik
+  /* Judul halaman mengikuti nama di sidebar, supaya yang diklik
      dan yang terbuka menyebut hal yang sama. */
-  const namaKetua = ruangKetua() && MENU_KETUA.find((m) => m.id === rute)?.label;
-  app.querySelector('#judulHal').textContent = namaKetua || j;
+  const namaTugas = tugas()?.menu.find((m) => m.id === rute)?.label;
+  app.querySelector('#judulHal').textContent = namaTugas || j;
   app.querySelector('#subHal').textContent = s;
   app.querySelector('#isiHal').appendChild(HAL[rute]());
 }

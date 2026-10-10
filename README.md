@@ -124,7 +124,22 @@ baru melanjutkan maksud aksi itu di daftar penuh.
 
 ### Ruang kerja Sekretaris
 
-Sekretaris memakai dasbor berupa **ubin pintasan**: sembilan modul persuratan,
+Sidebar Sekretaris memakai cetakan yang sama dengan Ketua — disusun menurut
+tugas:
+
+| Kelompok | Pertanyaan | Isi |
+|----------|------------|-----|
+| **Tindak Lanjuti** | Apa yang menunggu saya? | Kotak Masuk, Surat Masuk, Notulen & Presensi |
+| **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan, Keluar |
+| **Dokumen** | Dokumen resmi apa yang kami pegang? | Sertifikat, Tanda Tangan, Arsip Kepenulisan |
+| **Keanggotaan** | Siapa anggota kami? | Data Anggota, Data Alumni |
+| **Sistem** | Yang jarang disentuh | Pengaturan (Editor Halaman, Persetujuan, Log) |
+
+Dasbornya dibuka dengan **Perlu Ditindaklanjuti**: pesan belum dibaca, surat
+masuk yang baru diterima, surat yang masih draft, kajian selesai tanpa notulen,
+dan akun aktif yang belum mengganti sandi awalnya.
+
+Di bawahnya, Sekretaris memakai dasbor berupa **ubin pintasan**: sembilan modul persuratan,
 dokumen, dan keanggotaan, masing-masing memampangkan jumlah dokumennya sebagai
 isyarat beban kerja. Menekan ubin membuka halaman modulnya — sama seperti dasbor
 Ketua, tidak ada data yang ditulis dari dasbor.
