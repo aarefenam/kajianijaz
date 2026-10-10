@@ -1411,3 +1411,39 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
 @media (max-width: 820px) {
   .fnt-baris { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
+
+/* --------- laporan Ketua --------- */
+.lap-sub {
+  padding: 12px 22px 9px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .8px; color: var(--e-abu); border-top: 1px solid var(--e-garis);
+}
+.lap-saldo { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.lap-saldo > div { display: flex; flex-direction: column; gap: 3px; }
+.lap-saldo span { font-size: 12.4px; color: var(--e-abu); }
+.lap-saldo b { font-size: 23px; font-weight: 800; letter-spacing: -.4px; }
+.lap-saldo small { font-size: 12px; color: var(--e-abu); }
+.laporan .panel { margin-bottom: 20px; }
+.laporan .angka { white-space: nowrap; }
+
+/* --------- cetak ---------
+   Yang dicetak hanya isi halaman. Sidebar, tombol, dan kolom pencarian
+   tak berguna di atas kertas, dan bayangan hanya menghabiskan tinta. */
+@media print {
+  @page { margin: 14mm; }
+  body { background: #fff !important; }
+  .sidebar, .tombol-sidebar, .topbar-aksi, .toast-erp-tempat, .tirai-erp,
+  .btn, .ikon-aksi, .cari-org, .pilih-saring, .tab-bar, .notis, .bilah-pilih,
+  .kol-pilih, .kol-aksi { display: none !important; }
+  .tata { display: block !important; }
+  .konten { margin: 0 !important; padding: 0 !important; width: auto !important; }
+  .topbar { position: static !important; border: 0 !important; padding: 0 0 10px !important; background: transparent !important; }
+  .halaman { padding: 0 !important; }
+  .panel, .kartu, .stat { box-shadow: none !important; break-inside: avoid; }
+  .laporan .panel { break-inside: auto; }
+  .tabel-bungkus { overflow: visible !important; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  .grid-stat { grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
+  .stat::after, .stat::before { display: none !important; }
+  .lencana, .bar-maju, .bar-maju span, .stat-ik { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

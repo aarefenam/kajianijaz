@@ -6682,73 +6682,157 @@ HAL['kategori-akun'].judul = () => ['Kategori & Akun', 'Penggolongan transaksi d
 /* ============================================================
    LAPORAN & RINGKASAN
    ============================================================ */
+/* Laporan Ketua merangkum SELURUH organisasi, bukan hanya program
+   kerja: keanggotaan, kajian, karya tulis, keuangan, pencapaian, dan
+   evaluasi. Setiap angka dihitung dari koleksi yang sama dengan ruang
+   kerja PJ-nya — tak ada angka yang diketik di sini — sehingga laporan
+   ini tak pernah berselisih dengan halaman asalnya.
+
+   Halamannya sekaligus naskah cetak: tombol Cetak memanggil pencetak
+   peramban, dan lembar gaya cetak menyingkirkan sidebar serta tombol. */
 HAL.laporan = () => {
   const d = Store.db;
   const keg = d.kaleidoskop;
-  const hitung = (s) => keg.filter((k) => k.status === s).length;
+  const hitung = (st) => keg.filter((k) => k.status === st).length;
   const rampung = hitung('selesai');
   const persen = keg.length ? Math.round((rampung / keg.length) * 100) : 0;
+  const bisaKas = RBAC.can(U, 'keuangan.report');
 
-  const box = el('<div></div>');
+  const kajianSelesai = d.kajian.filter((k) => statusKajian(k) === 'selesai');
+  const rataHadir = (daftar) => (daftar.length
+    ? Math.round(daftar.reduce((j, k) => j + hadirKajian(k).persen, 0) / daftar.length) : 0);
+  const anggotaAktif = d.users.filter((u) => u.status === 'aktif');
+  const terbit = d.artikel.filter((a) => a.status === 'terbit');
+  const saldo = bisaKas ? saldoTotal() : null;
 
-  box.appendChild(el(`<div class="grid-stat">
-    ${[
-      { ik: I.grup,    n: d.pengurus.length,    l: 'Pengurus aktif',            w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
-      { ik: I.orang,   n: d.koordinator.length, l: 'Koordinator angkatan',      w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
-      { ik: I.agenda,  n: `${rampung}/${keg.length}`, l: 'Program kerja terlaksana', w: 'rgba(240,149,30,.14)', wc: '#B87310' },
-      { ik: I.piala,   n: d.pencapaian.length,  l: 'Pencapaian tercatat',       w: 'rgba(199,122,43,.14)', wc: '#96591C' },
-      { ik: I.obrolan, n: d.evaluasi.length,    l: 'Catatan evaluasi',          w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
-    ].map((s) => `<div class="stat" style="--w:${s.w};--wc:${s.wc}">
-      <div class="stat-ik">${s.ik}</div>
-      <div class="stat-nilai">${s.n}</div>
-      <div class="stat-label">${esc(s.l)}</div></div>`).join('')}
-  </div>`));
+  const box = el('<div class="laporan"></div>');
+  const bagian = (judul, ket, isi) => {
+    const p = el(`<div class="panel"><div class="panel-kepala"><h3>${esc(judul)}</h3>
+      <span class="ket">${ket}</span></div></div>`);
+    p.appendChild(typeof isi === 'string' ? el(isi) : isi);
+    box.appendChild(p);
+    return p;
+  };
+  const tabel = (kepala, baris, kosong) => `<div class="tabel-bungkus"><table>
+    <thead><tr>${kepala.map((h) => `<th${h === 'No' ? ' class="kol-no"' : ''}>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${baris.length ? baris.map((r) => `<tr>${r.map((c, i) => `<td${kepala[i] === 'No' ? ' class="kol-no"' : ''}>${c}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="${kepala.length}" style="color:var(--e-abu)">${esc(kosong)}</td></tr>`}</tbody></table></div>`;
 
-  box.appendChild(el(`<div class="panel">
-    <div class="panel-kepala"><h3>Kemajuan Program Kerja</h3>
-      <span class="ket">${persen}% dari ${keg.length} kegiatan sudah terlaksana</span>
-      <div class="kanan"><button class="btn btn-garis btn-kecil" data-cetak>${I.unduh} Cetak Laporan</button></div>
-    </div>
-    <div class="panel-isi">
-      <div class="bar-maju" style="margin-bottom:16px"><span style="width:${persen}%"></span></div>
-      <div style="display:flex;gap:26px;flex-wrap:wrap">
-        ${Object.entries(STATUS_KEG).map(([k, s]) => `<div>
-          <div style="font-size:22px;font-weight:800;line-height:1.2">${hitung(k)}</div>
-          <span class="lencana ${s.c}">${s.l}</span></div>`).join('')}
-      </div>
-    </div></div>`));
+  /* --- kepala laporan --- */
+  box.appendChild(el(`<div class="panel lap-kepala"><div class="panel-kepala">
+    <div><h3>Laporan Kepengurusan ${esc(Store.cms.situs.nama)}</h3>
+      <span class="ket">Keadaan per ${esc(tglRingkas())} · disusun otomatis dari data ERP</span></div>
+    <div class="kanan"><button class="btn btn-garis btn-kecil" data-cetak>${I.unduh} Cetak Laporan</button></div>
+  </div></div>`));
   box.querySelector('[data-cetak]').onclick = () => window.print();
 
+  /* --- ringkasan --- */
+  box.appendChild(el(`<div class="grid-stat">
+    ${[
+      { ik: I.grup,     n: anggotaAktif.length,          l: 'Anggota aktif',             w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+      { ik: I.orang,    n: d.pengurus.length,            l: 'Pengurus',                  w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.agenda,   n: `${rampung}/${keg.length}`,   l: 'Program kerja terlaksana',  w: 'rgba(240,149,30,.14)', wc: '#B87310' },
+      { ik: I.kalender, n: kajianSelesai.length,         l: 'Kajian terlaksana',         w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.cekBulat, n: kajianSelesai.length ? `${rataHadir(kajianSelesai)}%` : '—', l: 'Rata-rata kehadiran kajian', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
+      { ik: I.dok,      n: terbit.length,                l: 'Artikel terbit',            w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+      { ik: I.piala,    n: d.pencapaian.length,          l: 'Pencapaian tercatat',       w: 'rgba(199,122,43,.14)', wc: '#96591C' },
+      { ik: I.obrolan,  n: d.evaluasi.filter((e) => e.status !== 'tuntas').length, l: 'Evaluasi belum tuntas', w: 'rgba(229,83,75,.12)', wc: '#B23E37' },
+    ].map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}">
+      <div class="stat-ik">${x.ik}</div>
+      <div class="stat-nilai">${x.n}</div>
+      <div class="stat-label">${esc(x.l)}</div></div>`).join('')}
+  </div>`));
+
+  /* --- 1. program kerja --- */
   const sisa = keg.filter((k) => k.status !== 'selesai').sort(urutProgram);
   const telat = sisa.filter(terlambatProgram).length;
+  const pk = bagian('1. Program Kerja', `${persen}% dari ${keg.length} kegiatan terlaksana${telat ? ` · ${telat} melewati tenggat` : ''}`,
+    `<div class="panel-isi">
+      <div class="bar-maju" style="margin-bottom:16px"><span style="width:${persen}%"></span></div>
+      <div style="display:flex;gap:26px;flex-wrap:wrap">
+        ${Object.entries(STATUS_KEG).map(([k, x]) => `<div>
+          <div style="font-size:22px;font-weight:800;line-height:1.2">${hitung(k)}</div>
+          <span class="lencana ${x.c}">${x.l}</span></div>`).join('')}
+        ${telat ? `<div><div style="font-size:22px;font-weight:800;line-height:1.2">${telat}</div>
+          <span class="lencana l-merah">Terlambat</span></div>` : ''}
+      </div></div>`);
   if (sisa.length) {
-    box.appendChild(el(`<div class="panel">
-      <div class="panel-kepala"><h3>Program Belum Rampung</h3>
-        <span class="ket">${sisa.length} kegiatan menuntut perhatian${telat ? ` · ${telat} melewati tenggat` : ''}</span></div>
-      <div class="tabel-bungkus"><table>
-        <thead><tr><th class="kol-no">No</th><th>Kegiatan / Program</th><th>Waktu</th><th>Penanggung Jawab</th><th>Status</th></tr></thead>
-        <tbody>${sisa.map((k, i) => `<tr><td class="kol-no">${i + 1}</td><td>${esc(k.kegiatan)}</td><td>${esc(waktuProgram(k))}</td>
-          <td>${esc(k.pjId ? namaPendek(k.pjId) : '—')}</td>
-          <td>${lencanaProgram(k)}</td>
-        </tr>`).join('')}</tbody></table></div></div>`));
+    pk.appendChild(el(`<div class="lap-sub">Program belum rampung</div>`));
+    pk.appendChild(el(tabel(['No', 'Kegiatan / Program', 'Waktu', 'Penanggung Jawab', 'Status'],
+      sisa.map((k, i) => [i + 1, esc(k.kegiatan), esc(waktuProgram(k)), esc(k.pjId ? namaPendek(k.pjId) : '—'), lencanaProgram(k)]), '')));
   }
 
-  box.appendChild(el(`<div class="panel">
-    <div class="panel-kepala"><h3>Evaluasi & Tindak Lanjut</h3>
-      <span class="ket">${d.evaluasi.length} catatan · ${d.evaluasi.filter((e) => e.status !== 'tuntas').length} belum tuntas${
-        d.evaluasi.some(lewatEval) ? ` · ${d.evaluasi.filter(lewatEval).length} lewat tenggat` : ''}</span></div>
-    <div class="tabel-bungkus"><table>
-      <thead><tr><th class="kol-no">No</th><th>Evaluasi</th><th>Masukan / Solusi</th><th>Penanggung Jawab</th><th>Tenggat</th><th>Status</th></tr></thead>
-      <tbody>${[...d.evaluasi].sort(urutEval).map((e, i) => `<tr><td class="kol-no">${i + 1}</td><td>${esc(e.evaluasi)}${
-          programEval(e) ? `<br><span class="sub-sel">${esc(programEval(e).kegiatan)}</span>` : ''}</td>
-        <td>${esc(e.masukan)}</td><td>${esc(e.pjId ? namaPendek(e.pjId) : '—')}</td>
-        <td>${e.tenggat ? tgl(e.tenggat) : '—'}</td><td>${lencanaEval(e)}</td></tr>`).join('')
-        || `<tr><td colspan="6" style="color:var(--e-abu)">Belum ada catatan evaluasi.</td></tr>`}</tbody>
-    </table></div></div>`));
+  /* --- 2. kajian --- */
+  const perAngkatan = angkatanTersedia().map((a) => {
+    const semua = d.kajian.filter((k) => k.angkatan === a);
+    const sls = semua.filter((k) => statusKajian(k) === 'selesai');
+    return [esc(a), semua.length, sls.length, sls.length ? `${rataHadir(sls)}%` : '—',
+      `${sls.filter((k) => k.notulensi).length}/${sls.length}`];
+  });
+  bagian('2. Kajian', `${d.kajian.length} kajian terjadwal · ${kajianSelesai.length} terlaksana`,
+    tabel(['Angkatan', 'Terjadwal', 'Terlaksana', 'Rata-rata Kehadiran', 'Bernotulen'], perAngkatan, 'Belum ada jadwal kajian.'));
+
+  /* --- 3. karya tulis --- */
+  const kategori = [...new Set(d.artikel.map((a) => a.kategori).filter(Boolean))].sort();
+  const kt = bagian('3. Karya Tulis Ilmiah', `${d.artikel.length} naskah · ${terbit.length} terbit`,
+    `<div class="panel-isi"><div style="display:flex;gap:26px;flex-wrap:wrap">
+      ${Object.entries(STATUS_ART).map(([k, x]) => `<div>
+        <div style="font-size:22px;font-weight:800;line-height:1.2">${d.artikel.filter((a) => a.status === k).length}</div>
+        <span class="lencana ${x.c}">${x.l}</span></div>`).join('')}
+    </div></div>`);
+  kt.appendChild(el(tabel(['Kategori', 'Terbit', 'Total Naskah', 'Dibaca'],
+    kategori.map((k) => { const x = d.artikel.filter((a) => a.kategori === k);
+      return [esc(k), x.filter((a) => a.status === 'terbit').length, x.length,
+        `${x.reduce((j, a) => j + Number(a.dilihat || 0), 0).toLocaleString('id-ID')}×`]; }), 'Belum ada naskah.')));
+
+  /* --- 4. keuangan --- */
+  if (bisaKas) {
+    const masuk = d.keuangan.filter((t) => t.jenis === 'masuk'), keluar = d.keuangan.filter((t) => t.jenis === 'keluar');
+    const bulan = [...new Set(d.keuangan.map((t) => t.tanggal.slice(0, 7)))].sort().reverse().slice(0, 6);
+    const ku = bagian('4. Keuangan', `${d.keuangan.length} transaksi · rupiah dan pound dicatat terpisah`,
+      `<div class="panel-isi lap-saldo">
+        <div><span>Saldo Rupiah</span><b>${rpFmt(saldo.rp)}</b>
+          <small>Masuk ${rpFmt(jumlahKas(masuk, 'rp'))} · Keluar ${rpFmt(jumlahKas(keluar, 'rp'))}</small></div>
+        <div><span>Saldo Pound Mesir</span><b>${egpFmt(saldo.egp)}</b>
+          <small>Masuk ${egpFmt(jumlahKas(masuk, 'egp'))} · Keluar ${egpFmt(jumlahKas(keluar, 'egp'))}</small></div>
+      </div>`);
+    ku.appendChild(el(`<div class="lap-sub">Arus kas ${bulan.length} bulan terakhir</div>`));
+    ku.appendChild(el(tabel(['Bulan', 'Masuk (Rp)', 'Keluar (Rp)', 'Selisih (Rp)', 'Masuk (EGP)', 'Keluar (EGP)'],
+      bulan.map((b) => { const x = kasBulan(b);
+        const mr = jumlahKas(x.filter((t) => t.jenis === 'masuk'), 'rp'), kr = jumlahKas(x.filter((t) => t.jenis === 'keluar'), 'rp');
+        return [`<b>${esc(namaBulan(b))}</b>`, rpFmt(mr), rpFmt(kr), rpFmt(mr - kr),
+          egpFmt(jumlahKas(x.filter((t) => t.jenis === 'masuk'), 'egp')), egpFmt(jumlahKas(x.filter((t) => t.jenis === 'keluar'), 'egp'))]
+          .map((sel) => `<span class="angka">${sel}</span>`); }),
+      'Belum ada transaksi.')));
+  }
+
+  /* --- 5. keanggotaan --- */
+  const angk = [...new Set(d.users.map((u) => u.angkatan).filter(Boolean))].sort((x, y) => urutAngkatan(x) - urutAngkatan(y));
+  const jml = (a, st) => d.users.filter((u) => u.angkatan === a && u.status === st).length;
+  bagian(`${bisaKas ? 5 : 4}. Keanggotaan`, `${d.users.length} orang terdaftar · ${anggotaAktif.length} aktif`,
+    tabel(['Angkatan', 'Aktif', 'Alumni', 'Nonaktif', 'Jumlah'],
+      angk.map((a) => [esc(a), jml(a, 'aktif'), jml(a, 'alumni'), jml(a, 'nonaktif'), d.users.filter((u) => u.angkatan === a).length]),
+      'Belum ada anggota.'));
+
+  /* --- 6. pencapaian --- */
+  bagian(`${bisaKas ? 6 : 5}. Pencapaian`, `${d.pencapaian.length} capaian tercatat`,
+    tabel(['No', 'Pencapaian', 'Tanggal'],
+      [...d.pencapaian].sort((x, y) => (y.tanggal || '').localeCompare(x.tanggal || ''))
+        .map((x, i) => [i + 1, esc(x.pencapaian), tgl(x.tanggal)]), 'Belum ada pencapaian yang dicatat.'));
+
+  /* --- 7. evaluasi --- */
+  bagian(`${bisaKas ? 7 : 6}. Evaluasi & Tindak Lanjut`,
+    `${d.evaluasi.length} catatan · ${d.evaluasi.filter((e) => e.status !== 'tuntas').length} belum tuntas${
+      d.evaluasi.some(lewatEval) ? ` · ${d.evaluasi.filter(lewatEval).length} lewat tenggat` : ''}`,
+    tabel(['No', 'Evaluasi', 'Masukan / Solusi', 'Penanggung Jawab', 'Tenggat', 'Status'],
+      [...d.evaluasi].sort(urutEval).map((e, i) => [i + 1,
+        `${esc(e.evaluasi)}${programEval(e) ? `<br><span class="sub-sel">${esc(programEval(e).kegiatan)}</span>` : ''}`,
+        esc(e.masukan), esc(e.pjId ? namaPendek(e.pjId) : '—'), e.tenggat ? tgl(e.tenggat) : '—', lencanaEval(e)]),
+      'Belum ada catatan evaluasi.'));
 
   return box;
 };
-HAL.laporan.judul = () => ['Laporan & Ringkasan', 'Rekapitulasi kepengurusan, program kerja, dan evaluasi.'];
+HAL.laporan.judul = () => ['Laporan & Ringkasan', 'Rekapitulasi seluruh organisasi: program, kajian, karya tulis, keuangan, dan evaluasi.'];
 
 /* ============================================================
    HALAMAN BERTAB — Pengaturan dan Pantau Divisi

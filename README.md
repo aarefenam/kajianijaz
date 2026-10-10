@@ -88,6 +88,13 @@ sendiri begitu program ditandai selesai. Teks waktu lama berupa bulan dan tahun
 ("Mei 2025") dibentangkan otomatis menjadi sebulan penuh; yang tak terbaca
 dibiarkan kosong dan ditandai *tanggal belum diisi*.
 
+**Laporan & Ringkasan** merangkum seluruh organisasi dalam satu halaman siap
+cetak: program kerja, kajian per angkatan, karya tulis, keuangan, keanggotaan,
+pencapaian, dan evaluasi. Tiap angkanya dihitung dari koleksi yang sama dengan
+ruang kerja PJ-nya — tak ada yang diketik di halaman ini. Tombol **Cetak
+Laporan** memanggil pencetak peramban; lembar gaya cetak menyingkirkan sidebar
+dan tombol. Bagian keuangan hanya tampil bagi pemegang `keuangan.report`.
+
 **Evaluasi & Tindak Lanjut** mencatat lebih dari temuan: tiap evaluasi berstatus
 (Terbuka, Dikerjakan, Tuntas), berpenanggung jawab, boleh bertenggat, dan boleh
 dikaitkan dengan satu program kerja. Yang belum tuntas tampil lebih dulu;
