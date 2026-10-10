@@ -362,7 +362,7 @@ const MENU = [
   { id: 'koordinator', label: 'Koordinator Kajian',           ikon: I.orang,   izin: ['organisasi.manage'] },
   { id: 'kaleidoskop', label: 'Program Kerja',                ikon: I.agenda,  izin: ['organisasi.manage'] },
   { id: 'pencapaian',  label: 'Pencapaian / Achievement',     ikon: I.piala,   izin: ['organisasi.manage'] },
-  { id: 'evaluasi',    label: 'Evaluasi & Masukan',           ikon: I.obrolan, izin: ['organisasi.manage'] },
+  { id: 'evaluasi',    label: 'Evaluasi & Tindak Lanjut',     ikon: I.obrolan, izin: ['organisasi.manage'] },
   { id: 'laporan',     label: 'Laporan & Ringkasan',          ikon: I.bagan,   izin: ['organisasi.report'] },
   { id: 'pantau-divisi', label: 'Pantau Divisi',              ikon: I.ukur,    izin: ['organisasi.manage'] },
 
@@ -731,16 +731,60 @@ function layarGantiSandi() {
    pernah melihat halaman tanpa tahu ia berada di cabang mana. */
 const menuTerbuka = new Set();
 
+/* Kelompok sidebar yang sedang dilipat. Pilihan ini kenyamanan tiap
+   orang di perambannya sendiri, jadi disimpan di sana — bukan di
+   database. Penyimpanan peramban boleh gagal (mode privat, disetel
+   mati); sidebar tetap bekerja, hanya tak mengingat. */
+const KUNCI_GRUP = 'erp.grupTertutup';
+const grupTertutup = new Set((() => {
+  try { return JSON.parse(localStorage.getItem(KUNCI_GRUP) || '[]'); } catch (_) { return []; }
+})());
+const simpanGrup = () => {
+  try { localStorage.setItem(KUNCI_GRUP, JSON.stringify([...grupTertutup])); } catch (_) { /* tak apa */ }
+};
+const kunciGrup = (label) => `${U?.role}:${label}`;
+let ruteSidebar = null;       // rute saat sidebar terakhir digambar
+
 function kerangka() {
   const ketua = ruangKetua();
   const khusus = ruangKhusus();
 
   /* Judul grup memakai gabungan izin anak-anaknya, sehingga grup yang
      seluruh menunya tersembunyi ikut hilang dengan sendirinya. */
-  const daftarMenu = ketua ? menuKetua() : MENU.filter(bolehMenu);
-  const menuHtml = daftarMenu.filter((m) =>
-    !m.tersembunyi && !m.tersembunyiBila?.()).map((m) => {
-    if (m.grup) return `<div class="sb-grup">${esc(m.grup)}</div>`;
+  const daftarMenu = (ketua ? menuKetua() : MENU.filter(bolehMenu))
+    .filter((m) => !m.tersembunyi && !m.tersembunyiBila?.());
+
+  /* Tiap judul kelompok adalah tombol lipat. Anggotanya: semua menu
+     sesudahnya sampai judul kelompok berikutnya. */
+  const kelompok = new Map();       // entri menu → judul kelompoknya
+  let judulKini = null;
+  daftarMenu.forEach((m) => { if (m.grup) judulKini = m; else if (judulKini) kelompok.set(m, judulKini); });
+  const anggota = (g) => daftarMenu.filter((m) => kelompok.get(m) === g);
+  const memuatRute = (m) => m.id === rute || (m.anak || []).some((a) => a.id === rute);
+
+  /* Berpindah ke halaman di dalam kelompok yang terlipat membukanya —
+     lewat pintasan dasbor atau alamat langsung, pengguna tak boleh
+     mendarat di halaman yang menunya tersembunyi. Melipatnya kembali
+     sesudah itu tetap hak pengguna. */
+  if (rute !== ruteSidebar) {
+    const g = kelompok.get(daftarMenu.find(memuatRute));
+    if (g && grupTertutup.delete(kunciGrup(g.grup))) simpanGrup();
+    ruteSidebar = rute;
+  }
+
+  const menuHtml = daftarMenu.map((m) => {
+    if (m.grup) {
+      const tutup = grupTertutup.has(kunciGrup(m.grup));
+      const isi = anggota(m);
+      const lonceng = tutup ? isi.reduce((j, x) => j + (x.lonceng?.() || 0), 0) : 0;
+      return `<button class="sb-grup${tutup ? ' tutup' : ''}${tutup && isi.some(memuatRute) ? ' berisi-aktif' : ''}"
+        data-grup="${esc(m.grup)}" aria-expanded="${!tutup}">
+        <span>${esc(m.grup)}</span>
+        ${lonceng ? `<span class="sb-lonceng">${lonceng}</span>` : ''}
+        <span class="sb-panah">${I.bawah}</span></button>`;
+    }
+    const induknya = kelompok.get(m);
+    if (induknya && grupTertutup.has(kunciGrup(induknya.grup))) return '';
     const n = m.lonceng?.() || 0;
     const anak = m.anak || [];
     const terbuka = anak.length > 0 && (menuTerbuka.has(m.id) || anak.some((a) => a.id === rute));
@@ -854,6 +898,13 @@ function kerangka() {
     };
   });
   n.querySelectorAll('.sb-anak button').forEach((b) => { b.onclick = () => kunjungi(b.dataset.rute); });
+  n.querySelectorAll('.sb-grup').forEach((b) => {
+    b.onclick = () => {
+      const k = kunciGrup(b.dataset.grup);
+      grupTertutup.has(k) ? grupTertutup.delete(k) : grupTertutup.add(k);
+      simpanGrup(); gambar();
+    };
+  });
   n.querySelector('#btnKeluar').onclick = () => konfirmasi('Keluar dari ERP', 'Anda yakin ingin mengakhiri sesi?',
     async () => { await Store.logout(); U = null; rute = 'dasbor'; gambar(); }, 'Keluar');
   n.querySelector('#btnSidebar').onclick = () => n.querySelector('#sidebar').classList.toggle('buka');
@@ -2299,6 +2350,25 @@ function waktuProgram(k) {
 /** Menurut tanggal mulai; yang belum bertanggal di akhir. */
 const urutProgram = (a, b) => (a.tglMulai || '9999').localeCompare(b.tglMulai || '9999');
 
+/* --- evaluasi: dari catatan menjadi tindak lanjut ---
+   Sebuah temuan baru berguna bila ada yang menindaklanjutinya. Tiap
+   evaluasi karena itu berstatus, berpenanggung jawab, dan boleh
+   bertenggat serta terkait satu program kerja. "Lewat tenggat"
+   diturunkan seperti "Terlambat" pada program — tak disimpan. */
+const STATUS_EVAL = {
+  terbuka   : { l: 'Terbuka',    c: 'l-biru'   },
+  dikerjakan: { l: 'Dikerjakan', c: 'l-kuning' },
+  tuntas    : { l: 'Tuntas',     c: 'l-hijau'  },
+};
+const lewatEval = (e) => e.status !== 'tuntas' && !!e.tenggat && e.tenggat < nowTanggal();
+const lencanaEval = (e) => (lewatEval(e)
+  ? '<span class="lencana l-merah">Lewat Tenggat</span>'
+  : `<span class="lencana ${STATUS_EVAL[e.status]?.c || 'l-abu'}">${esc(STATUS_EVAL[e.status]?.l || e.status || 'Terbuka')}</span>`);
+const programEval = (e) => Store.db.kaleidoskop.find((k) => k.id === e.programId);
+/** Yang belum tuntas lebih dulu; di dalamnya, catatan terbaru di atas. */
+const urutEval = (a, b) => (a.status === 'tuntas') - (b.status === 'tuntas')
+  || (b.tanggal || '').localeCompare(a.tanggal || '');
+
 const MODUL = {
   pengurus: {
     ruang: 'ketua', izin: 'organisasi.manage',
@@ -2396,19 +2466,33 @@ const MODUL = {
 
   evaluasi: {
     ruang: 'ketua', izin: 'organisasi.manage',
-    urut: 5, judul: 'Evaluasi & Masukan', satuan: 'Evaluasi', ikon: I.obrolan, lebar: true,
-    sub: 'Temuan lapangan dan tindak lanjut yang disepakati.',
+    urut: 5, judul: 'Evaluasi & Tindak Lanjut', satuan: 'Evaluasi', ikon: I.obrolan, lebar: true,
+    sub: 'Temuan lapangan, siapa yang menindaklanjuti, dan sampai di mana.',
     pratinjau: { awal: 3, akhir: 1 },
-    cari: (x) => `${x.evaluasi} ${x.masukan}`, tajuk: (x) => x.evaluasi,
+    susun: urutEval,
+    cari: (x) => `${x.evaluasi} ${x.masukan} ${STATUS_EVAL[x.status]?.l || ''} ${Store.namaUser(x.pjId)} ${programEval(x)?.kegiatan || ''}`,
+    tajuk: (x) => x.evaluasi,
     kolom: [
-      { l: 'Evaluasi',         isi: (x) => esc(x.evaluasi) },
+      { l: 'Evaluasi', isi: (x) => `${esc(x.evaluasi)}<br><span class="sub-sel">${
+        esc([programEval(x)?.kegiatan, `dicatat ${tgl(x.tanggal)}`].filter(Boolean).join(' · '))}</span>` },
       { l: 'Masukan / Solusi', isi: (x) => esc(x.masukan) },
-      { l: 'Tanggal',          kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
+      { l: 'Penanggung Jawab', isi: (x) => esc(x.pjId ? namaPendek(x.pjId) : '—') },
+      { l: 'Tenggat', kelas: 'utuh', isi: (x) => (x.tenggat ? tgl(x.tenggat) : '—') },
+      { l: 'Status',  isi: lencanaEval },
     ],
     form: [
       { k: 'evaluasi', l: 'Poin Evaluasi', wajib: true, jenis: 'area', ph: 'Anggota sering telat hadir kajian' },
       { k: 'masukan',  l: 'Masukan / Solusi', wajib: true, jenis: 'area', ph: 'Langkah perbaikan yang disepakati' },
-      { k: 'tanggal',  l: 'Tanggal', jenis: 'tanggal', wajib: true },
+      { k: 'tanggal',  l: 'Tanggal Dicatat', jenis: 'tanggal', wajib: true },
+      { k: 'programId', l: 'Program Terkait', jenis: 'pilih',
+        pilihan: () => [{ v: '', l: '— tidak terkait program tertentu —' },
+          ...[...Store.db.kaleidoskop].sort(urutProgram).map((k) => ({ v: k.id, l: `${k.kegiatan} (${waktuProgram(k)})` }))] },
+      { k: 'pjId',     l: 'Penanggung Jawab Tindak Lanjut', jenis: 'pilih',
+        pilihan: () => [{ v: '', l: '— belum ditentukan —' }, ...pilihAnggota()] },
+      { k: 'tenggat',  l: 'Tenggat', jenis: 'tanggal', bawaan: '',
+        bantu: 'Boleh dikosongkan. Bila diisi, evaluasi yang melewatinya dan belum tuntas ditandai Lewat Tenggat.' },
+      { k: 'status',   l: 'Status Tindak Lanjut', jenis: 'pilih', bawaan: 'terbuka',
+        pilihan: Object.entries(STATUS_EVAL).map(([v, x]) => ({ v, l: x.l })) },
     ],
   },
 };
@@ -6595,11 +6679,15 @@ HAL.laporan = () => {
 
   box.appendChild(el(`<div class="panel">
     <div class="panel-kepala"><h3>Evaluasi & Tindak Lanjut</h3>
-      <span class="ket">${d.evaluasi.length} catatan terkumpul</span></div>
+      <span class="ket">${d.evaluasi.length} catatan · ${d.evaluasi.filter((e) => e.status !== 'tuntas').length} belum tuntas${
+        d.evaluasi.some(lewatEval) ? ` · ${d.evaluasi.filter(lewatEval).length} lewat tenggat` : ''}</span></div>
     <div class="tabel-bungkus"><table>
-      <thead><tr><th>Evaluasi</th><th>Masukan / Solusi</th><th>Tanggal</th></tr></thead>
-      <tbody>${d.evaluasi.map((e) => `<tr><td>${esc(e.evaluasi)}</td><td>${esc(e.masukan)}</td><td>${tgl(e.tanggal)}</td></tr>`).join('')
-        || `<tr><td colspan="3" style="color:var(--e-abu)">Belum ada catatan evaluasi.</td></tr>`}</tbody>
+      <thead><tr><th class="kol-no">No</th><th>Evaluasi</th><th>Masukan / Solusi</th><th>Penanggung Jawab</th><th>Tenggat</th><th>Status</th></tr></thead>
+      <tbody>${[...d.evaluasi].sort(urutEval).map((e, i) => `<tr><td class="kol-no">${i + 1}</td><td>${esc(e.evaluasi)}${
+          programEval(e) ? `<br><span class="sub-sel">${esc(programEval(e).kegiatan)}</span>` : ''}</td>
+        <td>${esc(e.masukan)}</td><td>${esc(e.pjId ? namaPendek(e.pjId) : '—')}</td>
+        <td>${e.tenggat ? tgl(e.tenggat) : '—'}</td><td>${lencanaEval(e)}</td></tr>`).join('')
+        || `<tr><td colspan="6" style="color:var(--e-abu)">Belum ada catatan evaluasi.</td></tr>`}</tbody>
     </table></div></div>`));
 
   return box;

@@ -58,7 +58,7 @@ kelompok yang masing-masing menjawab satu pertanyaan:
 | Kelompok | Pertanyaan | Isi |
 |----------|------------|-----|
 | **Putuskan** | Apa yang menunggu keputusan saya? | Persetujuan Website, Tinjau Artikel, Kotak Masuk |
-| **Pantau** | Bagaimana jalannya organisasi? | Program Kerja, Evaluasi & Masukan, Pencapaian, Pantau Divisi, Laporan |
+| **Pantau** | Bagaimana jalannya organisasi? | Program Kerja, Evaluasi & Tindak Lanjut, Pencapaian, Pantau Divisi, Laporan |
 | **Struktur** | Siapa memegang apa? | Data Anggota, Data Pengurus, Koordinator Kajian, Hak Akses |
 | **Sistem** | Pengaturan yang jarang disentuh | Pengaturan |
 
@@ -77,13 +77,22 @@ sendiri begitu program ditandai selesai. Teks waktu lama berupa bulan dan tahun
 ("Mei 2025") dibentangkan otomatis menjadi sebulan penuh; yang tak terbaca
 dibiarkan kosong dan ditandai *tanggal belum diisi*.
 
+**Evaluasi & Tindak Lanjut** mencatat lebih dari temuan: tiap evaluasi berstatus
+(Terbuka, Dikerjakan, Tuntas), berpenanggung jawab, boleh bertenggat, dan boleh
+dikaitkan dengan satu program kerja. Yang belum tuntas tampil lebih dulu;
+*Lewat Tenggat* diturunkan dari tenggatnya, seperti *Terlambat* pada program.
+
+Judul tiap kelompok di sidebar — pada semua peran — adalah tombol lipat. Saat
+terlipat ia memikul jumlah lonceng anggotanya, dan berpindah ke halaman di
+dalamnya membukanya kembali. Pilihan lipat disimpan di peramban tiap orang.
+
 Dasbor dibuka dengan **Menunggu Keputusan Anda** — tiga antrean kelompok
 Putuskan beserta jumlahnya, dihitung dengan cara yang sama dengan lonceng di
 sidebar — lalu **Program Kerja Berjalan**: kemajuan periode dan program yang
 belum rampung.
 
 Di bawahnya lima daftar kepengurusan — Data Pengurus, Koordinator Kajian,
-Program Kerja, Pencapaian, dan Evaluasi & Masukan. Seluruh dasbor **hanya etalase
+Program Kerja, Pencapaian, dan Evaluasi & Tindak Lanjut. Seluruh dasbor **hanya etalase
 pintasan**; tidak ada data yang ditulis dari sana. Kartunya memangkas isi
 (beberapa baris awal, tanda `…`, lalu baris terakhir), dan setiap aksi — Tambah
 Data, sunting, hapus, maupun centang Selesai — membuka dulu halaman modulnya,

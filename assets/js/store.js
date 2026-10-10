@@ -151,6 +151,7 @@ function migrasiBentuk(tersimpan) {
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
   tanggaliProgram(tersimpan);
+  lengkapiEvaluasi(tersimpan);
   bubuhiIdAnggota(tersimpan);
   petakanRoleLama(tersimpan);
   petakanFontLama(tersimpan);
@@ -484,6 +485,19 @@ function tanggaliProgram(tersimpan) {
     k.pjId = k.pjId || '';
     k.divisi = k.divisi || '';
     k.catatan = k.catatan || '';
+  });
+}
+
+/* Evaluasi dahulu berhenti sebagai catatan. Kini ia berstatus dan
+   berpenanggung jawab; catatan lama dianggap masih terbuka, sebab tak
+   ada yang pernah mencatat bahwa ia sudah ditindaklanjuti. */
+function lengkapiEvaluasi(tersimpan) {
+  (tersimpan.evaluasi || []).forEach((e) => {
+    if (e.status !== undefined) return;
+    e.status = 'terbuka';
+    e.programId = e.programId || '';
+    e.pjId = e.pjId || '';
+    e.tenggat = e.tenggat || '';
   });
 }
 
