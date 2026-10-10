@@ -130,7 +130,7 @@ tugas:
 | Kelompok | Pertanyaan | Isi |
 |----------|------------|-----|
 | **Tindak Lanjuti** | Apa yang menunggu saya? | Kotak Masuk, Surat Masuk, Notulen & Presensi |
-| **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan |
+| **Persuratan** | Surat apa yang kami terbitkan? | Surat Internal, Eksternal, Keputusan, Templat Surat |
 | **Dokumen** | Dokumen resmi apa yang kami pegang? | Sertifikat, Tanda Tangan, Arsip Kepenulisan |
 | **Keanggotaan** | Siapa anggota kami? | Data Anggota, Data Alumni |
 | **Sistem** | Yang jarang disentuh | Pengaturan (Editor Halaman, Persetujuan, Log) |
@@ -152,6 +152,27 @@ berupa lima jenis SK, yang bisa dibentangkan dari sidebar maupun dari ubinnya.
 Kategori *Surat Keluar* dilebur: surat yang diterbitkan organisasi cukup
 dibedakan Internal dan Eksternal. Isi kategori lamanya hanya data contoh dan
 dibuang saat data dimuat.
+
+**Surat disusun dari blok.** Tiap surat Internal, Eksternal, dan Keputusan
+adalah larik blok — Kop Surat, Nomor & Perihal, Tempat & Tanggal, Tujuan, Isi,
+Tanda Tangan, Garis, Jarak — yang dapat disisipkan di mana pun, disunting,
+diurutkan, dan dibuang di halaman **Susun Surat**, dengan lembar A4 di
+sebelahnya yang menggambar ulang seketika. Bloknya disimpan pada arsip surat
+itu sendiri (`surat.blok`): menambah surat langsung membuka penyusunnya, jadi
+setiap surat yang disusun sudah bernomor dan sudah tercatat di arsip.
+
+- **Templat Surat** (`templatSurat`) adalah susunan blok yang disalin ke surat
+  baru. Mengubah templat tidak mengubah surat yang sudah terbit.
+- Blok Tanda Tangan mengambil sampai tiga penandatangan dari Kumpulan Tanda
+  Tangan. Penanda `{{nomor}}`, `{{perihal}}`, `{{tujuan}}`, dan `{{tanggal}}`
+  pada isi diganti data suratnya.
+- **Unduh PDF** memakai pencetak peramban ("Simpan sebagai PDF") pada kertas A4
+  — tanpa pustaka PDF dan tanpa perubahan server.
+- Tata letak lembarnya masih sementara, menunggu templat resmi organisasi.
+
+**Surat Masuk** tidak disusun, melainkan ditindaklanjuti: ia berpenanggung
+jawab, bertenggat, dan ditandai *Lewat Tenggat* bila masih berstatus Diterima
+sesudah tenggatnya. Semua surat dapat dilampiri gambar pindaian.
 
 **Nomor surat dan sertifikat terisi otomatis.** Polanya
 `URUT/KODE/BULAN-ROMAWI/TAHUN` — `013/AI/VI/2025` — dengan kode `AI` (internal),

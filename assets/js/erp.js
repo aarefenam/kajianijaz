@@ -383,6 +383,8 @@ const MENU = [
       { id: 'sk-alumni',         label: 'SK Alumni'         },
     ] },
   { id: 'surat-masuk',  label: 'Surat Masuk',  ikon: I.baki,   izin: ['sekretariat.manage'] },
+  { id: 'templat-surat', label: 'Templat Surat', ikon: I.layout, izin: ['sekretariat.manage'] },
+  { id: 'susun-surat',   label: 'Susun Surat',   ikon: I.dok,    izin: ['sekretariat.manage'], tersembunyi: true },
 
   { grup: 'Dokumen & Arsip', izin: ['sertifikat.manage', 'ttd.manage'] },
   { id: 'sertifikat', label: 'Sertifikat',            ikon: I.dok,  izin: ['sertifikat.manage'] },
@@ -567,6 +569,8 @@ const MENU_SEKRETARIS = [
   { id: 'surat-internal' },
   { id: 'surat-eksternal' },
   { id: 'surat-keputusan' },
+  { id: 'templat-surat' },
+  { id: 'susun-surat' },
   { grup: 'Dokumen' },
   { id: 'sertifikat' },
   { id: 'ttd' },
@@ -2660,11 +2664,18 @@ function ikatNomor(isi, item, hitung) {
   ['tanggal', 'jenis'].forEach((k) => isi.querySelector(`[data-k="${k}"]`)?.addEventListener('change', segarkan));
 }
 
+/** Surat masuk yang baru diterima dan tenggat tindak lanjutnya terlewat. */
+const lewatSurat = (x) => x.status === 'diterima' && !!x.tenggat && x.tenggat < nowTanggal();
+
 const lencanaStatus = (v) =>
   `<span class="lencana ${STATUS_SURAT[v]?.c || 'l-abu'}">${esc(STATUS_SURAT[v]?.l || v)}</span>`;
 
 /** Cetakan satu modul surat. `saring` menentukan irisan `db.surat`-nya. */
 function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, saring, bawaanBaru, kolomSk }) {
+  /* Surat masuk diterima, bukan disusun: ia berlampiran pindaian dan
+     bertindak lanjut. Tiga kategori lainnya diterbitkan organisasi,
+     jadi dapat disusun dari blok dan diunduh sebagai PDF. */
+  const masuk = bawaanBaru.kategori === 'masuk';
   return {
     ruang: 'sekretaris', izin: 'sekretariat.manage', koleksi: 'surat',
     judul, satuan, sub: ket, ket, ikon, warna,
@@ -2672,7 +2683,21 @@ function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, sarin
     bawaanBaru,
     sesudahForm: (isi, item) => ikatNomor(isi, item, (f) =>
       nomorBerikut(Store.db.surat, KODE_SURAT[bawaanBaru.kategori], f.querySelector('[data-k="tanggal"]').value)),
-    rapikan: (d) => tolakNomorKembar(Store.db.surat, d, 'surat'),
+    rapikan: (d) => {
+      tolakNomorKembar(Store.db.surat, d, 'surat');
+      /* Surat baru lahir dengan blok salinan templatnya — salinan, supaya
+         mengubah templat kelak tak mengubah surat yang sudah terbit. */
+      if (!masuk && !d.id) return { ...d, blok: blokTemplat(d.templatId) };
+      return d;
+    },
+    ...(masuk ? {} : {
+      aksiLain: [{ ikon: I.dok, judul: 'Susun surat & unduh PDF', klik: (x) => bukaSusun('surat', x.id) }],
+      sesudahSimpan: (d, baru) => {
+        if (!baru) return;
+        const x = Store.db.surat.find((r) => nomorBaku(r.nomor) === nomorBaku(d.nomor));
+        if (x) bukaSusun('surat', x.id);
+      },
+    }),
     cari: (x) => `${x.nomor} ${x.perihal} ${x.tujuan}`,
     tajuk: (x) => x.perihal,
     pratinjau: { awal: 3, akhir: 1 },
@@ -2682,7 +2707,10 @@ function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, sarin
       ...(kolomSk ? [{ l: 'Jenis SK', isi: (x) => esc(JENIS_SK[x.jenisSk] || '—') }] : []),
       { l: labelPihak, isi: (x) => esc(x.tujuan) },
       { l: 'Tanggal', kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
-      { l: 'Status',  isi: (x) => lencanaStatus(x.status) },
+      ...(masuk ? [{ l: 'Tindak Lanjut', penuh: true, isi: (x) => `${esc(x.pjId ? namaPendek(x.pjId) : '—')}${
+        x.tenggat ? `<br><span class="sub-sel${lewatSurat(x) ? ' perlu' : ''}">tenggat ${tgl(x.tenggat)}</span>` : ''}` }] : []),
+      { l: 'Status',  isi: (x) => (masuk && lewatSurat(x) ? '<span class="lencana l-merah">Lewat Tenggat</span>' : lencanaStatus(x.status)) },
+      { l: 'Lampiran', penuh: true, isi: () => '', pasang: selGambar('lampiran', 'perihal', (x) => x.nomor) },
     ],
     form: [
       { k: 'nomor',   l: 'Nomor Surat', wajib: true, ph: '001/AI/VI/2025',
@@ -2695,6 +2723,18 @@ function modulSurat({ judul, satuan, ket, ikon, warna, labelPihak, status, sarin
       { k: 'tanggal', l: 'Tanggal', jenis: 'tanggal', wajib: true },
       { k: 'status',  l: 'Status', jenis: 'pilih', bawaan: status[0],
         pilihan: status.map((v) => ({ v, l: STATUS_SURAT[v].l })) },
+      ...(masuk ? [
+        { k: 'pjId', l: 'Penanggung Jawab Tindak Lanjut', jenis: 'pilih',
+          pilihan: () => [{ v: '', l: '— belum ditentukan —' }, ...pilihAnggota()] },
+        { k: 'tenggat', l: 'Tenggat Tindak Lanjut', jenis: 'tanggal', bawaan: '',
+          bantu: 'Boleh dikosongkan. Surat berstatus Diterima yang melewatinya ditandai Lewat Tenggat.' },
+      ] : [
+        { k: 'templatId', l: 'Templat Surat', jenis: 'pilih', hanyaBaru: true,
+          pilihan: () => Store.db.templatSurat.map((t) => ({ v: t.id, l: t.nama })),
+          bantu: 'Susunan blok awal surat ini. Sesudah disimpan, penyusun surat langsung terbuka.' },
+      ]),
+      { k: 'lampiran', l: masuk ? 'Pindaian Surat' : 'Lampiran', jenis: 'gambar',
+        bantu: masuk ? 'Foto atau pindaian surat yang diterima.' : 'Foto atau pindaian surat bertanda tangan basah, bila ada.' },
     ],
   };
 }
@@ -2730,6 +2770,31 @@ Object.assign(MODUL, {
     status: ['diterima', 'ditindaklanjuti', 'diarsipkan'],
     saring: kat('masuk'), bawaanBaru: { kategori: 'masuk' },
   }),
+
+  'templat-surat': {
+    ruang: 'sekretaris', izin: 'sekretariat.manage', koleksi: 'templatSurat',
+    judul: 'Templat Surat', satuan: 'Templat', ikon: I.layout,
+    ket: 'Susunan blok siap pakai untuk surat baru',
+    sub: 'Susunan blok — kop, isi, tanda tangan — yang disalin ke tiap surat baru.',
+    warna: ['rgba(124,92,214,.14)', '#5F45AE'],
+    cari: (x) => `${x.nama} ${x.ket || ''}`, tajuk: (x) => x.nama,
+    pratinjau: { awal: 3, akhir: 1 },
+    bawaanBaru: () => ({ blok: blokBawaan() }),
+    aksiLain: [{ ikon: I.dok, judul: 'Susun blok templat', klik: (x) => bukaSusun('templat', x.id) }],
+    sesudahSimpan: (d, baru) => {
+      if (!baru) return;
+      const x = Store.db.templatSurat.find((t) => t.nama === d.nama);
+      if (x) bukaSusun('templat', x.id);
+    },
+    kolom: [
+      { l: 'Nama Templat', isi: (x) => `<b>${esc(x.nama)}</b>${x.ket ? `<br><span class="sub-sel">${esc(x.ket)}</span>` : ''}` },
+      { l: 'Susunan Blok', isi: (x) => esc((x.blok || []).map((b) => BLOK_SURAT[b.jenis]?.l || b.jenis).join(' → ')) },
+    ],
+    form: [
+      { k: 'nama', l: 'Nama Templat', wajib: true, ph: 'Surat Undangan' },
+      { k: 'ket',  l: 'Keterangan', ph: 'Dipakai untuk undangan rapat dan kegiatan' },
+    ],
+  },
 
   sertifikat: {
     ruang: 'sekretaris', izin: 'sertifikat.manage',
@@ -2902,7 +2967,7 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
     <thead><tr>
       <th class="kol-no">No.</th>
       ${kolom.map((c) => `<th class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${esc(c.l)}</th>`).join('')}
-      ${aksi ? '<th class="kol-aksi">Aksi</th>' : ''}
+      ${aksi ? `<th class="kol-aksi${m.aksiLain ? ' lebar' : ''}">Aksi</th>` : ''}
     </tr></thead><tbody></tbody></table></div>`);
   const tb = bungkus.querySelector('tbody');
 
@@ -2916,13 +2981,17 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
     const tr = el(`<tr>
       <td class="kol-no">${b.no}</td>
       ${kolom.map((c) => `<td class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${c.isi(b.x)}</td>`).join('')}
-      ${aksi ? `<td class="kol-aksi"><div class="sel-aksi">
+      ${aksi ? `<td class="kol-aksi${m.aksiLain ? ' lebar' : ''}"><div class="sel-aksi">
+        ${(m.aksiLain || []).map((a, i) => `<button class="ikon-aksi" data-lain="${i}" title="${esc(a.judul)}" ${bisa ? '' : 'disabled'}>${a.ikon}</button>`).join('')}
         <button class="ikon-aksi sunting" title="Sunting" ${bisa ? '' : 'disabled'}>${I.sunting}</button>
         <button class="ikon-aksi hapus" title="Hapus" ${bisa ? '' : 'disabled'}>${I.hapus}</button>
       </div></td>` : ''}
     </tr>`);
 
     kolom.forEach((c, i) => c.pasang?.(tr.children[i + 1], b.x, { nama, pratinjau }));
+    tr.querySelectorAll('[data-lain]').forEach((t) => {
+      t.onclick = () => m.aksiLain[Number(t.dataset.lain)].klik(b.x);
+    });
     tr.querySelector('.sunting')?.addEventListener('click', () => jalankan(() => formOrg(nama, b.x)));
     tr.querySelector('.hapus')?.addEventListener('click', () => jalankan(() => hapusOrg(nama, b.x)));
     tb.appendChild(tr);
@@ -3128,9 +3197,15 @@ function formOrg(nama, item) {
     return toast(`Role ${RBAC.roleLabel(U.role)} tidak berwenang mengubah data ini.`, true);
 
   const isi = el('<div></div>');
-  let lampiran = item?.lampiran || '';
+  /* Kolom gambar menyimpan ke kuncinya sendiri — `lampiran` pada surat,
+     `gambar` pada tanda tangan. Dulu nilai awalnya selalu dibaca dari
+     `item.lampiran`, sehingga menyunting tanda tangan diam-diam
+     mengosongkan berkasnya. */
+  const kunciGambar = m.form.find((f) => f.jenis === 'gambar')?.k;
+  let lampiran = (kunciGambar && item?.[kunciGambar]) || '';
+  const kolomForm = m.form.filter((f) => !(f.hanyaBaru && item));
 
-  m.form.forEach((f) => {
+  kolomForm.forEach((f) => {
     const nilaiAwal = item?.[f.k] ?? nilai(f.bawaan) ?? (f.jenis === 'tanggal' ? nowTanggal() : '');
     const g = el(`<div class="grup"><label>${esc(f.l)}${f.wajib ? ' <span style="color:var(--e-merah)">*</span>' : ''}</label></div>`);
 
@@ -3174,7 +3249,7 @@ function formOrg(nama, item) {
   kaki.querySelector('[data-s]').onclick = () => {
     const data = { id: item?.id, ...(item ? {} : nilai(m.bawaanBaru) || {}) };
     let kurang = '';
-    m.form.forEach((f) => {
+    kolomForm.forEach((f) => {
       const mentah = f.jenis === 'gambar' ? lampiran : isi.querySelector(`[data-k="${f.k}"]`).value.trim();
       if (f.wajib && !mentah) kurang = kurang || f.l;
       data[f.k] = f.jenis === 'angka' ? Number(mentah || 0) : mentah;
@@ -3184,6 +3259,7 @@ function formOrg(nama, item) {
       const rapi = m.rapikan ? m.rapikan(data) : data;
       if (m.simpan) m.simpan(rapi); else Store.simpanKoleksi(U, m.koleksi || nama, rapi);
       tutupModal(); toast('Data tersimpan.'); gambar();
+      m.sesudahSimpan?.(rapi, !item);
     });
   };
 }
@@ -6954,6 +7030,320 @@ HAL.laporan = () => {
   return box;
 };
 HAL.laporan.judul = () => ['Laporan & Ringkasan', 'Rekapitulasi seluruh organisasi: program, kajian, karya tulis, keuangan, dan evaluasi.'];
+
+/* ============================================================
+   PENYUSUN SURAT — surat dirangkai dari blok
+   ------------------------------------------------------------
+   Sebuah surat adalah larik blok: kop, nomor & perihal, tanggal,
+   tujuan, isi, tanda tangan. Tiap blok dapat disisipkan di mana pun,
+   disunting, diurutkan, dan dibuang — dan lembar di sebelahnya
+   menggambar ulang seketika.
+
+   Bloknya disimpan PADA arsip surat itu sendiri (`surat.blok`), jadi
+   setiap surat yang disusun adalah surat yang sudah bernomor dan sudah
+   tercatat; tak ada surat yang hidup di luar arsip. Templat hanyalah
+   susunan blok yang disalin saat surat dibuat.
+
+   Unduhan PDF memakai pencetak peramban: lembarnya dicetak apa adanya
+   pada kertas A4, dan "Simpan sebagai PDF" menghasilkan berkasnya.
+   Tak ada pustaka PDF dan tak ada yang berubah di server.
+
+   Tata letak lembar di sini masih sementara; ia akan disesuaikan
+   begitu templat resmi organisasi tersedia.
+   ============================================================ */
+const tglSurat = (t) => (t ? new Date(`${t}T00:00`).toLocaleDateString('id-ID',
+  { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+const barisHtml = (teks) => esc(teks).replace(/\n/g, '<br>');
+
+/** Ganti {{nomor}}, {{perihal}}, {{tujuan}}, {{tanggal}} dengan isi
+    suratnya. Pada templat belum ada surat, jadi penandanya dibiarkan. */
+function isiPengganti(teks, surat) {
+  return String(teks || '').replace(/\{\{\s*(nomor|perihal|tujuan|tanggal)\s*\}\}/g, (utuh, k) => {
+    if (!surat) return utuh;
+    return (k === 'tanggal' ? tglSurat(surat.tanggal) : surat[k]) || utuh;
+  });
+}
+
+const RATA_TEKS = [{ v: 'kiri', l: 'Rata kiri' }, { v: 'rata', l: 'Rata kiri-kanan' },
+  { v: 'tengah', l: 'Tengah' }, { v: 'kanan', l: 'Rata kanan' }];
+
+/* Tiap jenis blok: namanya, isi awalnya, kolom penyuntingnya, dan cara
+   menggambarnya di lembar. Menambah jenis blok cukup satu entri di sini. */
+const BLOK_SURAT = {
+  kop: {
+    l: 'Kop Surat',
+    baru: () => ({ logo: '', nama: `KAJIAN ${Store.cms.situs.nama}`.toUpperCase(),
+      baris: `${Store.cms.situs.naungan || ''}\n${[Store.cms.situs.email, Store.cms.situs.telepon].filter(Boolean).join(' · ')}` }),
+    bidang: [
+      { k: 'logo', l: 'Logo', jenis: 'gambar', bantu: 'Dikosongkan berarti memakai logo situs.' },
+      { k: 'nama', l: 'Nama Organisasi' },
+      { k: 'baris', l: 'Alamat & Kontak', jenis: 'area' },
+    ],
+    gambar: (b) => `<div class="ls-kop"><img src="${esc(b.logo || Store.cms.situs.logo)}" alt="">
+      <div><div class="ls-kop-nama">${esc(b.nama)}</div><div class="ls-kop-baris">${barisHtml(b.baris)}</div></div></div>`,
+  },
+  meta: {
+    l: 'Nomor & Perihal',
+    baru: () => ({ lampiran: '-' }),
+    bidang: [{ k: 'lampiran', l: 'Lampiran', bantu: 'Nomor dan perihal diambil dari arsip surat.' }],
+    gambar: (b, s) => `<table class="ls-meta"><tbody>
+      <tr><td>Nomor</td><td>:</td><td>${esc(s ? s.nomor : '{{nomor}}')}</td></tr>
+      <tr><td>Lampiran</td><td>:</td><td>${esc(b.lampiran || '-')}</td></tr>
+      <tr><td>Perihal</td><td>:</td><td><b>${esc(s ? s.perihal : '{{perihal}}')}</b></td></tr></tbody></table>`,
+  },
+  tanggal: {
+    l: 'Tempat & Tanggal',
+    baru: () => ({ tempat: 'Kairo' }),
+    bidang: [{ k: 'tempat', l: 'Tempat', bantu: 'Tanggalnya diambil dari arsip surat.' }],
+    gambar: (b, s) => `<p class="ls-kanan">${esc(b.tempat)}, ${esc(s ? tglSurat(s.tanggal) : '{{tanggal}}')}</p>`,
+  },
+  tujuan: {
+    l: 'Tujuan Surat',
+    baru: () => ({ teks: 'Kepada Yth.\n{{tujuan}}\ndi Tempat' }),
+    bidang: [{ k: 'teks', l: 'Tujuan', jenis: 'area' }],
+    gambar: (b, s) => `<p class="ls-tujuan">${barisHtml(isiPengganti(b.teks, s))}</p>`,
+  },
+  teks: {
+    l: 'Isi / Paragraf',
+    baru: () => ({ isi: '', rata: 'rata', tebal: 'tidak' }),
+    bidang: [
+      { k: 'isi', l: 'Isi', jenis: 'area', tinggi: 130,
+        bantu: 'Penanda {{nomor}}, {{perihal}}, {{tujuan}}, dan {{tanggal}} diganti isi suratnya.' },
+      { k: 'rata', l: 'Perataan', jenis: 'pilih', pilihan: RATA_TEKS },
+      { k: 'tebal', l: 'Huruf', jenis: 'pilih', pilihan: [{ v: 'tidak', l: 'Biasa' }, { v: 'ya', l: 'Tebal' }] },
+    ],
+    gambar: (b, s) => `<p class="ls-${esc(b.rata || 'rata')}${b.tebal === 'ya' ? ' ls-tebal' : ''}">${
+      barisHtml(isiPengganti(b.isi, s)) || '<span class="ls-kosong">Isi surat…</span>'}</p>`,
+  },
+  ttd: {
+    l: 'Tanda Tangan',
+    baru: () => ({ penanda: [], rata: 'kanan' }),
+    bidang: [
+      { k: 'penanda', l: 'Penandatangan', jenis: 'penanda',
+        bantu: 'Diambil dari Kumpulan Tanda Tangan. Paling banyak tiga, berjajar.' },
+      { k: 'rata', l: 'Letak', jenis: 'pilih',
+        pilihan: [{ v: 'kanan', l: 'Kanan' }, { v: 'kiri', l: 'Kiri' }, { v: 'tengah', l: 'Tengah / berjajar' }] },
+    ],
+    gambar: (b) => {
+      const orang = (b.penanda || []).map((id) => Store.db.tandaTangan.find((t) => t.id === id)).filter(Boolean);
+      if (!orang.length) return '<div class="ls-ttd ls-ttd-kanan"><div class="ls-ttd-orang"><span class="ls-kosong">Pilih penandatangan…</span></div></div>';
+      return `<div class="ls-ttd ls-ttd-${esc(b.rata || 'kanan')}">${orang.map((t) => `<div class="ls-ttd-orang">
+        <div>${esc(t.jabatan)}${t.divisi && t.divisi !== t.jabatan ? `<br>${esc(t.divisi)}` : ''}</div>
+        ${t.gambar ? `<img src="${esc(t.gambar)}" alt="">` : '<div class="ls-ttd-ruang"></div>'}
+        <div class="ls-ttd-nama">${esc(t.nama)}</div></div>`).join('')}</div>`;
+    },
+  },
+  garis: { l: 'Garis Pemisah', baru: () => ({}), bidang: [], gambar: () => '<hr class="ls-garis">' },
+  spasi: {
+    l: 'Jarak Kosong',
+    baru: () => ({ tinggi: 'sedang' }),
+    bidang: [{ k: 'tinggi', l: 'Tinggi', jenis: 'pilih',
+      pilihan: [{ v: 'kecil', l: 'Kecil' }, { v: 'sedang', l: 'Sedang' }, { v: 'besar', l: 'Besar' }] }],
+    gambar: (b) => `<div class="ls-spasi ls-spasi-${esc(b.tinggi || 'sedang')}"></div>`,
+  },
+};
+
+const blokBaru = (jenis) => ({ id: 'b' + Math.random().toString(36).slice(2, 9), jenis, ...BLOK_SURAT[jenis].baru() });
+
+/** Susunan awal bila tak ada templat sama sekali. */
+function blokBawaan() {
+  const ttd = Store.db.tandaTangan[0]?.id;
+  return [
+    blokBaru('kop'), blokBaru('garis'), blokBaru('tanggal'), blokBaru('meta'), blokBaru('tujuan'),
+    { ...blokBaru('teks'), isi: "Assalamu'alaikum warahmatullahi wabarakatuh," },
+    { ...blokBaru('teks'), isi: 'Sehubungan dengan {{perihal}}, dengan ini kami sampaikan …' },
+    { ...blokBaru('teks'), isi: "Demikian surat ini kami sampaikan. Atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nWassalamu'alaikum warahmatullahi wabarakatuh." },
+    { ...blokBaru('ttd'), penanda: ttd ? [ttd] : [] },
+  ];
+}
+/** Salinan blok sebuah templat, dengan id blok yang baru. */
+function blokTemplat(templatId) {
+  const t = Store.db.templatSurat.find((x) => x.id === templatId) || Store.db.templatSurat[0];
+  const asal = t?.blok?.length ? t.blok : blokBawaan();
+  return asal.filter((b) => BLOK_SURAT[b.jenis]).map((b) => ({ ...JSON.parse(JSON.stringify(b)), id: blokBaru(b.jenis).id }));
+}
+
+function lembarSurat(blok, surat) {
+  return `<div class="lembar-surat">${blok.filter((b) => BLOK_SURAT[b.jenis])
+    .map((b) => `<div class="ls-blok" data-blok="${esc(b.id)}">${BLOK_SURAT[b.jenis].gambar(b, surat)}</div>`).join('')
+    || '<p class="ls-kosong" style="text-align:center">Lembar kosong. Sisipkan blok dari panel kiri.</p>'}</div>`;
+}
+
+/* Yang sedang disusun. `kerja` salinan kerja bloknya: ia bertahan saat
+   halaman digambar ulang, dan baru menimpa arsip ketika disimpan. */
+let susun = null;       // { jenis: 'surat' | 'templat', id, kerja, kotor }
+
+function bukaSusun(jenis, id) {
+  const sumber = jenis === 'surat' ? Store.db.surat.find((x) => x.id === id) : Store.db.templatSurat.find((x) => x.id === id);
+  if (!sumber) return toast('Data tidak ditemukan.', true);
+  /* Surat lama belum punya blok: ia memulai dari templat pertama. */
+  const awal = sumber.blok?.length ? JSON.parse(JSON.stringify(sumber.blok)) : blokTemplat();
+  susun = { jenis, id, kerja: awal, kotor: !sumber.blok?.length, asal: rute };
+  rute = 'susun-surat'; location.hash = rute; gambar();
+}
+
+HAL['susun-surat'] = () => {
+  const sumber = susun && (susun.jenis === 'surat' ? Store.db.surat.find((x) => x.id === susun.id)
+    : Store.db.templatSurat.find((x) => x.id === susun.id));
+  if (!sumber) {
+    susun = null;
+    const kosong = el(`<div class="panel"><div class="kosong-erp">${I.kotak}<p>Belum ada surat yang dibuka</p>
+      <small>Buka sebuah surat dari daftarnya, lalu tekan ikon "Susun surat".</small>
+      <button class="btn btn-kecil" style="margin-top:14px">Buka Surat Internal</button></div></div>`);
+    kosong.querySelector('button').onclick = () => bukaModul('surat-internal');
+    return kosong;
+  }
+  const surat = susun.jenis === 'surat' ? sumber : null;
+  const blok = susun.kerja;
+  const kembali = () => bukaModul(susun.jenis === 'templat' ? 'templat-surat'
+    : surat.jenisSk && HAL[`sk-${surat.jenisSk}`] && susun.asal === `sk-${surat.jenisSk}` ? susun.asal : `surat-${surat.kategori}`);
+
+  const box = el(`<div class="ss">
+    <div class="ss-bilah">
+      <button class="btn btn-garis btn-kecil" data-kembali>${I.kiri || '←'} Kembali</button>
+      <div class="ss-judul"><b>${esc(surat ? surat.nomor : `Templat: ${sumber.nama}`)}</b>
+        <span>${esc(surat ? surat.perihal : 'Disalin ke tiap surat baru yang memilih templat ini')}</span></div>
+      <span class="ss-status" data-status></span>
+      <button class="btn btn-garis btn-kecil" data-simpan>Simpan</button>
+      ${surat ? `<button class="btn btn-lime btn-kecil" data-pdf>${I.unduh} Unduh PDF</button>` : ''}
+    </div>
+    <div class="ss-tata">
+      <div class="ss-kiri" data-kiri></div>
+      <div class="ss-kanan"><div class="ss-bingkai" data-bingkai></div></div>
+    </div></div>`);
+  const kiri = box.querySelector('[data-kiri]');
+  const bingkai = box.querySelector('[data-bingkai]');
+  const status = box.querySelector('[data-status]');
+
+  const tandai = (kotor) => {
+    susun.kotor = kotor;
+    status.textContent = kotor ? 'Belum disimpan' : 'Tersimpan';
+    status.classList.toggle('kotor', kotor);
+  };
+  const pratinjau = () => {
+    bingkai.innerHTML = lembarSurat(blok, surat);
+    const lembar = bingkai.firstElementChild;
+    /* Lembar selebar A4 dikecilkan agar muat di panelnya. */
+    requestAnimationFrame(() => {
+      const skala = Math.min(1, (bingkai.clientWidth - 2) / lembar.offsetWidth);
+      if (skala > 0) lembar.style.zoom = skala;
+    });
+  };
+  const ubah = () => { tandai(true); pratinjau(); };
+
+  const pilihSisip = (pada) => {
+    const sel = el(`<select class="ss-sisip"><option value="">＋ Sisipkan blok di sini…</option>
+      ${Object.entries(BLOK_SURAT).map(([k, d]) => `<option value="${k}">${esc(d.l)}</option>`).join('')}</select>`);
+    sel.onchange = () => { if (!sel.value) return; blok.splice(pada, 0, blokBaru(sel.value)); tandai(true); gambarKiri(); pratinjau(); };
+    return sel;
+  };
+
+  function kolomBlok(b, f) {
+    const g = el(`<div class="grup"><label>${esc(f.l)}</label></div>`);
+    if (f.jenis === 'area') {
+      const t = el(`<textarea style="min-height:${f.tinggi || 72}px"></textarea>`);
+      t.value = b[f.k] || ''; t.oninput = () => { b[f.k] = t.value; ubah(); };
+      g.appendChild(t);
+    } else if (f.jenis === 'pilih') {
+      const p = el(`<select>${f.pilihan.map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select>`);
+      p.value = b[f.k] ?? f.pilihan[0].v; p.onchange = () => { b[f.k] = p.value; ubah(); };
+      g.appendChild(p);
+    } else if (f.jenis === 'gambar') {
+      const k = el(`<div class="ss-gambar"><img alt=""><label class="btn btn-garis btn-kecil" style="cursor:pointer;margin:0">
+        ${I.gambar} Pilih Gambar<input type="file" accept="image/*" hidden></label>
+        <button class="btn btn-garis btn-kecil" data-lepas>Pakai logo situs</button></div>`);
+      const img = k.querySelector('img');
+      const segar = () => { img.src = b[f.k] || Store.cms.situs.logo; k.querySelector('[data-lepas]').hidden = !b[f.k]; };
+      const inp = k.querySelector('input');
+      inp.onchange = async () => {
+        const berkas = inp.files[0]; if (!berkas) return;
+        try { b[f.k] = await Store.unggahGambar(berkas, 600); segar(); ubah(); } catch (e) { toast(e.message, true); }
+        inp.value = '';
+      };
+      k.querySelector('[data-lepas]').onclick = () => { b[f.k] = ''; segar(); ubah(); };
+      segar(); g.appendChild(k);
+    } else if (f.jenis === 'penanda') {
+      const daftar = el('<div class="ss-penanda"></div>');
+      if (!Store.db.tandaTangan.length) daftar.appendChild(el('<span class="sub-sel">Kumpulan Tanda Tangan masih kosong.</span>'));
+      Store.db.tandaTangan.forEach((t) => {
+        const baris = el(`<label><input type="checkbox"> <span><b>${esc(t.nama)}</b> · ${esc(t.jabatan)}</span></label>`);
+        const c = baris.querySelector('input');
+        c.checked = (b[f.k] || []).includes(t.id);
+        c.onchange = () => {
+          const kini = (b[f.k] || []).filter((id) => id !== t.id);
+          if (c.checked) {
+            if (kini.length >= 3) { c.checked = false; return toast('Paling banyak tiga penandatangan dalam satu blok.', true); }
+            kini.push(t.id);
+          }
+          b[f.k] = kini; ubah();
+        };
+        daftar.appendChild(baris);
+      });
+      g.appendChild(daftar);
+    } else {
+      const i = el('<input type="text">');
+      i.value = b[f.k] || ''; i.oninput = () => { b[f.k] = i.value; ubah(); };
+      g.appendChild(i);
+    }
+    if (f.bantu) g.appendChild(el(`<div class="bantu">${esc(f.bantu)}</div>`));
+    return g;
+  }
+
+  function gambarKiri() {
+    kiri.replaceChildren(pilihSisip(0));
+    blok.forEach((b, i) => {
+      const d = BLOK_SURAT[b.jenis];
+      if (!d) return;
+      const kartu = el(`<div class="ss-blok">
+        <div class="ss-blok-kepala"><span class="ss-no">${i + 1}</span><b>${esc(d.l)}</b>
+          <button class="ikon-aksi" data-naik title="Naikkan" ${i === 0 ? 'disabled' : ''}>${I.atas || '↑'}</button>
+          <button class="ikon-aksi" data-turun title="Turunkan" ${i === blok.length - 1 ? 'disabled' : ''}>${I.bawah}</button>
+          <button class="ikon-aksi hapus" data-buang title="Buang blok">${I.hapus}</button></div>
+        <div class="ss-blok-isi"></div></div>`);
+      const isi = kartu.querySelector('.ss-blok-isi');
+      d.bidang.forEach((f) => isi.appendChild(kolomBlok(b, f)));
+      if (!d.bidang.length) isi.remove();
+      const pindah = (ke) => { blok.splice(ke, 0, blok.splice(i, 1)[0]); tandai(true); gambarKiri(); pratinjau(); };
+      kartu.querySelector('[data-naik]').onclick = () => pindah(i - 1);
+      kartu.querySelector('[data-turun]').onclick = () => pindah(i + 1);
+      kartu.querySelector('[data-buang]').onclick = () => { blok.splice(i, 1); tandai(true); gambarKiri(); pratinjau(); };
+      kiri.appendChild(kartu);
+      kiri.appendChild(pilihSisip(i + 1));
+    });
+  }
+
+  const simpan = () => aman(() => {
+    Store.simpanKoleksi(U, susun.jenis === 'surat' ? 'surat' : 'templatSurat', { id: susun.id, blok: JSON.parse(JSON.stringify(blok)) });
+    tandai(false);
+  });
+  box.querySelector('[data-simpan]').onclick = () => { if (simpan()) toast(surat ? 'Susunan surat tersimpan di arsip.' : 'Templat tersimpan.'); };
+  box.querySelector('[data-kembali]').onclick = () => (susun.kotor
+    ? konfirmasi('Tinggalkan penyusun', 'Perubahan yang belum disimpan akan hilang.', kembali, 'Tinggalkan')
+    : kembali());
+  box.querySelector('[data-pdf]')?.addEventListener('click', () => {
+    if (susun.kotor && !simpan()) return;
+    /* Nama berkas PDF mengikuti judul dokumen saat dicetak. */
+    const judulLama = document.title;
+    document.title = `${surat.nomor.replace(/\//g, '-')} ${surat.perihal}`.slice(0, 90);
+    document.body.classList.add('cetak-surat');
+    /* Tepi kertas surat berbeda dari laporan, jadi aturan @page-nya
+       dipasang hanya selama mencetak. */
+    const kertas = document.head.appendChild(Object.assign(document.createElement('style'),
+      { textContent: '@page { size: A4; margin: 18mm 20mm; }' }));
+    const usai = () => {
+      document.body.classList.remove('cetak-surat');
+      kertas.remove();
+      document.title = judulLama;
+      window.removeEventListener('afterprint', usai);
+    };
+    window.addEventListener('afterprint', usai);
+    window.print();
+  });
+
+  gambarKiri(); pratinjau(); tandai(susun.kotor);
+  return box;
+};
+HAL['susun-surat'].judul = () => ['Susun Surat', 'Rangkai surat dari blok, lalu unduh sebagai PDF.'];
 
 /* ============================================================
    HALAMAN BERTAB — Pengaturan dan Pantau Divisi

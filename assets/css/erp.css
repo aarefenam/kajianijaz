@@ -1413,6 +1413,77 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
   .fnt-baris { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
 
+/* --------- penyusun surat --------- */
+.t-org .kol-aksi.lebar { width: 112px; }
+.ss-bilah {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+  background: var(--e-panel); border: 1px solid var(--e-garis); border-radius: var(--e-radius);
+  padding: 12px 16px; box-shadow: var(--e-bayang);
+}
+.ss-judul { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.ss-judul b { font-size: 14.4px; }
+.ss-judul span { font-size: 12.2px; color: var(--e-abu); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-status { font-size: 12px; color: #4A7A1E; font-weight: 700; }
+.ss-status.kotor { color: #B87310; }
+.ss-tata { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 18px; align-items: start; }
+.ss-kiri { display: flex; flex-direction: column; gap: 8px; }
+.ss-sisip {
+  width: 100%; padding: 6px 10px; font-size: 12px; border-style: dashed; color: var(--e-abu);
+  background: transparent; border-radius: 9px; cursor: pointer;
+}
+.ss-sisip:hover { border-color: var(--e-lime); color: inherit; }
+.ss-blok { background: var(--e-panel); border: 1px solid var(--e-garis); border-radius: 12px; overflow: hidden; }
+.ss-blok-kepala { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px; background: #FAFBFA; }
+.ss-blok-kepala b { flex: 1; font-size: 13px; }
+.ss-no {
+  width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; flex: none;
+  background: rgba(140,198,63,.16); color: #4A7A1E; font-size: 11px; font-weight: 800;
+}
+.ss-blok-isi { padding: 12px; border-top: 1px solid var(--e-garis); }
+.ss-blok-isi .grup { margin-bottom: 10px; }
+.ss-blok-isi .grup:last-child { margin-bottom: 0; }
+.ss-blok-isi label { font-size: 11.6px; }
+.ss-gambar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ss-gambar img { width: 44px; height: 44px; object-fit: contain; border: 1px solid var(--e-garis); border-radius: 8px; background: #fff; }
+.ss-penanda { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow-y: auto; }
+.ss-penanda label { display: flex; align-items: flex-start; gap: 8px; font-size: 12.6px; font-weight: 500; margin: 0; cursor: pointer; }
+.ss-penanda input { width: auto; margin-top: 3px; }
+.ss-kanan { position: sticky; top: 14px; }
+.ss-bingkai { background: #E7EBE7; border-radius: var(--e-radius); padding: 16px; overflow: hidden; }
+@media (max-width: 980px) { .ss-tata { grid-template-columns: 1fr; } .ss-kanan { position: static; } }
+
+/* Lembar surat — selebar A4, memakai satuan cetak agar yang tampak di
+   layar sama dengan yang keluar dari pencetak. */
+.lembar-surat {
+  width: 210mm; min-height: 297mm; box-sizing: border-box; background: #fff; color: #111;
+  padding: 18mm 20mm; box-shadow: 0 2px 14px rgba(0,0,0,.14);
+  font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.5;
+}
+.lembar-surat p { margin: 0 0 10pt; }
+.ls-kop { display: flex; align-items: center; gap: 14pt; }
+.ls-kop img { width: 62pt; height: 62pt; object-fit: contain; flex: none; }
+.ls-kop > div { flex: 1; text-align: center; }
+.ls-kop-nama { font-size: 17pt; font-weight: 700; letter-spacing: .5pt; line-height: 1.2; }
+.ls-kop-baris { font-size: 10pt; line-height: 1.35; margin-top: 3pt; }
+.ls-garis { border: 0; border-top: 2.2pt solid #111; border-bottom: .7pt solid #111; height: 2pt; margin: 6pt 0 12pt; }
+.ls-meta { width: auto; border-collapse: collapse; margin: 0 0 12pt; }
+.ls-meta td { padding: 0 6pt 0 0; border: 0; font-size: 12pt; vertical-align: top; background: transparent; }
+.ls-meta td:first-child { width: 62pt; }
+.lembar-surat .ls-meta tr:hover { background: transparent; }
+.ls-kiri { text-align: left; } .ls-kanan { text-align: right; } .ls-tengah { text-align: center; }
+.ls-rata { text-align: justify; }
+.ls-tebal { font-weight: 700; }
+.ls-tujuan { margin-bottom: 14pt !important; }
+.ls-ttd { display: flex; gap: 20pt; margin-top: 14pt; break-inside: avoid; }
+.ls-ttd-kanan { justify-content: flex-end; } .ls-ttd-kiri { justify-content: flex-start; }
+.ls-ttd-tengah { justify-content: space-around; }
+.ls-ttd-orang { min-width: 150pt; text-align: center; }
+.ls-ttd-orang img { display: block; height: 56pt; max-width: 150pt; object-fit: contain; margin: 2pt auto; }
+.ls-ttd-ruang { height: 60pt; }
+.ls-ttd-nama { font-weight: 700; text-decoration: underline; }
+.ls-spasi-kecil { height: 8pt; } .ls-spasi-sedang { height: 18pt; } .ls-spasi-besar { height: 36pt; }
+.ls-kosong { color: #9AA59D; font-style: italic; }
+
 /* --------- laporan Ketua --------- */
 .lap-sub {
   padding: 12px 22px 9px; font-size: 11px; font-weight: 800; text-transform: uppercase;
@@ -1447,4 +1518,19 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
   .grid-stat { grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
   .stat::after, .stat::before { display: none !important; }
   .lencana, .bar-maju, .bar-maju span, .stat-ik { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Mencetak surat: hanya lembarnya, tanpa bingkai layar. Ukuran dan
+   tepi kertasnya dipasang erp.js saat mencetak — aturan @page bernama
+   membuat Chromium memenggal blok tanda tangan ke halaman berikutnya. */
+@media print {
+  body.cetak-surat .topbar, body.cetak-surat .ss-bilah, body.cetak-surat .ss-kiri { display: none !important; }
+  body.cetak-surat .ss-tata { display: block !important; }
+  body.cetak-surat .ss-kanan { position: static !important; }
+  body.cetak-surat .ss-bingkai { background: transparent !important; padding: 0 !important; overflow: visible !important; }
+  body.cetak-surat .lembar-surat {
+    zoom: 1 !important; width: auto !important; min-height: 0 !important;
+    padding: 0 !important; box-shadow: none !important;
+  }
+  body.cetak-surat .ls-kosong { display: none !important; }
 }

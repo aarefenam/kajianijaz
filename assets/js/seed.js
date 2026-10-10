@@ -720,6 +720,32 @@ const SEED = {
   ],
   /* Kumpulan tanda tangan tiap divisi kepengurusan — dipakai
      untuk membubuhi surat dan sertifikat. */
+  /* Templat surat — susunan blok yang disalin ke tiap surat baru.
+     Tata letaknya sementara, menunggu templat resmi organisasi; isinya
+     dapat disunting sepenuhnya dari ERP. */
+  templatSurat: [
+    { id:'ts1', nama:'Surat Resmi', ket:'Susunan umum: kop, nomor, tujuan, isi, tanda tangan', blok: [
+      { id:'b1', jenis:'kop', logo:'', nama:"KAJIAN AL-I'JAZ", baris:"Kajian Tafsir & 'Ulum al-Quran\nDi bawah naungan IKPM Kairo, Mesir · kajianalijaz@gmail.com" },
+      { id:'b2', jenis:'garis' },
+      { id:'b3', jenis:'tanggal', tempat:'Kairo' },
+      { id:'b4', jenis:'meta', lampiran:'-' },
+      { id:'b5', jenis:'tujuan', teks:'Kepada Yth.\n{{tujuan}}\ndi Tempat' },
+      { id:'b6', jenis:'teks', rata:'rata', tebal:'tidak', isi:"Assalamu'alaikum warahmatullahi wabarakatuh," },
+      { id:'b7', jenis:'teks', rata:'rata', tebal:'tidak', isi:'Sehubungan dengan {{perihal}}, dengan ini kami sampaikan …' },
+      { id:'b8', jenis:'teks', rata:'rata', tebal:'tidak', isi:"Demikian surat ini kami sampaikan. Atas perhatian dan kerja samanya kami ucapkan terima kasih.\n\nWassalamu'alaikum warahmatullahi wabarakatuh." },
+      { id:'b9', jenis:'ttd', rata:'tengah', penanda:['tt1','tt2'] },
+    ] },
+    { id:'ts2', nama:'Surat Keputusan', ket:'Judul di tengah, isi keputusan, satu penandatangan', blok: [
+      { id:'b1', jenis:'kop', logo:'', nama:"KAJIAN AL-I'JAZ", baris:"Kajian Tafsir & 'Ulum al-Quran\nDi bawah naungan IKPM Kairo, Mesir · kajianalijaz@gmail.com" },
+      { id:'b2', jenis:'garis' },
+      { id:'b3', jenis:'teks', rata:'tengah', tebal:'ya', isi:'SURAT KEPUTUSAN\nNomor: {{nomor}}' },
+      { id:'b4', jenis:'teks', rata:'tengah', tebal:'tidak', isi:'tentang\n{{perihal}}' },
+      { id:'b5', jenis:'teks', rata:'rata', tebal:'tidak', isi:'Menimbang:\n1. …\n\nMengingat:\n1. …\n\nMemutuskan:\nMenetapkan …' },
+      { id:'b6', jenis:'tanggal', tempat:'Ditetapkan di Kairo' },
+      { id:'b7', jenis:'ttd', rata:'kanan', penanda:['tt1'] },
+    ] },
+  ],
+
   tandaTangan: [
     { id:'tt1', divisi:'Ketua Umum', jabatan:'Ketua Umum', nama:'Ust. Jauhar Ridloni Marzuq', gambar: ttdBawaan('Ust. Jauhar Ridloni Marzuq') },
     { id:'tt2', divisi:'Sekretaris Umum', jabatan:'Sekretaris Umum', nama:'Ust. Novan Hariansyah', gambar: ttdBawaan('Ust. Novan Hariansyah') },

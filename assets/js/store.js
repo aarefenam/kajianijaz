@@ -74,6 +74,7 @@ function dbAwal() {
     /* Sekretariat — ruang kerja Sekretaris */
     sertifikat : clone(s.sertifikat),
     tandaTangan: clone(s.tandaTangan),
+    templatSurat: clone(s.templatSurat),
     /* Kepengurusan — ruang kerja Ketua Umum */
     pengurus   : clone(s.pengurus),
     koordinator: clone(s.koordinator),
@@ -1352,6 +1353,7 @@ const KOLEKSI = {
   penugasan  : { izin: 'redaksi.manage',    tunggal: 'penugasan',    judul: (x) => x.judul      },
   sertifikat : { izin: 'sertifikat.manage', tunggal: 'sertifikat',   judul: (x) => x.judul      },
   tandaTangan: { izin: 'ttd.manage',        tunggal: 'tanda tangan', judul: (x) => x.nama       },
+  templatSurat: { izin: 'sekretariat.manage', tunggal: 'templat surat', judul: (x) => x.nama    },
 };
 
 function petaKoleksi(nama) {

@@ -229,6 +229,7 @@ const IZIN_KOLEKSI = {
   surat           : ['surat.manage'],
   sertifikat      : ['sertifikat.manage'],
   tandaTangan     : ['ttd.manage'],
+  templatSurat    : ['surat.manage'],
   pengurus        : ['organisasi.manage'],
   koordinator     : ['organisasi.manage'],
   kaleidoskop     : ['organisasi.manage'],
