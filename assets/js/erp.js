@@ -2350,6 +2350,50 @@ function waktuProgram(k) {
 /** Menurut tanggal mulai; yang belum bertanggal di akhir. */
 const urutProgram = (a, b) => (a.tglMulai || '9999').localeCompare(b.tglMulai || '9999');
 
+/* --- pengurus & koordinator: terhubung ke Data Anggota ---
+   Keduanya tetap daftar tersendiri — jabatan dan nomor WA memang milik
+   daftar ini — tetapi orangnya dipilih dari Data Anggota. Selama
+   terhubung, nama yang tampil adalah nama di Data Anggota saat ini;
+   nama yang tersimpan di baris hanya cadangan bila tautannya putus
+   (anggotanya dihapus) atau memang orang luar. */
+const orangTerhubung = (x) => (x.userId ? Store.getUser(x.userId) : null);
+const namaOrang = (x) => orangTerhubung(x)?.nama || x.nama || '—';
+const selOrang = (x) => {
+  const u = orangTerhubung(x);
+  return u ? selAnggota(u)
+    : `${esc(x.nama || '—')}<br><span class="sub-sel perlu">belum terhubung ke Data Anggota</span>`;
+};
+const kolomPilihOrang = {
+  k: 'userId', l: 'Anggota', jenis: 'pilih',
+  pilihan: () => [{ v: '', l: '— bukan anggota terdaftar (isi nama di bawah) —' },
+    ...[...Store.db.users].sort((a, b) => a.nama.localeCompare(b.nama))
+      .map((u) => ({ v: u.id, l: `${u.nama}${u.angkatan ? ` · ${u.angkatan}` : ''}` }))],
+  bantu: 'Dipilih dari Data Anggota. Bila nama di sana berubah, nama di daftar ini ikut berubah.',
+};
+const kolomNamaOrang = { k: 'nama', l: 'Nama Lengkap', ph: 'Nama lengkap',
+  bantu: 'Diisi hanya bila orangnya tidak ada di Data Anggota.' };
+/** Memilih anggota mengisi dan mengunci kolom nama; melepasnya membuka lagi. */
+function kunciNamaOrang(isi) {
+  const pilih = isi.querySelector('[data-k="userId"]');
+  const nama = isi.querySelector('[data-k="nama"]');
+  const selaras = () => {
+    const u = Store.getUser(pilih.value);
+    nama.disabled = !!u;
+    if (u) nama.value = u.nama;
+  };
+  pilih.onchange = selaras;
+  selaras();
+}
+function rapikanOrang(d) {
+  if (d.userId) {
+    const u = Store.getUser(d.userId);
+    if (!u) throw new Error('Anggota yang dipilih tidak ditemukan.');
+    return { ...d, nama: u.nama };
+  }
+  if (!d.nama) throw new Error('Pilih anggota, atau isi nama lengkapnya.');
+  return d;
+}
+
 /* --- evaluasi: dari catatan menjadi tindak lanjut ---
    Sebuah temuan baru berguna bila ada yang menindaklanjutinya. Tiap
    evaluasi karena itu berstatus, berpenanggung jawab, dan boleh
@@ -2375,14 +2419,15 @@ const MODUL = {
     urut: 1, judul: 'Data Pengurus', satuan: 'Pengurus', ikon: I.grup, hitung: true,
     sub: 'Struktur kepengurusan beserta kontak setiap jabatan.',
     pratinjau: { awal: 3, akhir: 1 },
-    cari: (x) => `${x.nama} ${x.jabatan}`, tajuk: (x) => x.nama,
+    cari: (x) => `${namaOrang(x)} ${x.jabatan}`, tajuk: namaOrang,
+    sesudahForm: kunciNamaOrang, rapikan: rapikanOrang,
     kolom: [
-      { l: 'Nama',    isi: (x) => esc(x.nama) },
+      { l: 'Nama',    isi: selOrang },
       { l: 'Jabatan', isi: (x) => esc(x.jabatan) },
       { l: 'No. WA',  kelas: 'wa', isi: (x) => esc(samarWa(x.wa)) },
     ],
     form: [
-      { k: 'nama',    l: 'Nama Lengkap', wajib: true, ph: 'Nama pengurus' },
+      kolomPilihOrang, kolomNamaOrang,
       { k: 'jabatan', l: 'Jabatan',      wajib: true, ph: 'Sekretaris Umum' },
       { k: 'wa',      l: 'Nomor WhatsApp', ph: '+20 100 000 0000',
         bantu: 'Empat digit terakhir disamarkan di tabel. Nomor utuh hanya terlihat di form ini.' },
@@ -2394,14 +2439,15 @@ const MODUL = {
     urut: 2, judul: 'Data Koordinator Kajian', satuan: 'Koordinator', ikon: I.orang, hitung: true,
     sub: 'Penanggung jawab kajian pada setiap angkatan.',
     pratinjau: { awal: 3, akhir: 1 },
-    cari: (x) => `${x.nama} ${x.angkatan}`, tajuk: (x) => x.nama,
+    cari: (x) => `${namaOrang(x)} ${x.angkatan}`, tajuk: namaOrang,
+    sesudahForm: kunciNamaOrang, rapikan: rapikanOrang,
     kolom: [
-      { l: 'Nama',       isi: (x) => esc(x.nama) },
+      { l: 'Nama',       isi: selOrang },
       { l: 'Koordinator',isi: (x) => esc(x.angkatan) },
       { l: 'No. WA',     kelas: 'wa', isi: (x) => esc(samarWa(x.wa)) },
     ],
     form: [
-      { k: 'nama',     l: 'Nama Lengkap', wajib: true, ph: 'Nama koordinator' },
+      kolomPilihOrang, kolomNamaOrang,
       { k: 'angkatan', l: 'Koordinator Angkatan', wajib: true, ph: 'Angkatan XI' },
       { k: 'wa',       l: 'Nomor WhatsApp', ph: '+20 100 000 0000' },
     ],
@@ -2420,7 +2466,7 @@ const MODUL = {
         ? `<br><span class="sub-sel">${esc([x.divisi, x.catatan].filter(Boolean).join(' · '))}</span>` : ''}` },
       { l: 'Waktu',   kelas: 'utuh', isi: (x) => (x.tglMulai ? esc(waktuProgram(x))
         : `${esc(x.waktu || '—')}<br><span class="sub-sel perlu">tanggal belum diisi</span>`) },
-      { l: 'Penanggung Jawab', isi: (x) => esc(x.pjId ? namaPendek(x.pjId) : '—') },
+      { l: 'Penanggung Jawab', penuh: true, isi: (x) => esc(x.pjId ? namaPendek(x.pjId) : '—') },
       { l: 'Status',  isi: lencanaProgram },
       { l: 'Selesai', tengah: true, isi: () => '', pasang: selCentang },
     ],
@@ -2754,11 +2800,14 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
     semua.forEach((x, i) => baris.push({ x, no: i + 1 }));
   }
 
-  const lebarPutus = 1 + m.kolom.length + (aksi ? 1 : 0);
+  /* Kartu dasbor sempit: kolom bertanda `penuh` hanya tampil di halaman
+     modulnya. */
+  const kolom = pratinjau ? m.kolom.filter((c) => !c.penuh) : m.kolom;
+  const lebarPutus = 1 + kolom.length + (aksi ? 1 : 0);
   const bungkus = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr>
       <th class="kol-no">No.</th>
-      ${m.kolom.map((c) => `<th class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${esc(c.l)}</th>`).join('')}
+      ${kolom.map((c) => `<th class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${esc(c.l)}</th>`).join('')}
       ${aksi ? '<th class="kol-aksi">Aksi</th>' : ''}
     </tr></thead><tbody></tbody></table></div>`);
   const tb = bungkus.querySelector('tbody');
@@ -2772,14 +2821,14 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
     }
     const tr = el(`<tr>
       <td class="kol-no">${b.no}</td>
-      ${m.kolom.map((c) => `<td class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${c.isi(b.x)}</td>`).join('')}
+      ${kolom.map((c) => `<td class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${c.isi(b.x)}</td>`).join('')}
       ${aksi ? `<td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Sunting" ${bisa ? '' : 'disabled'}>${I.sunting}</button>
         <button class="ikon-aksi hapus" title="Hapus" ${bisa ? '' : 'disabled'}>${I.hapus}</button>
       </div></td>` : ''}
     </tr>`);
 
-    m.kolom.forEach((c, i) => c.pasang?.(tr.children[i + 1], b.x, { nama, pratinjau }));
+    kolom.forEach((c, i) => c.pasang?.(tr.children[i + 1], b.x, { nama, pratinjau }));
     tr.querySelector('.sunting')?.addEventListener('click', () => jalankan(() => formOrg(nama, b.x)));
     tr.querySelector('.hapus')?.addEventListener('click', () => jalankan(() => hapusOrg(nama, b.x)));
     tb.appendChild(tr);
@@ -2988,6 +3037,7 @@ function formOrg(nama, item) {
     if (f.bantu && f.jenis !== 'gambar') g.appendChild(el(`<div class="bantu">${esc(f.bantu)}</div>`));
     isi.appendChild(g);
   });
+  m.sesudahForm?.(isi, item);
 
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button>

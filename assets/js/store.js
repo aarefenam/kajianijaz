@@ -152,6 +152,7 @@ function migrasiBentuk(tersimpan) {
 
   tanggaliProgram(tersimpan);
   lengkapiEvaluasi(tersimpan);
+  hubungkanOrang(tersimpan);
   bubuhiIdAnggota(tersimpan);
   petakanRoleLama(tersimpan);
   petakanFontLama(tersimpan);
@@ -485,6 +486,32 @@ function tanggaliProgram(tersimpan) {
     k.pjId = k.pjId || '';
     k.divisi = k.divisi || '';
     k.catatan = k.catatan || '';
+  });
+}
+
+/* Data Pengurus dan Koordinator dahulu menyimpan nama sebagai teks
+   lepas, tak terkait Data Anggota — orang yang sama diketik sampai tiga
+   kali dan bisa berbeda ejaan. Kini tiap baris boleh menunjuk seorang
+   anggota lewat `userId`, dan namanya mengikuti Data Anggota.
+
+   Tautan awal dipasang hanya bila namanya cocok dengan TEPAT SATU
+   anggota (gelar "Ust." dan huruf besar-kecil diabaikan). Yang tak
+   cocok, atau cocok dengan lebih dari satu, dibiarkan tak terhubung
+   untuk dipilih pengurus sendiri — menebak orang lebih buruk daripada
+   tidak menautkan. */
+const namaBaku = (n) => String(n || '').trim().toLowerCase()
+  .replace(/^(ustadzah|ustadz|usth|ust)\.?\s+/, '').replace(/\s+/g, ' ');
+function hubungkanOrang(tersimpan) {
+  const peta = new Map();
+  (tersimpan.users || []).forEach((u) => {
+    const k = namaBaku(u.nama);
+    if (k) peta.set(k, peta.has(k) ? null : u.id);          // null = nama kembar
+  });
+  ['pengurus', 'koordinator'].forEach((koleksi) => {
+    (tersimpan[koleksi] || []).forEach((x) => {
+      if (x.userId !== undefined) return;
+      x.userId = peta.get(namaBaku(x.nama)) || '';
+    });
   });
 }
 

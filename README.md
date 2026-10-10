@@ -82,6 +82,12 @@ dibiarkan kosong dan ditandai *tanggal belum diisi*.
 dikaitkan dengan satu program kerja. Yang belum tuntas tampil lebih dulu;
 *Lewat Tenggat* diturunkan dari tenggatnya, seperti *Terlambat* pada program.
 
+**Data Pengurus** dan **Koordinator Kajian** tetap daftar tersendiri, tetapi
+orangnya dipilih dari Data Anggota. Selama terhubung, nama yang tampil mengikuti
+Data Anggota; baris yang orangnya bukan anggota, atau anggotanya sudah dihapus,
+memakai nama yang tersimpan dan ditandai *belum terhubung ke Data Anggota*.
+Tautan awal dipasang otomatis hanya bila namanya cocok dengan tepat satu anggota.
+
 Judul tiap kelompok di sidebar — pada semua peran — adalah tombol lipat. Saat
 terlipat ia memikul jumlah lonceng anggotanya, dan berpindah ke halaman di
 dalamnya membukanya kembali. Pilihan lipat disimpan di peramban tiap orang.
