@@ -70,6 +70,13 @@ modul (`#cms`, `#kajian`, dan seterusnya) tetap berlaku dan membuka tabnya.
 **Program Kerja** adalah nama baru Kaleidoskop Kegiatan & Program; datanya tetap
 di koleksi `kaleidoskop`.
 
+Tiap program bertanggal mulai dan selesai, berpenanggung jawab, berdivisi, dan
+bercatatan. Daftarnya terurut menurut tanggal mulai. **Terlambat** bukan status
+yang disimpan: ia diturunkan dari tanggal selesai dan hari ini, lalu hilang
+sendiri begitu program ditandai selesai. Teks waktu lama berupa bulan dan tahun
+("Mei 2025") dibentangkan otomatis menjadi sebulan penuh; yang tak terbaca
+dibiarkan kosong dan ditandai *tanggal belum diisi*.
+
 Dasbor dibuka dengan **Menunggu Keputusan Anda** — tiga antrean kelompok
 Putuskan beserta jumlahnya, dihitung dengan cara yang sama dengan lonceng di
 sidebar — lalu **Program Kerja Berjalan**: kemajuan periode dan program yang

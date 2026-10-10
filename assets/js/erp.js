@@ -2275,6 +2275,30 @@ const STATUS_KEG = {
   rencana: { l: 'Rencana', c: 'l-biru'   },
 };
 
+/* --- program kerja: waktu, keterlambatan, urutan ---
+   "Terlambat" bukan status yang disimpan. Ia diturunkan dari tanggal
+   selesai dan hari ini, sehingga tak pernah perlu dirawat tangan dan
+   tak pernah basi: program yang lewat tenggat tampil terlambat dengan
+   sendirinya, dan berhenti begitu ditandai selesai. */
+const terlambatProgram = (k) => k.status !== 'selesai' && !!k.tglSelesai && k.tglSelesai < nowTanggal();
+const lencanaProgram = (k) => (terlambatProgram(k)
+  ? '<span class="lencana l-merah">Terlambat</span>'
+  : `<span class="lencana ${STATUS_KEG[k.status]?.c || 'l-abu'}">${esc(STATUS_KEG[k.status]?.l || k.status)}</span>`);
+
+/** Rentang waktu sebagai teks. Sebulan penuh ditulis ringkas ("Mei
+    2025"); selebihnya tanggal mulai dan selesainya. Program yang belum
+    bertanggal memakai teks lamanya. */
+function waktuProgram(k) {
+  if (!k.tglMulai) return k.waktu || '—';
+  const a = k.tglMulai, b = k.tglSelesai || k.tglMulai;
+  const akhirBulan = new Date(Number(b.slice(0, 4)), Number(b.slice(5, 7)), 0).getDate();
+  if (a.slice(0, 7) === b.slice(0, 7) && a.slice(8) === '01' && Number(b.slice(8)) === akhirBulan)
+    return new Date(`${a}T00:00`).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+  return a === b ? tgl(a) : `${tgl(a)} – ${tgl(b)}`;
+}
+/** Menurut tanggal mulai; yang belum bertanggal di akhir. */
+const urutProgram = (a, b) => (a.tglMulai || '9999').localeCompare(b.tglMulai || '9999');
+
 const MODUL = {
   pengurus: {
     ruang: 'ketua', izin: 'organisasi.manage',
@@ -2316,25 +2340,39 @@ const MODUL = {
   kaleidoskop: {
     ruang: 'ketua', izin: 'organisasi.manage',
     urut: 3, judul: 'Program Kerja', satuan: 'Kegiatan', ikon: I.agenda,
-    sub: 'Rekam jejak program kerja sepanjang periode.',
+    sub: 'Rencana, pelaksanaan, dan penanggung jawab program kerja sepanjang periode.',
     pratinjau: { awal: 5, akhir: 0 }, aksiDiKartu: false,
-    cari: (x) => `${x.kegiatan} ${x.waktu} ${x.status}`, tajuk: (x) => x.kegiatan,
+    susun: urutProgram,
+    cari: (x) => `${x.kegiatan} ${waktuProgram(x)} ${x.status} ${x.divisi || ''} ${Store.namaUser(x.pjId)} ${x.catatan || ''}`,
+    tajuk: (x) => x.kegiatan,
     kolom: [
-      { l: 'Kegiatan / Program', isi: (x) => esc(x.kegiatan) },
-      { l: 'Waktu',   kelas: 'utuh', isi: (x) => esc(x.waktu) },
-      { l: 'Status',  isi: (x) => `<span class="lencana ${STATUS_KEG[x.status]?.c || 'l-abu'}">${esc(STATUS_KEG[x.status]?.l || x.status)}</span>` },
+      { l: 'Kegiatan / Program', isi: (x) => `<b>${esc(x.kegiatan)}</b>${x.divisi || x.catatan
+        ? `<br><span class="sub-sel">${esc([x.divisi, x.catatan].filter(Boolean).join(' · '))}</span>` : ''}` },
+      { l: 'Waktu',   kelas: 'utuh', isi: (x) => (x.tglMulai ? esc(waktuProgram(x))
+        : `${esc(x.waktu || '—')}<br><span class="sub-sel perlu">tanggal belum diisi</span>`) },
+      { l: 'Penanggung Jawab', isi: (x) => esc(x.pjId ? namaPendek(x.pjId) : '—') },
+      { l: 'Status',  isi: lencanaProgram },
       { l: 'Selesai', tengah: true, isi: () => '', pasang: selCentang },
     ],
     form: [
       { k: 'kegiatan', l: 'Nama Kegiatan / Program', wajib: true, ph: 'Seminar Ulumul Quran' },
-      { k: 'waktu',    l: 'Waktu Pelaksanaan', wajib: true, ph: 'Mei 2025',
-        bantu: 'Ditulis bebas, misalnya "Mei 2025" atau "Sem. Ganjil 2025".' },
+      { k: 'tglMulai',   l: 'Tanggal Mulai',   jenis: 'tanggal', wajib: true },
+      { k: 'tglSelesai', l: 'Tanggal Selesai', jenis: 'tanggal', wajib: true,
+        bantu: 'Program yang melewati tanggal ini dan belum selesai ditandai Terlambat.' },
+      { k: 'pjId',     l: 'Penanggung Jawab', jenis: 'pilih',
+        pilihan: () => [{ v: '', l: '— belum ditentukan —' }, ...pilihAnggota()] },
+      { k: 'divisi',   l: 'Divisi / Biro', ph: 'Biro Kajian' },
       { k: 'status',   l: 'Status', jenis: 'pilih', bawaan: 'rencana',
         pilihan: Object.entries(STATUS_KEG).map(([v, s]) => ({ v, l: s.l })) },
+      { k: 'catatan',  l: 'Catatan / Hasil', jenis: 'area', ph: 'Capaian, kendala, atau tindak lanjut.' },
     ],
     /* Kotak centang selalu mengikuti status, supaya lencana dan centang
-       di tabel tidak pernah saling berlawanan. */
-    rapikan: (d) => ({ ...d, selesai: d.status === 'selesai' }),
+       di tabel tidak pernah saling berlawanan. `waktu` — teks yang dulu
+       diketik tangan — kini ditulis ulang dari tanggalnya. */
+    rapikan: (d) => {
+      if (d.tglSelesai < d.tglMulai) throw new Error('Tanggal selesai tidak boleh mendahului tanggal mulai.');
+      return { ...d, selesai: d.status === 'selesai', waktu: waktuProgram(d) };
+    },
   },
 
   pencapaian: {
@@ -2602,7 +2640,8 @@ function selGambar(kunci, kunciJudul, ket, kelas = '') {
     lima modul surat, misalnya, hidup di satu `db.surat` yang sama. */
 const dataModul = (nama) => {
   const m = MODUL[nama];
-  return m.sumber ? m.sumber() : Store.db[m.koleksi || nama];
+  const d = m.sumber ? m.sumber() : Store.db[m.koleksi || nama];
+  return m.susun ? [...d].sort(m.susun) : d;
 };
 
 function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
@@ -2751,9 +2790,12 @@ function antreanKetua() {
 function ringkasProgram() {
   const semua = Store.db.kaleidoskop;
   const rampung = semua.filter((k) => k.status === 'selesai').length;
-  const urutan = { proses: 0, rencana: 1 };
+  /* Yang terlambat paling atas, lalu yang sedang berjalan, lalu rencana;
+     di dalam tiap kelompok, yang tenggatnya paling dekat lebih dulu. */
+  const bobot = (k) => (terlambatProgram(k) ? 0 : k.status === 'proses' ? 1 : 2);
   const sisa = semua.filter((k) => k.status !== 'selesai')
-    .sort((a, b) => (urutan[a.status] ?? 2) - (urutan[b.status] ?? 2));
+    .sort((a, b) => bobot(a) - bobot(b) || (a.tglSelesai || '9999').localeCompare(b.tglSelesai || '9999'));
+  const telat = sisa.filter(terlambatProgram).length;
   const persen = semua.length ? Math.round((rampung / semua.length) * 100) : 0;
   const tampil = sisa.slice(0, 4);
 
@@ -2761,16 +2803,16 @@ function ringkasProgram() {
     <div class="kartu-kepala">
       <button class="kartu-tautan" data-buka title="Buka Program Kerja">
         <h3>Program Kerja Berjalan</h3>
-        <span class="hitung">(${rampung} dari ${semua.length} selesai)</span>
+        <span class="hitung">(${rampung} dari ${semua.length} selesai${telat ? ` · <b class="rp-telat">${telat} terlambat</b>` : ''})</span>
         <span class="panah">${I.kanan}</span>
       </button>
       <div class="kanan"><div class="bar-maju" title="${persen}% terlaksana"><span style="width:${persen}%"></span></div>
         <b class="rp-persen">${persen}%</b></div>
     </div>
     ${tampil.length ? `<ul class="rp-daftar">${tampil.map((k) => `<li>
-        <span class="lencana ${STATUS_KEG[k.status]?.c || 'l-abu'}">${esc(STATUS_KEG[k.status]?.l || k.status)}</span>
-        <span class="rp-nama">${esc(k.kegiatan)}</span>
-        <span class="rp-waktu">${esc(k.waktu || '—')}</span></li>`).join('')}
+        ${lencanaProgram(k)}
+        <span class="rp-nama">${esc(k.kegiatan)}${k.pjId ? `<span class="rp-pj"> · ${esc(namaPendek(k.pjId))}</span>` : ''}</span>
+        <span class="rp-waktu">${esc(waktuProgram(k))}</span></li>`).join('')}
       ${sisa.length > tampil.length ? `<li class="rp-lain"><button data-buka>dan ${sisa.length - tampil.length} program lainnya</button></li>` : ''}
     </ul>` : `<div class="rp-kosong">${I.cekBulat} ${semua.length ? 'Seluruh program kerja sudah terlaksana.' : 'Belum ada program kerja yang dicatat.'}</div>`}
   </div>`);
@@ -6537,15 +6579,17 @@ HAL.laporan = () => {
     </div></div>`));
   box.querySelector('[data-cetak]').onclick = () => window.print();
 
-  const sisa = keg.filter((k) => k.status !== 'selesai');
+  const sisa = keg.filter((k) => k.status !== 'selesai').sort(urutProgram);
+  const telat = sisa.filter(terlambatProgram).length;
   if (sisa.length) {
     box.appendChild(el(`<div class="panel">
       <div class="panel-kepala"><h3>Program Belum Rampung</h3>
-        <span class="ket">${sisa.length} kegiatan menuntut perhatian</span></div>
+        <span class="ket">${sisa.length} kegiatan menuntut perhatian${telat ? ` · ${telat} melewati tenggat` : ''}</span></div>
       <div class="tabel-bungkus"><table>
-        <thead><tr><th>Kegiatan / Program</th><th>Waktu</th><th>Status</th></tr></thead>
-        <tbody>${sisa.map((k) => `<tr><td>${esc(k.kegiatan)}</td><td>${esc(k.waktu)}</td>
-          <td><span class="lencana ${STATUS_KEG[k.status]?.c || 'l-abu'}">${esc(STATUS_KEG[k.status]?.l || k.status)}</span></td>
+        <thead><tr><th class="kol-no">No</th><th>Kegiatan / Program</th><th>Waktu</th><th>Penanggung Jawab</th><th>Status</th></tr></thead>
+        <tbody>${sisa.map((k, i) => `<tr><td class="kol-no">${i + 1}</td><td>${esc(k.kegiatan)}</td><td>${esc(waktuProgram(k))}</td>
+          <td>${esc(k.pjId ? namaPendek(k.pjId) : '—')}</td>
+          <td>${lencanaProgram(k)}</td>
         </tr>`).join('')}</tbody></table></div></div>`));
   }
 

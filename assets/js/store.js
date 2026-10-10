@@ -150,6 +150,7 @@ function migrasiBentuk(tersimpan) {
   /* Domain baru ditambahkan belakangan; DB lama belum mengenalnya. */
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
+  tanggaliProgram(tersimpan);
   bubuhiIdAnggota(tersimpan);
   petakanRoleLama(tersimpan);
   petakanFontLama(tersimpan);
@@ -448,6 +449,41 @@ function susunBeranda(tersimpan) {
       if (sec.data) delete sec.data.nomor;
     });
     beranda.sections = hasil;
+  });
+}
+
+/* Program kerja dahulu mencatat waktunya sebagai teks bebas — "Mei
+   2025". Teks tak dapat diurutkan dan tak dapat dibandingkan dengan hari
+   ini, jadi tak ada cara mengetahui program mana yang terlambat.
+
+   Kini tiap program bertanggal mulai dan selesai. Teks lama yang berupa
+   bulan dan tahun dibentangkan menjadi sebulan penuh; yang tak terbaca
+   dibiarkan kosong untuk diisi pengurus, bukan ditebak. Teks aslinya
+   sendiri tidak dibuang — ia tetap di `waktu`. */
+const BULAN_TEKS = {
+  jan: 1, januari: 1, feb: 2, februari: 2, mar: 3, maret: 3, apr: 4, april: 4,
+  mei: 5, may: 5, jun: 6, juni: 6, jul: 7, juli: 7, agu: 8, agt: 8, agustus: 8, aug: 8,
+  sep: 9, sept: 9, september: 9, okt: 10, oktober: 10, oct: 10,
+  nov: 11, november: 11, nopember: 11, des: 12, desember: 12, dec: 12,
+};
+function rentangDariTeks(teks) {
+  const m = String(teks || '').trim().toLowerCase().match(/^([a-z]+)\.?\s+(\d{4})$/);
+  const bulan = m && BULAN_TEKS[m[1]];
+  if (!bulan) return null;
+  const tahun = Number(m[2]);
+  const dua = (n) => String(n).padStart(2, '0');
+  const akhir = new Date(tahun, bulan, 0).getDate();      // hari ke-0 bulan berikutnya
+  return { mulai: `${tahun}-${dua(bulan)}-01`, selesai: `${tahun}-${dua(bulan)}-${dua(akhir)}` };
+}
+function tanggaliProgram(tersimpan) {
+  (tersimpan.kaleidoskop || []).forEach((k) => {
+    if (k.tglMulai !== undefined) return;
+    const r = rentangDariTeks(k.waktu);
+    k.tglMulai = r ? r.mulai : '';
+    k.tglSelesai = r ? r.selesai : '';
+    k.pjId = k.pjId || '';
+    k.divisi = k.divisi || '';
+    k.catatan = k.catatan || '';
   });
 }
 
