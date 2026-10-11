@@ -163,6 +163,7 @@ function migrasiBentuk(tersimpan) {
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
   tanggaliProgram(tersimpan);
+  tautkanKategori(tersimpan);
   lengkapiEvaluasi(tersimpan);
   hubungkanOrang(tersimpan);
   bubuhiIdAnggota(tersimpan);
@@ -558,6 +559,23 @@ function niaBerikut(users, angkatan) {
 }
 function nomoriAnggota(tersimpan) {
   (tersimpan.users || []).forEach((u) => { if (!u.nia) u.nia = niaBerikut(tersimpan.users, u.angkatan); });
+}
+
+/* Transaksi dahulu menunjuk kategorinya lewat NAMA. Mengganti nama
+   kategori membuat transaksi lamanya terlepas — tetap tercatat, tetapi
+   tak lagi terhitung di kategori mana pun. Kini tiap transaksi juga
+   memegang `kategoriId`; namanya tetap disimpan agar laporan lama dan
+   unduhan CSV tidak berubah bentuk.
+
+   Tautan awal dicari dari nama dan jenisnya. Yang tak ketemu dibiarkan
+   kosong dan ditandai di ERP — tidak ditebak. */
+function tautkanKategori(tersimpan) {
+  const kat = tersimpan.kategoriKeuangan || [];
+  (tersimpan.keuangan || []).forEach((t) => {
+    if (t.kategoriId !== undefined) return;
+    const k = kat.find((x) => x.nama === t.kategori && x.jenis === t.jenis) || kat.find((x) => x.nama === t.kategori);
+    t.kategoriId = k ? k.id : '';
+  });
 }
 
 /* Evaluasi dahulu berhenti sebagai catatan. Kini ia berstatus dan
@@ -1493,6 +1511,20 @@ function simpanTransaksi(user, data) {
   RBAC.assertCan(user, 'keuangan.manage');
   const rapi = { ...data, rp: Number(data.rp || 0), egp: Number(data.egp || 0) };
   if (!rapi.rp && !rapi.egp) throw new Error('Isi nominal rupiah atau pound, minimal salah satu.');
+  if (rapi.rp < 0 || rapi.egp < 0) throw new Error('Nominal tidak boleh negatif.');
+
+  /* Kategori ditautkan lewat id; namanya ikut disimpan. */
+  const lama = rapi.id ? db.keuangan.find((x) => x.id === rapi.id) : null;
+  const jenis = rapi.jenis || lama?.jenis;
+  if (rapi.kategori !== undefined) {
+    const k = db.kategoriKeuangan.find((x) => x.nama === rapi.kategori && x.jenis === jenis)
+      || db.kategoriKeuangan.find((x) => x.nama === rapi.kategori);
+    rapi.kategoriId = k ? k.id : '';
+    if (!lama && k?.nonaktif) throw new Error(`Kategori "${k.nama}" sudah dinonaktifkan. Pilih kategori lain.`);
+  }
+  const akun = db.akunKas.find((a) => a.id === (rapi.akunId || lama?.akunId || 'ak1'));
+  if (!akun) throw new Error('Akun tujuan tidak ditemukan. Pilih akun yang tersedia.');
+  if (!lama && akun.nonaktif) throw new Error(`Akun "${akun.nama}" sudah dinonaktifkan. Pilih akun lain.`);
   if (rapi.id) {
     const t = db.keuangan.find((x) => x.id === rapi.id);
     if (!t) throw new Error('Transaksi tidak ditemukan.');
@@ -1557,6 +1589,94 @@ const nominalGabung = (t) => [
   t.rp ? 'Rp ' + Number(t.rp).toLocaleString('id-ID') : '',
   t.egp ? 'EGP ' + Number(t.egp).toLocaleString('id-ID') : '',
 ].filter(Boolean).join(' + ') || 'Rp 0';
+
+/* --- akun & kategori: tak boleh hilang selagi masih dipakai ---
+   Menghapus akun yang punya transaksi membuat saldonya lenyap dari
+   Saldo Keseluruhan tanpa satu peringatan pun; menghapus kategori
+   meninggalkan transaksi tanpa golongan. Keduanya kini ditolak —
+   yang tak dipakai lagi cukup dinonaktifkan. */
+const transaksiAkun = (id) => db.keuangan.filter((t) => t.akunId === id || t.akunTujuanId === id);
+const transaksiKategori = (k) => db.keuangan.filter((t) => t.kategoriId === k.id || (!t.kategoriId && t.kategori === k.nama));
+
+function simpanAkunKas(user, data) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const d = { ...data, saldoAwalRp: Number(data.saldoAwalRp || 0), saldoAwalEgp: Number(data.saldoAwalEgp || 0),
+    nonaktif: data.nonaktif === true || data.nonaktif === 'ya' };
+  const alasan = String(d.alasanSaldo || '').trim();
+  delete d.alasanSaldo;
+  if (!String(d.nama || '').trim()) throw new Error('Nama akun wajib diisi.');
+  if (d.id) {
+    const a = db.akunKas.find((x) => x.id === d.id);
+    if (!a) throw new Error('Akun tidak ditemukan.');
+    const berubah = Number(a.saldoAwalRp || 0) !== d.saldoAwalRp || Number(a.saldoAwalEgp || 0) !== d.saldoAwalEgp;
+    /* Saldo awal menggeser seluruh saldo sesudahnya. Selagi akun masih
+       kosong ia bebas diatur; sesudah ada transaksi, perubahannya harus
+       beralasan dan meninggalkan jejak. */
+    if (berubah && transaksiAkun(a.id).length) {
+      if (!alasan) throw new Error('Akun ini sudah bertransaksi. Isi alasan untuk mengubah saldo awalnya.');
+      a.riwayatSaldo = (a.riwayatSaldo || []).concat({ ts: nowISO(), oleh: user.id, alasan,
+        dariRp: Number(a.saldoAwalRp || 0), keRp: d.saldoAwalRp, dariEgp: Number(a.saldoAwalEgp || 0), keEgp: d.saldoAwalEgp });
+      catat(user, 'keuangan.saldoAwal', a.id, `Mengubah saldo awal "${a.nama}" — ${alasan}`);
+    }
+    if (d.nonaktif && !a.nonaktif) {
+      const s = saldoAkun(a.id);
+      if (s.rp || s.egp) throw new Error('Akun masih bersaldo. Pindahkan atau keluarkan dulu uangnya sebelum dinonaktifkan.');
+    }
+    Object.assign(a, d);
+    catat(user, 'akunKas.ubah', a.id, `Mengubah akun kas "${a.nama}"`);
+  } else {
+    const baru = { id: uid('ak'), ...d };
+    db.akunKas.push(baru);
+    catat(user, 'akunKas.tambah', baru.id, `Menambah akun kas "${baru.nama}"`);
+  }
+  simpan();
+}
+function hapusAkunKas(user, id) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const a = db.akunKas.find((x) => x.id === id);
+  if (!a) return;
+  const n = transaksiAkun(id).length;
+  if (n) throw new Error(`Akun "${a.nama}" dipakai ${n} transaksi dan tidak dapat dihapus. Nonaktifkan saja bila tak dipakai lagi.`);
+  db.akunKas = db.akunKas.filter((x) => x.id !== id);
+  catat(user, 'akunKas.hapus', id, `Menghapus akun kas "${a.nama}"`);
+  simpan();
+}
+
+function simpanKategoriKas(user, data) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const nama = String(data.nama || '').trim();
+  if (!nama) throw new Error('Nama kategori wajib diisi.');
+  const d = { ...data, nama, nonaktif: data.nonaktif === true || data.nonaktif === 'ya' };
+  if (db.kategoriKeuangan.some((x) => x.id !== d.id && x.nama.toLowerCase() === nama.toLowerCase() && x.jenis === d.jenis))
+    throw new Error(`Kategori "${nama}" sudah ada.`);
+  if (d.id) {
+    const k = db.kategoriKeuangan.find((x) => x.id === d.id);
+    if (!k) throw new Error('Kategori tidak ditemukan.');
+    const terpakai = transaksiKategori(k);
+    if (d.jenis !== k.jenis && terpakai.length)
+      throw new Error('Jenis kategori yang sudah dipakai transaksi tidak dapat diubah.');
+    /* Transaksinya ikut berganti nama dan ikut ditautkan — inilah yang
+       dulu tak terjadi. */
+    terpakai.forEach((t) => { t.kategori = nama; t.kategoriId = k.id; });
+    Object.assign(k, d);
+    catat(user, 'kategoriKeuangan.ubah', k.id, `Mengubah kategori "${nama}"${terpakai.length ? ` beserta ${terpakai.length} transaksinya` : ''}`);
+  } else {
+    const baru = { id: uid('kt'), ...d };
+    db.kategoriKeuangan.push(baru);
+    catat(user, 'kategoriKeuangan.tambah', baru.id, `Menambah kategori "${nama}"`);
+  }
+  simpan();
+}
+function hapusKategoriKas(user, id) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const k = db.kategoriKeuangan.find((x) => x.id === id);
+  if (!k) return;
+  const n = transaksiKategori(k).length;
+  if (n) throw new Error(`Kategori "${k.nama}" dipakai ${n} transaksi dan tidak dapat dihapus. Nonaktifkan saja bila tak dipakai lagi.`);
+  db.kategoriKeuangan = db.kategoriKeuangan.filter((x) => x.id !== id);
+  catat(user, 'kategoriKeuangan.hapus', id, `Menghapus kategori "${k.nama}"`);
+  simpan();
+}
 
 /** Saldo sebuah akun, dua mata uang sekaligus — tidak pernah dijumlahkan. */
 function saldoAkun(idAkun) {
@@ -1985,6 +2105,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
+  simpanAkunKas, hapusAkunKas, simpanKategoriKas, hapusKategoriKas, transaksiKategori,
   simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,

@@ -3364,6 +3364,14 @@ function formOrg(nama, item) {
       data[f.k] = f.jenis === 'angka' ? Number(mentah || 0) : mentah;
     });
     if (kurang) return toast(`${kurang} wajib diisi.`, true);
+    /* Peringatan tidak menutup form: isinya tetap utuh, dan menekan
+       Simpan sekali lagi dengan isi yang sama berarti "ya, memang benar". */
+    const sidik = JSON.stringify(data);
+    const peringatan = m.peringatanSimpan?.(data);
+    if (peringatan && isi.dataset.sudahDiperingatkan !== sidik) {
+      isi.dataset.sudahDiperingatkan = sidik;
+      return toast(peringatan, true);
+    }
     aman(() => {
       const rapi = m.rapikan ? m.rapikan(data) : data;
       if (m.simpan) m.simpan(rapi); else Store.simpanKoleksi(U, m.koleksi || nama, rapi);
@@ -7019,9 +7027,17 @@ function saldoTotal() {
 }
 
 const namaAkun = (id) => Store.db.akunKas.find((a) => a.id === id)?.nama || '—';
-const kategoriUntuk = (jenis) => Store.db.kategoriKeuangan.filter((k) => k.jenis === jenis)
-  .map((k) => ({ v: k.nama, l: k.nama }));
-const pilihanAkun = () => Store.db.akunKas.map((a) => ({ v: a.id, l: a.nama }));
+/* Yang nonaktif tetap ada di pilihan — transaksi lama yang disunting
+   tak boleh diam-diam berpindah akun — tetapi ditaruh di akhir dan
+   bertanda; transaksi BARU ke sana ditolak penyimpannya. */
+const aktifDulu = (a, b) => (a.nonaktif === true) - (b.nonaktif === true);
+const kategoriUntuk = (jenis) => Store.db.kategoriKeuangan.filter((k) => k.jenis === jenis).sort(aktifDulu)
+  .map((k) => ({ v: k.nama, l: k.nonaktif ? `${k.nama} (nonaktif)` : k.nama }));
+const pilihanAkun = () => [...Store.db.akunKas].sort(aktifDulu)
+  .map((a) => ({ v: a.id, l: a.nonaktif ? `${a.nama} (nonaktif)` : a.nama }));
+const lencanaNonaktif = (x) => (x.nonaktif ? ' <span class="lencana l-abu">nonaktif</span>' : '');
+const pilihStatus = { k: 'nonaktif', l: 'Status', jenis: 'pilih', bawaan: 'tidak',
+  pilihan: [{ v: 'tidak', l: 'Aktif' }, { v: 'ya', l: 'Nonaktif — tak dipakai untuk transaksi baru' }] };
 
 /* ---------------- dasbor ---------------- */
 /* Antrean Bendahara: yang menuntut tindakannya hari ini. Ditambah
@@ -7031,6 +7047,7 @@ function antreanBendahara() {
   const aktif = Store.db.users.filter((u) => u.status === 'aktif');
   const menunggak = aktif.filter((u) => Store.iuranAnggota(u.id, bulan).status !== 'lunas');
   const minus = Store.db.akunKas.map((a) => ({ a, s: Store.saldoAkun(a.id) })).filter((x) => x.s.rp < 0 || x.s.egp < 0);
+  const tanpaKat = Store.db.keuangan.filter((t) => t.jenis !== 'transfer' && !t.kategoriId);
   return kartuAntrean('Perlu Ditindak', [
     { rute: 'iuran-anggota', sebelum: () => { saringIuran = { bulan, angkatan: '', status: 'belum' }; },
       ikon: I.grup, judul: `Iuran ${namaBulan(bulan)}`, n: menunggak.length,
@@ -7039,6 +7056,9 @@ function antreanBendahara() {
     { rute: 'saldo', ikon: I.peringatan, judul: 'Akun Bersaldo Minus', n: minus.length,
       satuan: 'akun perlu diperiksa', kosong: 'Tidak ada akun yang minus',
       rinci: minus[0] && `${minus[0].a.nama}: ${minus[0].s.rp < 0 ? rpFmt(minus[0].s.rp) : egpFmt(minus[0].s.egp)}` },
+    ...(tanpaKat.length ? [{ rute: 'laporan-kas', ikon: I.tag, judul: 'Kategori Tak Dikenal', n: tanpaKat.length,
+      satuan: 'transaksi berkategori yang sudah tak terdaftar', kosong: '',
+      rinci: `"${tanpaKat[0].kategori}" — sunting transaksinya, pilih kategori yang ada` }] : []),
   ]);
 }
 
@@ -7201,6 +7221,19 @@ Object.assign(MODUL, {
     sub: 'Seluruh uang keluar beserta akun sumbernya.',
     sumber: kasKeluar,
     bawaanBaru: () => ({ jenis: 'keluar', arus: null }),
+    /* Pengeluaran yang melampaui isi akunnya hampir selalu salah akun
+       atau salah nominal — tetapi kadang memang benar (ditalangi dulu),
+       jadi diperingatkan, bukan dilarang. */
+    peringatanSimpan: (d) => {
+      const a = Store.db.akunKas.find((x) => x.id === d.akunId);
+      if (!a) return '';
+      const lama = d.id ? Store.db.keuangan.find((x) => x.id === d.id) : null;
+      const s = Store.saldoAkun(a.id);
+      const kembali = lama && lama.akunId === a.id ? lama : { rp: 0, egp: 0 };
+      const rp = s.rp + Number(kembali.rp || 0) - Number(d.rp || 0), egp = s.egp + Number(kembali.egp || 0) - Number(d.egp || 0);
+      if (rp >= 0 && egp >= 0) return '';
+      return `Saldo "${a.nama}" akan menjadi ${rp < 0 ? rpFmt(rp) : egpFmt(egp)}. Periksa akun dan nominalnya — tekan Simpan sekali lagi bila memang benar.`;
+    },
     kolom: [{ l: 'Jenis Pengeluaran', isi: (x) => `<b>${esc(x.sumber || x.kategori)}</b>` }, ...kolomNominal],
     form: [
       { k: 'sumber', l: 'Jenis Pengeluaran', wajib: true, ph: 'Sewa Sekretariat' },
@@ -7214,8 +7247,12 @@ Object.assign(MODUL, {
     sub: 'Tempat uang organisasi disimpan.',
     cari: (x) => `${x.nama} ${x.jenis}`, tajuk: (x) => x.nama,
     pratinjau: { awal: 3, akhir: 1 },
+    simpan: (d) => Store.simpanAkunKas(U, d),
+    hapus: (x) => Store.hapusAkunKas(U, x.id),
+    /* Form memakai 'ya'/'tidak'; yang tersimpan boolean. */
+    sesudahForm: (isi, item) => { if (item) isi.querySelector('[data-k="nonaktif"]').value = item.nonaktif ? 'ya' : 'tidak'; },
     kolom: [
-      { l: 'Nama Akun', isi: (x) => `<b>${esc(x.nama)}</b><br><span style="color:var(--e-abu);font-size:11.6px">${esc(x.ket || '')}</span>` },
+      { l: 'Nama Akun', isi: (x) => `<b>${esc(x.nama)}</b>${lencanaNonaktif(x)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(x.ket || '')}</span>` },
       { l: 'Jenis', isi: (x) => `<span class="lencana l-abu">${esc(x.jenis)}</span>` },
       { l: 'Saldo Rp', kelas: 'utuh', isi: (x) => `<b>${rpFmt(Store.saldoAkun(x.id).rp)}</b>` },
       { l: 'Saldo EGP', kelas: 'utuh', isi: (x) => `<b>${egpFmt(Store.saldoAkun(x.id).egp)}</b>` },
@@ -7227,7 +7264,10 @@ Object.assign(MODUL, {
       { k: 'saldoAwalRp', l: 'Saldo Awal (Rp)', jenis: 'angka', ph: '0' },
       { k: 'saldoAwalEgp', l: 'Saldo Awal (EGP)', jenis: 'angka', ph: '0',
         bantu: 'Satu akun memegang kedua mata uang, sehingga satu setoran berisi rupiah dan pound tak perlu dipecah.' },
+      { k: 'alasanSaldo', l: 'Alasan Mengubah Saldo Awal',
+        bantu: 'Wajib hanya bila saldo awal diubah pada akun yang sudah bertransaksi. Perubahannya tercatat di log.' },
       { k: 'ket', l: 'Keterangan', ph: 'Uang tunai yang dipegang di sekretariat.' },
+      pilihStatus,
     ],
   },
   'kategori-kas': {
@@ -7236,15 +7276,20 @@ Object.assign(MODUL, {
     sub: 'Penggolongan pemasukan dan pengeluaran.',
     cari: (x) => x.nama, tajuk: (x) => x.nama,
     pratinjau: { awal: 3, akhir: 1 },
+    simpan: (d) => Store.simpanKategoriKas(U, d),
+    hapus: (x) => Store.hapusKategoriKas(U, x.id),
+    sesudahForm: (isi, item) => { if (item) isi.querySelector('[data-k="nonaktif"]').value = item.nonaktif ? 'ya' : 'tidak'; },
     kolom: [
-      { l: 'Nama Kategori', isi: (x) => `<b>${esc(x.nama)}</b>` },
+      { l: 'Nama Kategori', isi: (x) => `<b>${esc(x.nama)}</b>${lencanaNonaktif(x)}` },
       { l: 'Jenis', isi: (x) => `<span class="lencana ${x.jenis === 'masuk' ? 'l-hijau' : 'l-merah'}">${x.jenis === 'masuk' ? 'Pemasukan' : 'Pengeluaran'}</span>` },
-      { l: 'Dipakai', kelas: 'utuh', isi: (x) => Store.db.keuangan.filter((t) => t.kategori === x.nama).length + ' transaksi' },
+      { l: 'Dipakai', kelas: 'utuh', isi: (x) => Store.transaksiKategori(x).length + ' transaksi' },
     ],
     form: [
       { k: 'nama', l: 'Nama Kategori', wajib: true, ph: 'Konsumsi Kajian' },
       { k: 'jenis', l: 'Jenis', jenis: 'pilih', bawaan: 'keluar',
-        pilihan: [{ v: 'masuk', l: 'Pemasukan' }, { v: 'keluar', l: 'Pengeluaran' }] },
+        pilihan: [{ v: 'masuk', l: 'Pemasukan' }, { v: 'keluar', l: 'Pengeluaran' }],
+        bantu: 'Mengganti nama kategori ikut mengganti namanya pada seluruh transaksinya.' },
+      pilihStatus,
     ],
   },
 });
