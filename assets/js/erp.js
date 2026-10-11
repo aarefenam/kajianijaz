@@ -7176,9 +7176,13 @@ function dasborBendahara() {
       <span class="ik" style="--w:${r.w};--wc:${r.wc}">${r.ik}</span>
       <div class="isi"><div class="jd">${esc(r.judul)}</div><div class="kt">${esc(r.ket)}</div></div>
       <span class="pd">${esc(r.periode())}</span>
-      <button class="btn btn-garis btn-kecil">${r.kustom ? `Buat Laporan ${I.panahKanan}` : `${I.unduh} Unduh`}</button>
+      <button class="btn btn-garis btn-kecil">${r.kustom ? `Pilih Rentang ${I.panahKanan}` : 'Lihat & Cetak'}</button>
     </div>`);
-    n.querySelector('button').onclick = () => (r.kustom ? dialogLaporanKustom() : unduhLaporan(r.rentang()));
+    /* Dasbor hanya pintasan: laporannya dibuka di halaman Laporan Keuangan. */
+    n.querySelector('button').onclick = () => {
+      if (r.kustom) return bukaModul('laporan-kas', dialogLaporanKustom);
+      laporanTerbuka = r.rentang(); bukaModul('laporan-kas');
+    };
     lap.isi.appendChild(n);
   });
   baris2.appendChild(lap.el);
@@ -7510,20 +7514,30 @@ const awalBulan = (mundur = 0) => {
      ke hari terakhir bulan sebelumnya di zona timur UTC. */
   return tanggalLokal(new Date(d.getFullYear(), d.getMonth() - mundur, 1));
 };
+/* Triwulan KALENDER yang sedang berjalan. Dulu labelnya "Q4" tetapi
+   isinya tiga bulan terakhir berjalan — dua hal yang berbeda. */
+const triwulanIni = () => {
+  const d = new Date(), q = Math.floor(d.getMonth() / 3);
+  return { dari: tanggalLokal(new Date(d.getFullYear(), q * 3, 1)), sampai: tanggalLokal(new Date(d.getFullYear(), q * 3 + 3, 0)), q: q + 1 };
+};
 const LAPORAN_KAS = [
-  { judul: 'Laporan Bulanan', ket: 'Rekap pemasukan dan pengeluaran bulanan.', ik: I.dok,
+  { judul: 'Laporan Bulanan', ket: 'Bulan yang sedang berjalan, sampai hari ini.', ik: I.dok,
     w: 'rgba(140,198,63,.16)', wc: '#4A7A1E',
     periode: () => namaBulan(nowTanggal().slice(0, 7)),
-    rentang: () => ({ dari: awalBulan(0), sampai: nowTanggal(), nama: 'bulanan' }) },
-  { judul: 'Laporan Triwulan', ket: 'Rekap keuangan per tiga bulan.', ik: I.bagan,
+    rentang: () => ({ dari: awalBulan(0), sampai: nowTanggal(), nama: 'bulanan', judul: `Laporan Bulanan — ${namaBulan(nowTanggal().slice(0, 7))}` }) },
+  { judul: 'Laporan Bulan Lalu', ket: 'Sebulan penuh — biasanya yang ditutup bukunya.', ik: I.gembok,
+    w: 'rgba(47,169,140,.14)', wc: '#1F7A64',
+    periode: () => namaBulan(awalBulan(1).slice(0, 7)),
+    rentang: () => ({ dari: awalBulan(1), sampai: Store.akhirBulan(awalBulan(1).slice(0, 7)), nama: 'bulan-lalu', judul: `Laporan Bulanan — ${namaBulan(awalBulan(1).slice(0, 7))}` }) },
+  { judul: 'Laporan Triwulan', ket: 'Triwulan kalender yang sedang berjalan.', ik: I.bagan,
     w: 'rgba(62,127,184,.14)', wc: '#2C6091',
-    periode: () => 'Q' + (Math.floor(new Date().getMonth() / 3) + 1) + ' ' + new Date().getFullYear(),
-    rentang: () => ({ dari: awalBulan(2), sampai: nowTanggal(), nama: 'triwulan' }) },
-  { judul: 'Laporan Tahunan', ket: 'Rekap keuangan tahunan.', ik: I.piala,
+    periode: () => `Triwulan ${triwulanIni().q} ${new Date().getFullYear()}`,
+    rentang: () => { const t = triwulanIni(); return { dari: t.dari, sampai: t.sampai > nowTanggal() ? nowTanggal() : t.sampai, nama: 'triwulan', judul: `Laporan Triwulan ${t.q} ${new Date().getFullYear()}` }; } },
+  { judul: 'Laporan Periode', ket: 'Sejak awal masa kepengurusan sampai hari ini.', ik: I.piala,
     w: 'rgba(124,92,214,.14)', wc: '#5F45AE',
-    periode: () => 'Tahun ' + new Date().getFullYear(),
-    rentang: () => ({ dari: new Date().getFullYear() + '-01-01', sampai: nowTanggal(), nama: 'tahunan' }) },
-  { judul: 'Laporan Kustom', ket: 'Buat laporan sesuai kebutuhan.', ik: I.sunting,
+    periode: () => { const p = Store.periodeAktif(); return p.ditetapkan ? `${tgl(p.mulai)} – ${tgl(p.selesai)}` : `Tahun ${p.mulai.slice(0, 4)}`; },
+    rentang: () => { const p = Store.periodeAktif(); return { dari: p.mulai, sampai: p.selesai > nowTanggal() ? nowTanggal() : p.selesai, nama: 'periode', judul: 'Laporan Periode Kepengurusan' }; } },
+  { judul: 'Laporan Kustom', ket: 'Rentang tanggal sesuai kebutuhan.', ik: I.sunting,
     w: 'rgba(240,149,30,.15)', wc: '#B87310', kustom: true, periode: () => '' },
 ];
 
@@ -7550,6 +7564,96 @@ function unduhLaporan({ dari, sampai, nama }) {
   unduhCsv(`laporan-keuangan-${nama}-${dari}.csv`, b);
 }
 
+/* Cetak sebuah potongan halaman saja. Potongannya disalin ke wadah
+   tersendiri di luar kerangka aplikasi, lalu kerangkanya disembunyikan
+   selama mencetak — jadi tak perlu daftar panjang "apa saja yang harus
+   disembunyikan" tiap kali halaman berubah. */
+function cetakKhusus(simpul, kertas = '@page { size: A4; margin: 15mm; }', judulBerkas = '') {
+  const wadah = document.body.appendChild(Object.assign(document.createElement('div'), { id: 'cetak-khusus' }));
+  wadah.appendChild(simpul.cloneNode(true));
+  const gaya = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: kertas }));
+  const judulLama = document.title;
+  if (judulBerkas) document.title = judulBerkas;
+  document.body.classList.add('cetak-khusus');
+  const usai = () => {
+    document.body.classList.remove('cetak-khusus');
+    wadah.remove(); gaya.remove(); document.title = judulLama;
+    window.removeEventListener('afterprint', usai);
+  };
+  window.addEventListener('afterprint', usai);
+  window.print();
+}
+
+/** Lembar laporan keuangan untuk satu rentang: saldo awal, pemasukan dan
+    pengeluaran per kategori, transfer, saldo akhir — dua mata uang
+    berdampingan. Tiap angkanya dari buku kas; tak ada yang diketik. */
+function lembarLaporanKas({ dari, sampai, judul }) {
+  const s = Store.cms.situs;
+  const kemarin = (() => { const d = new Date(`${dari}T00:00`); d.setDate(d.getDate() - 1); return tanggalLokal(d); })();
+  const tx = Store.kasSah().filter((t) => t.tanggal >= dari && t.tanggal <= sampai);
+  const masuk = tx.filter((t) => t.jenis === 'masuk'), keluar = tx.filter((t) => t.jenis === 'keluar'), transfer = tx.filter((t) => t.jenis === 'transfer');
+  const lain = Store.db.keuangan.filter((t) => t.tanggal >= dari && t.tanggal <= sampai && !Store.kasSahkah(t));
+  const akun = Store.db.akunKas.map((a) => ({ a, awal: Store.saldoAkun(a.id, kemarin), akhir: Store.saldoAkun(a.id, sampai) }))
+    .filter((x) => !x.a.nonaktif || x.awal.rp || x.awal.egp || x.akhir.rp || x.akhir.egp);
+  const jml = (d, k) => jumlahKas(d, k);
+  const perKat = (d) => [...new Set(d.map((t) => t.kategori || '(tanpa kategori)'))].sort()
+    .map((k) => ({ k, d: d.filter((t) => (t.kategori || '(tanpa kategori)') === k) }));
+  const tot = (kunci) => akun.reduce((j, x) => ({ rp: j.rp + x[kunci].rp, egp: j.egp + x[kunci].egp }), { rp: 0, egp: 0 });
+  const awal = tot('awal'), akhir = tot('akhir');
+  /* Penukaran mengubah total per mata uang: pound keluar, rupiah masuk. */
+  const tukar = { rp: jml(transfer, 'rpTujuan') - jml(transfer, 'rp'), egp: jml(transfer, 'egpTujuan') - jml(transfer, 'egp') };
+  const hitung = { rp: awal.rp + jml(masuk, 'rp') - jml(keluar, 'rp') + tukar.rp, egp: awal.egp + jml(masuk, 'egp') - jml(keluar, 'egp') + tukar.egp };
+  const cocok = hitung.rp === akhir.rp && hitung.egp === akhir.egp;
+  const sel = (n, f) => `<td class="lk-angka">${n ? f(n) : '—'}</td>`;
+  const barisKat = (grup) => grup.map((g) => `<tr><td>${esc(g.k)}</td><td class="lk-angka">${g.d.length}</td>${sel(jml(g.d, 'rp'), rpFmt)}${sel(jml(g.d, 'egp'), egpFmt)}</tr>`).join('')
+    || '<tr><td colspan="4" class="lk-kosong">Tidak ada transaksi.</td></tr>';
+  const orang = (role) => Store.db.users.find((u) => u.role === role && u.status === 'aktif')?.nama || '';
+
+  return el(`<div class="lk">
+    <div class="lk-kop">${lambang(40)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div></div>
+    <h2>${esc(judul || 'Laporan Keuangan')}</h2>
+    <p class="lk-periode">Periode ${esc(tglSurat(dari))} s.d. ${esc(tglSurat(sampai))}</p>
+
+    <h3>A. Saldo Awal <small>per ${esc(tglSurat(kemarin))}</small></h3>
+    <table><thead><tr><th>Akun</th><th class="lk-angka">Rupiah</th><th class="lk-angka">Pound</th></tr></thead>
+      <tbody>${akun.map((x) => `<tr><td>${esc(x.a.nama)}</td><td class="lk-angka">${rpFmt(x.awal.rp)}</td><td class="lk-angka">${egpFmt(x.awal.egp)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Jumlah saldo awal</td><td class="lk-angka">${rpFmt(awal.rp)}</td><td class="lk-angka">${egpFmt(awal.egp)}</td></tr></tfoot></table>
+
+    <h3>B. Pemasukan</h3>
+    <table><thead><tr><th>Kategori</th><th class="lk-angka">Transaksi</th><th class="lk-angka">Rupiah</th><th class="lk-angka">Pound</th></tr></thead>
+      <tbody>${barisKat(perKat(masuk))}</tbody>
+      <tfoot><tr><td>Jumlah pemasukan</td><td class="lk-angka">${masuk.length}</td><td class="lk-angka">${rpFmt(jml(masuk, 'rp'))}</td><td class="lk-angka">${egpFmt(jml(masuk, 'egp'))}</td></tr></tfoot></table>
+
+    <h3>C. Pengeluaran</h3>
+    <table><thead><tr><th>Kategori</th><th class="lk-angka">Transaksi</th><th class="lk-angka">Rupiah</th><th class="lk-angka">Pound</th></tr></thead>
+      <tbody>${barisKat(perKat(keluar))}</tbody>
+      <tfoot><tr><td>Jumlah pengeluaran</td><td class="lk-angka">${keluar.length}</td><td class="lk-angka">${rpFmt(jml(keluar, 'rp'))}</td><td class="lk-angka">${egpFmt(jml(keluar, 'egp'))}</td></tr></tfoot></table>
+
+    ${transfer.length ? `<h3>D. Transfer & Penukaran <small>bukan pemasukan maupun pengeluaran</small></h3>
+    <table><thead><tr><th>No. Bukti</th><th>Tanggal</th><th>Dari → Ke</th><th class="lk-angka">Keluar</th><th class="lk-angka">Tiba</th></tr></thead>
+      <tbody>${transfer.map((t) => `<tr><td>${esc(t.nomor || '')}</td><td>${tgl(t.tanggal)}</td><td>${esc(namaAkun(t.akunId))} → ${esc(namaAkun(t.akunTujuanId))}</td>
+        <td class="lk-angka">${esc(uangDua(t.rp, t.egp))}</td><td class="lk-angka">${esc(uangDua(t.rpTujuan, t.egpTujuan))}</td></tr>`).join('')}</tbody>
+      ${tukar.rp || tukar.egp ? `<tfoot><tr><td colspan="3">Pengaruh penukaran pada total</td><td class="lk-angka" colspan="2">${
+        [tukar.rp ? `${tukar.rp > 0 ? '+' : '−'} ${rpFmt(Math.abs(tukar.rp))}` : '', tukar.egp ? `${tukar.egp > 0 ? '+' : '−'} ${egpFmt(Math.abs(tukar.egp))}` : ''].filter(Boolean).join(' · ')}</td></tr></tfoot>` : ''}</table>` : ''}
+
+    <h3>${transfer.length ? 'E' : 'D'}. Saldo Akhir <small>per ${esc(tglSurat(sampai))}</small></h3>
+    <table><thead><tr><th>Akun</th><th class="lk-angka">Rupiah</th><th class="lk-angka">Pound</th></tr></thead>
+      <tbody>${akun.map((x) => `<tr><td>${esc(x.a.nama)}</td><td class="lk-angka">${rpFmt(x.akhir.rp)}</td><td class="lk-angka">${egpFmt(x.akhir.egp)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Jumlah saldo akhir</td><td class="lk-angka">${rpFmt(akhir.rp)}</td><td class="lk-angka">${egpFmt(akhir.egp)}</td></tr></tfoot></table>
+
+    <p class="lk-cocok ${cocok ? 'ya' : 'tidak'}">${cocok
+      ? `Saldo awal + pemasukan − pengeluaran${tukar.rp || tukar.egp ? ' ± penukaran' : ''} = saldo akhir. Hitungan cocok untuk rupiah dan pound.`
+      : `Hitungan TIDAK cocok: seharusnya ${rpFmt(hitung.rp)} dan ${egpFmt(hitung.egp)}. Periksa saldo awal akun yang pernah diubah.`}</p>
+    ${lain.length ? `<p class="lk-catatan">Tidak termasuk: ${lain.filter((t) => t.status === 'menunggu').length} pengeluaran menunggu persetujuan,
+      ${lain.filter((t) => t.status === 'ditolak').length} ditolak, ${lain.filter((t) => t.status === 'batal').length} dibatalkan.</p>` : ''}
+
+    <div class="lk-ttd"><div>Mengetahui,<br>Ketua Umum<div class="lk-ruang"></div><b>${esc(orang('ketua'))}</b></div>
+      <div>Kairo, ${esc(tglSurat(nowTanggal()))}<br>Bendahara<div class="lk-ruang"></div><b>${esc(orang('bendahara'))}</b></div></div>
+  </div>`);
+}
+
+let laporanTerbuka = null;      // { dari, sampai, judul, nama }
+
 function dialogLaporanKustom() {
   const isi = el(`<div>
     <p style="margin:0 0 16px;font-size:13.2px;color:var(--e-abu)">
@@ -7573,25 +7677,25 @@ function dialogLaporanKustom() {
   pratinjau();
 
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
-    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>${I.unduh} Unduh Laporan</button></div>`);
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Tampilkan Laporan</button></div>`);
   modal({ judul: 'Buat Laporan Kustom', isi, kaki });
   kaki.querySelector('[data-b]').onclick = tutupModal;
   kaki.querySelector('[data-s]').onclick = () => {
     const dari = isi.querySelector('#d1').value, sampai = isi.querySelector('#d2').value;
     if (dari > sampai) return toast('Tanggal awal melewati tanggal akhir.', true);
-    unduhLaporan({ dari, sampai, nama: 'kustom' });
-    tutupModal();
+    laporanTerbuka = { dari, sampai, nama: 'kustom', judul: 'Laporan Keuangan' };
+    tutupModal(); gambar();
   };
 }
 
 HAL['laporan-kas'] = () => {
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
-    <b>Laporan diunduh sebagai berkas CSV</b>
-    Terbuka langsung di Excel dengan dobel-klik. Tiap laporan memuat rincian transaksi
-    beserta total pemasukan, pengeluaran, dan selisihnya — dalam rupiah dan pound berdampingan.
+    <b>Laporan siap cetak, atau unduh rinciannya</b>
+    "Lihat & Cetak" menyusun laporan ringkas — saldo awal, pemasukan dan pengeluaran per kategori, saldo akhir —
+    yang dapat dicetak atau disimpan sebagai PDF. "CSV" mengunduh rincian tiap transaksinya untuk dibuka di Excel.
   </div></div></div>`);
   const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
-    <h3>Laporan Keuangan</h3><span class="hitung">(${Store.db.keuangan.length} transaksi tercatat)</span></div>
+    <h3>Laporan Keuangan</h3><span class="hitung">(${Store.kasSah().length} transaksi sah)</span></div>
     <div class="mw-panel-isi" data-isi></div></div>`);
   const isi = kartu.querySelector('[data-isi]');
   LAPORAN_KAS.forEach((r) => {
@@ -7599,12 +7703,30 @@ HAL['laporan-kas'] = () => {
       <span class="ik" style="--w:${r.w};--wc:${r.wc}">${r.ik}</span>
       <div class="isi"><div class="jd">${esc(r.judul)}</div><div class="kt">${esc(r.ket)}</div></div>
       <span class="pd">${esc(r.periode())}</span>
-      <button class="btn btn-garis btn-kecil">${r.kustom ? `Buat Laporan ${I.panahKanan}` : `${I.unduh} Unduh`}</button>
+      ${r.kustom ? `<button class="btn btn-garis btn-kecil" data-lihat>Pilih Rentang ${I.panahKanan}</button>`
+        : `<button class="btn btn-kecil" data-lihat>Lihat & Cetak</button><button class="btn btn-garis btn-kecil" data-csv>${I.unduh} CSV</button>`}
     </div>`);
-    n.querySelector('button').onclick = () => (r.kustom ? dialogLaporanKustom() : unduhLaporan(r.rentang()));
+    n.querySelector('[data-lihat]').onclick = () => { if (r.kustom) return dialogLaporanKustom(); laporanTerbuka = r.rentang(); gambar(); };
+    n.querySelector('[data-csv]')?.addEventListener('click', () => unduhLaporan(r.rentang()));
     isi.appendChild(n);
   });
   box.appendChild(kartu);
+
+  if (laporanTerbuka) {
+    const lembar = lembarLaporanKas(laporanTerbuka);
+    const lap = el(`<div class="kartu lk-kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+      <h3>${esc(laporanTerbuka.judul || 'Laporan Keuangan')}</h3><span class="hitung">${tgl(laporanTerbuka.dari)} – ${tgl(laporanTerbuka.sampai)}</span>
+      <div class="kanan"><button class="btn btn-garis btn-kecil" data-csv>${I.unduh} CSV</button>
+        <button class="btn btn-kecil" data-cetak>${I.unduh} Cetak / Simpan PDF</button>
+        <button class="btn btn-garis btn-kecil" data-tutup>${I.tutup} Tutup</button></div></div>
+      <div class="lk-bingkai"></div></div>`);
+    lap.querySelector('.lk-bingkai').appendChild(lembar);
+    lap.querySelector('[data-cetak]').onclick = () => cetakKhusus(lembar, '@page { size: A4; margin: 15mm; }',
+      `${laporanTerbuka.judul || 'Laporan Keuangan'} ${laporanTerbuka.dari} sd ${laporanTerbuka.sampai}`);
+    lap.querySelector('[data-csv]').onclick = () => unduhLaporan(laporanTerbuka);
+    lap.querySelector('[data-tutup]').onclick = () => { laporanTerbuka = null; gambar(); };
+    box.appendChild(lap);
+  }
 
   /* buku besar */
   const semua = [...Store.kasSah()].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
@@ -7616,18 +7738,18 @@ HAL['laporan-kas'] = () => {
   const cari = bb.querySelector('[data-cari]');
   const isiUlang = () => {
     const q = cari.value.trim().toLowerCase();
-    const data = semua.filter((t) => !q || `${t.sumber} ${t.kategori} ${t.ket}`.toLowerCase().includes(q));
+    const data = semua.filter((t) => !q || `${t.nomor || ''} ${t.sumber} ${t.kategori} ${t.ket}`.toLowerCase().includes(q));
     if (!data.length) { wadah.replaceChildren(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada transaksi yang cocok</p></div>`)); return; }
     wadah.replaceChildren(el(`<div class="tabel-bungkus"><table class="t-org">
-      <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Sumber / Jenis</th><th>Kategori</th>
+      <thead><tr><th class="kol-no">No.</th><th>No. Bukti</th><th>Tanggal</th><th>Sumber / Jenis</th><th>Kategori</th>
         <th>Akun</th><th>Masuk</th><th>Keluar</th></tr></thead>
       <tbody>${data.map((t, i) => `<tr>
-        <td class="kol-no">${i + 1}</td><td class="utuh">${tgl(t.tanggal)}</td>
+        <td class="kol-no">${i + 1}</td><td class="utuh"><span class="nia">${esc(t.nomor || '—')}</span></td><td class="utuh">${tgl(t.tanggal)}</td>
         <td><b>${esc(t.sumber || t.kategori)}</b>${t.arus ? `<br><span class="lencana l-abu">${t.arus}</span>` : ''}</td>
         <td class="utuh">${esc(t.kategori)}</td>
-        <td class="utuh"><span class="lencana l-abu">${esc(namaAkun(t.akunId))}</span></td>
-        <td class="utuh" style="color:#4A7A1E">${t.jenis === 'masuk' ? Store.nominalGabung(t) : '—'}</td>
-        <td class="utuh" style="color:#B23E37">${t.jenis === 'keluar' ? Store.nominalGabung(t) : '—'}</td>
+        <td class="utuh"><span class="lencana l-abu">${esc(namaAkun(t.akunId))}</span>${t.jenis === 'transfer' ? `<br><span class="sub-sel">→ ${esc(namaAkun(t.akunTujuanId))}</span>` : ''}</td>
+        <td class="utuh" style="color:#4A7A1E">${t.jenis === 'masuk' ? Store.nominalGabung(t) : t.jenis === 'transfer' ? `<span class="sub-sel">tiba ${esc(uangDua(t.rpTujuan, t.egpTujuan))}</span>` : '—'}</td>
+        <td class="utuh" style="color:#B23E37">${t.jenis === 'keluar' ? Store.nominalGabung(t) : t.jenis === 'transfer' ? `<span class="sub-sel">pindah ${esc(uangDua(t.rp, t.egp))}</span>` : '—'}</td>
       </tr>`).join('')}</tbody></table></div>`));
   };
   cari.oninput = isiUlang;

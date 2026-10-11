@@ -343,6 +343,57 @@ mencapai nominal; ia membayar dengan salah satu. Halaman Iuran per Anggota
 menampilkan siapa lunas, bayar sebagian, atau belum untuk bulan yang dipilih,
 dapat disaring dan diunduh sebagai CSV.
 
+### Ruang kerja Bendahara
+
+Sidebar Bendahara mengikuti jalannya uang:
+
+| Kelompok | Pertanyaan | Isi |
+|----------|------------|-----|
+| **Terima** | Uang apa yang masuk? | Iuran per Anggota, Pemasukan Internal, Pemasukan Eksternal |
+| **Keluarkan** | Uang apa yang keluar? | Pengeluaran, Transfer & Tukar |
+| **Periksa** | Apakah bukunya cocok? | Saldo & Akun, Tutup Buku |
+| **Laporkan** | Apa yang kusampaikan? | Laporan Keuangan, Anggaran & Realisasi |
+| **Pengaturan** | Yang jarang disentuh | Kategori & Akun, periode kepengurusan |
+
+**Status transaksi.** `sah` dihitung dalam saldo dan laporan; `menunggu`,
+`ditolak`, dan `batal` tetap tampak di buku tetapi tidak dihitung. Transaksi
+lama tanpa status dianggap sah.
+
+- **Nomor bukti** otomatis: `BKM` (kas masuk), `BKK` (kas keluar), `BTR`
+  (transfer), kode periode, nomor urut — `BKK-2627-0014`. Periodenya masa
+  kepengurusan yang ditetapkan Bendahara, bukan tahun kalender.
+- **Persetujuan.** Pengeluaran sah setelah disetujui Ketua Umum di halaman
+  *Persetujuan Pengeluaran*. Ketua menetapkan batasnya; nol berarti semua
+  nominal perlu disetujui. Aturan ini ditegakkan `jagaKas()` di
+  `api/inti.php`: Bendahara tak dapat mengesahkan pengeluarannya sendiri dan
+  Ketua tak dapat mengubah isinya, sekalipun memanggil API langsung.
+- **Transfer & Tukar** memindahkan uang antar akun atau menukar mata uang
+  tanpa dihitung sebagai pemasukan atau pengeluaran.
+- **Batalkan, bukan hapus.** Transaksi dibatalkan dengan alasan dan tetap
+  tercoret di buku; hapus permanen hanya untuk yang dicatat hari itu juga.
+  Perubahan nominal, akun, dan tanggal tercatat pada riwayat transaksinya.
+- **Tutup Buku** per bulan, setelah mencocokkan uang yang benar-benar ada
+  dengan saldo buku; selisihnya wajib dijelaskan. Bulan yang ditutup terkunci
+  di peramban dan di server. Hanya Ketua yang dapat membukanya kembali.
+- **Akun dan kategori** yang masih dipakai tak dapat dihapus, cukup
+  dinonaktifkan. Mengganti nama kategori ikut mengganti namanya di seluruh
+  transaksinya. Saldo awal akun yang sudah bertransaksi berubah hanya dengan
+  alasan.
+- **Anggaran** per kategori pengeluaran untuk satu periode; realisasinya
+  dihitung dari buku kas. Transaksi dapat ditautkan ke **Program Kerja** dan
+  **Proyek Buku** — biaya program tampil di ruang kerja Ketua, realisasi buku
+  di ruang kerja PJ Buku. Pusat keuangan tetap satu.
+- **Iuran:** tunggakan dihitung sejak awal periode (atau sejak anggota
+  bergabung), dapat dibayar beberapa bulan sekaligus, dan berkuitansi.
+- **Laporan** siap cetak — saldo awal, pemasukan dan pengeluaran per kategori,
+  transfer, saldo akhir, dua mata uang — untuk bulan berjalan, bulan lalu,
+  triwulan kalender, periode kepengurusan, atau rentang bebas. Rinciannya
+  tetap dapat diunduh sebagai CSV.
+
+`uji/nama-bentrok.py` memeriksa nama tingkat-atas yang dideklarasikan dua kali
+di antara skrip ERP — kesalahan yang menggugurkan satu skrip seluruhnya dan
+tak terlihat oleh `node --check`.
+
 ### Ruang kerja PJ Koordinator Kajian
 
 Seluruh halamannya terikat pada **Angkatan & Level** yang dipilih di kanan atas —

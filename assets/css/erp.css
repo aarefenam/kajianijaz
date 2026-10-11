@@ -1600,6 +1600,31 @@ b.perlu { color: var(--e-merah); }
 
 .bar-maju.lampau span { background: linear-gradient(90deg, #E5534B, #B23E37); }
 
+/* --------- laporan keuangan siap cetak --------- */
+.lk-bingkai { background: #E7EBE7; padding: 16px; overflow-x: auto; }
+.lk { background: #fff; color: #111; max-width: 180mm; margin: 0 auto; padding: 12mm 14mm; box-shadow: 0 2px 12px rgba(0,0,0,.12);
+  font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; }
+.lk-kop { display: flex; align-items: center; gap: 4mm; padding-bottom: 3.5mm; border-bottom: .7mm double #111; margin-bottom: 5mm; }
+.lk-kop b { display: block; font-size: 14pt; letter-spacing: .4pt; } .lk-kop span { font-size: 9.5pt; }
+.lk h2 { text-align: center; font-size: 14pt; margin: 0; text-transform: uppercase; letter-spacing: .6pt; }
+.lk-periode { text-align: center; margin: 1mm 0 5mm; font-size: 10.5pt; }
+.lk h3 { font-size: 11.5pt; margin: 5mm 0 1.5mm; break-after: avoid; }
+.lk h3 small { font-weight: 400; font-size: 9.5pt; font-style: italic; }
+.lk table { width: 100%; border-collapse: collapse; }
+.lk th, .lk td { border: .25mm solid #777; padding: 1.3mm 2mm; font-size: 10.5pt; background: transparent; color: #111;
+  text-transform: none; letter-spacing: 0; white-space: normal; font-weight: 400; vertical-align: top; }
+.lk th { font-weight: 700; background: #F1F3F1; }
+.lk tbody tr:hover { background: transparent; }
+.lk tfoot td { font-weight: 700; background: #F8F9F8; }
+.lk .lk-angka { text-align: right; white-space: nowrap; }
+.lk-kosong { text-align: center; font-style: italic; color: #666 !important; }
+.lk-cocok { margin: 4mm 0 0; font-size: 10pt; font-style: italic; }
+.lk-cocok.tidak { color: #B23E37; font-weight: 700; font-style: normal; }
+.lk-catatan { margin: 1mm 0 0; font-size: 9.5pt; color: #444; }
+.lk-ttd { display: flex; justify-content: space-between; gap: 10mm; margin-top: 9mm; break-inside: avoid; }
+.lk-ttd > div { text-align: center; min-width: 58mm; } .lk-ruang { height: 18mm; }
+#cetak-khusus { display: none; }
+
 /* --------- layar pindai --------- */
 .layar-pindai {
   position: fixed; inset: 0; z-index: 120; background: #0B1F14; color: #fff;
@@ -1730,4 +1755,12 @@ b.perlu { color: var(--e-merah); }
   body.cetak-kuitansi .modal-isi { padding: 0 !important; overflow: visible !important; max-height: none !important; }
   body.cetak-kuitansi .kw-bungkus { background: transparent !important; padding: 0 !important; }
   body.cetak-kuitansi .kw { border: .3mm solid #666 !important; }
+}
+
+/* Cetak khusus: hanya potongan yang disalin ke #cetak-khusus. */
+@media print {
+  body.cetak-khusus > *:not(#cetak-khusus) { display: none !important; }
+  body.cetak-khusus #cetak-khusus { display: block !important; }
+  body.cetak-khusus .lk { box-shadow: none !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+  body.cetak-khusus .lk th, body.cetak-khusus .lk tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
