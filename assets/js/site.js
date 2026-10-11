@@ -382,18 +382,21 @@ const SUMBER = {
 
   buku: {
     label: 'Buku',
-    ambil: () => [...(Store.db.buku || [])],
+    /* Yang sudah terbit lebih dulu, lalu yang sedang digarap. */
+    ambil: () => [...(Store.db.buku || [])].sort((a, b) => (a.status === 'terbit' ? 0 : 1) - (b.status === 'terbit' ? 0 : 1)),
     cari : (x) => [x.judul, x.ringkas],
     /* Tanpa gambar sampul: yang ada di data hanyalah naskah yang masih
        digarap. Punggung buku tipografis lebih jujur daripada sampul
        contoh yang bukan sampul aslinya. */
     kartu: (x) => `<article class="kk kk-buku">
-      <div class="kk-sampul"><span>${esc(x.judul)}</span><i></i></div>
+      ${x.sampul ? `<div class="kk-sampul" style="background:center/cover url('${esc(x.sampul)}')"></div>`
+        : `<div class="kk-sampul"><span>${esc(x.judul)}</span><i></i></div>`}
       <div class="kk-isi">
         <h3 class="kk-judul">${esc(x.judul)}</h3>
         ${x.ringkas ? `<p class="kk-teks">${esc(String(x.ringkas).slice(0, 96))}</p>` : ''}
-        <div class="kk-kaki kk-garis"><span class="kk-tag">${esc(x.tahap || 'proses')}</span>
-        ${x.targetTerbit ? `<span>Target ${tglPendek(x.targetTerbit)}</span>` : ''}</div>
+        <div class="kk-kaki kk-garis">${x.status === 'terbit'
+          ? `<span class="kk-tag">Sudah terbit</span>${x.terbitPada ? `<span>${tglPendek(x.terbitPada)}</span>` : ''}`
+          : `<span class="kk-tag">${esc(x.tahap || 'proses')}</span>${x.targetTerbit ? `<span>Target ${tglPendek(x.targetTerbit)}</span>` : ''}`}</div>
       </div>
     </article>`,
   },

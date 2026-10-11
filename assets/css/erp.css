@@ -1821,3 +1821,5 @@ b.perlu { color: var(--e-merah); }
 .naskah-riwayat .br:first-child { border-top: 0; }
 .naskah-riwayat .lencana { flex: none; }
 .naskah-riwayat .ct { margin-top: 3px; color: #44534A; }
+
+.t-org tr.baris-dibuka td { background: rgba(140,198,63,.07); }

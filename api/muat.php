@@ -59,8 +59,10 @@ if (!$u) {
     /* Buku: judul dan ringkasannya saja. Modal, honor, timeline, dan
        daftar penanggung jawab tiap tahap tidak ikut. */
     'buku' => [
-      ['id', 'judul', 'ringkas', 'tahap', 'status', 'targetTerbit'],
-      fn($x) => ($x['status'] ?? '') !== 'arsip',
+      ['id', 'judul', 'ringkas', 'tahap', 'status', 'targetTerbit', 'terbitPada', 'sampul'],
+      /* Katalog publik: yang sudah terbit dan yang sedang digarap. Rencana
+         yang belum dimulai dan proyek yang dihentikan tidak tampil. */
+      fn($x) => in_array($x['status'] ?? '', ['terbit', 'berjalan', 'aktif'], true),
     ],
     'event' => [
       ['id', 'judul', 'tanggal', 'jam', 'lokasi', 'ket'],

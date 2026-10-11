@@ -297,6 +297,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   if ($nama === 'keuangan' || $nama === 'aturKas' || $nama === 'tutupBuku') jagaKas($user, $nama, $isiBaru);
   if ($nama === 'kajian') jagaKajian($user, $isiBaru);
   if ($nama === 'artikel') susunArtikel($user, $isiBaru);
+  if ($nama === 'buku') jagaBuku($isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
@@ -451,6 +452,34 @@ function jagaHapusPengguna(array $user, $isiBaru): void {
     }
     if (bolehkah($u, 'user.manage') && !bolehkah($user, 'user.manage')) {
       galat('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.', 403);
+    }
+  }
+}
+
+/**
+ * Penjaga baris `buku`. Proyek yang sudah memuat naskah, dokumen,
+ * kegiatan produksi, penjualan, atau transaksi Buku Kas tidak dapat
+ * dibuang: ia dihentikan beserta alasannya. Tanpa ini, satu kiriman dapat
+ * melenyapkan proyek yang masih dirujuk catatan Bendahara.
+ */
+function jagaBuku($isiBaru): void {
+  if (!is_array($isiBaru)) galat('Bentuk data buku tidak sah.');
+  $tersisa = [];
+  foreach ($isiBaru as $b) {
+    if (is_array($b) && ($b['id'] ?? '') !== '') $tersisa[$b['id']] = true;
+  }
+  $kas = null;
+  foreach (bacaKoleksi('buku')['isi'] ?? [] as $b) {
+    $id = $b['id'] ?? '';
+    if ($id === '' || isset($tersisa[$id])) continue;
+    /* Proyek contoh bawaan kedua dibuang migrasiBuku() di store.js. */
+    if ($id === 'bk2' && ($b['judul'] ?? '') === 'Kaidah-Kaidah Tafsir Nusantara') continue;
+    foreach (['naskah', 'dokumen', 'produksi', 'penjualan'] as $bagian) {
+      if (!empty($b[$bagian])) galat('Proyek "' . ($b['judul'] ?? $id) . '" sudah memuat pekerjaan — hentikan, jangan dihapus.', 403);
+    }
+    if ($kas === null) $kas = bacaKoleksi('keuangan')['isi'] ?? [];
+    foreach ($kas as $t) {
+      if (($t['bukuId'] ?? '') === $id) galat('Proyek "' . ($b['judul'] ?? $id) . '" dirujuk transaksi Buku Kas — hentikan, jangan dihapus.', 403);
     }
   }
 }

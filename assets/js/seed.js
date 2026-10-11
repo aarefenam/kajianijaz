@@ -887,7 +887,7 @@ const KASARAN = (uraian, rp, egp) => ({ id: 'md' + rp, uraian, rp, egp });
 
 SEED.buku = [
   {
-    id: 'bk1', status: 'aktif', tahap: 'penulisan',
+    id: 'bk1', status: 'berjalan', tahap: 'penulisan',
     judul: 'Peta Intelektual Mufassir',
     ringkas: 'Bunga rampai kajian atas sepuluh kitab tafsir beserta corak dan kecenderungan mufassirnya.',
     kumpulPerdana: '2025-06-10',
@@ -954,36 +954,6 @@ SEED.buku = [
     ],
   },
 
-  {
-    id: 'bk2', status: 'arsip', tahap: 'selesai',
-    judul: "Kaidah-Kaidah Tafsir Nusantara",
-    ringkas: 'Terbit perdana Kajian Al-I\'jaz, memuat delapan kajian atas tradisi tafsir di Nusantara.',
-    kumpulPerdana: '2024-02-05',
-    targetTerbit: '2024-08-18',
-    pjUtamaId: 'u2',
-    editorIds: ['u7'], layouterIds: ['u5'], desainerIds: ['u6'], pjProduksiId: 'u3',
-    timeline: [
-      { id: 'tl7',  tahapan: 'Pengumpulan Tulisan', tanggal: '2024-04-30' },
-      { id: 'tl8',  tahapan: 'Editing',             tanggal: '2024-05-30' },
-      { id: 'tl9',  tahapan: 'Layouting & Desain',  tanggal: '2024-06-25' },
-      { id: 'tl10', tahapan: 'Cetak',               tanggal: '2024-07-28' },
-      { id: 'tl11', tahapan: 'Distribusi',          tanggal: '2024-08-18' },
-    ],
-    naskah: [
-      { id: 'nk11', userId: 'u4',  subJudul: 'Tafsir Marah Labid',      progressTulis: 'siap', progressEdit: 'siap', deadline: '2024-04-30', buktiLayout: '' },
-      { id: 'nk12', userId: 'u11', subJudul: 'Tafsir al-Ibriz',         progressTulis: 'siap', progressEdit: 'siap', deadline: '2024-04-30', buktiLayout: '' },
-      { id: 'nk13', userId: 'u14', subJudul: 'Tafsir al-Azhar',         progressTulis: 'siap', progressEdit: 'siap', deadline: '2024-04-30', buktiLayout: '' },
-      { id: 'nk14', userId: 'u18', subJudul: 'Tafsir al-Misbah',        progressTulis: 'siap', progressEdit: 'siap', deadline: '2024-04-30', buktiLayout: '' },
-    ],
-    desain: [{ id: 'ds4', keterangan: 'Cover Depan', bukti: ph('KAIDAH TAFSIR NUSANTARA', '#1E4D2B', '#0E2E1C', 'قواعد') }],
-    produksi: [
-      { id: 'pd5', kegiatan: 'Cetak 150 eksemplar', selesai: true },
-      { id: 'pd6', kegiatan: 'Distribusi ke wilayah', selesai: true },
-    ],
-    distribusi: [{ id: 'db4', wilayah: 'Seluruh Wilayah', pjId: 'u3' }],
-    modal: [KASARAN('Cetak (150 eksemplar)', 3200000, 1900), KASARAN('Desain & Layout', 600000, 360)],
-    dokumen: [{ id: 'dk5', nama: 'Laporan Pertanggungjawaban Terbit', jenis: 'Laporan', tanggal: '2024-09-01' }],
-  },
 ];
 
 /* ==========================================================

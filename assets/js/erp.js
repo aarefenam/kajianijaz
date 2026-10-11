@@ -5031,13 +5031,14 @@ const cekBaca = (on) => `<span class="cek-baca ${on ? 'on' : ''}">${on ? I.cek :
 /** Yang menuntut tindakan PJ Buku, dari seluruh proyek yang masih berjalan. */
 function perluBuku() {
   const kini = nowTanggal();
-  const jalan = Store.db.buku.filter((b) => !['arsip', 'terbit', 'dihentikan'].includes(b.status));
+  const jalan = Store.db.buku.filter(Store.bukuJalan);
   const dari = (f) => jalan.flatMap((b) => f(b).map((x) => ({ b, x })));
   return {
     telatTulis: dari((b) => (b.naskah || []).filter((n) => n.progressTulis !== 'siap' && n.deadline && n.deadline < kini)),
     siapEdit: dari((b) => (b.naskah || []).filter((n) => n.progressTulis === 'siap' && n.progressEdit !== 'siap')),
     siapLayout: dari((b) => (b.naskah || []).filter((n) => n.progressEdit === 'siap' && !n.buktiLayout)),
     telatTerbit: jalan.filter((b) => b.targetTerbit && b.targetTerbit < kini),
+    telatTimeline: dari((b) => (b.timeline || []).filter((t) => !t.selesai && t.tanggal && t.tanggal < kini)),
     tanpaTim: jalan.filter((b) => !b.pjUtamaId || !(b.editorIds || []).length),
   };
 }
@@ -5049,6 +5050,9 @@ function antreanBuku() {
     { ...ke('buku-perencanaan', p.telatTerbit), ikon: I.peringatan, judul: 'Target Terbit Terlewat', n: p.telatTerbit.length,
       satuan: 'proyek melewati target terbitnya', kosong: 'Tidak ada proyek yang melewati target',
       rinci: p.telatTerbit[0] && `${p.telatTerbit[0].judul} — target ${tgl(p.telatTerbit[0].targetTerbit)}` },
+    { ...ke('buku-perencanaan', p.telatTimeline), ikon: I.kalender, judul: 'Tahapan Timeline Terlewat', n: p.telatTimeline.length,
+      satuan: 'tahapan lewat tanggal dan belum ditandai selesai', kosong: 'Timeline berjalan sesuai tanggal',
+      rinci: rinci(p.telatTimeline, (d) => `${d.x.tahapan} (${tgl(d.x.tanggal)})`) },
     { ...ke('buku-penulisan', p.telatTulis), ikon: I.jam, judul: 'Naskah Lewat Tenggat', n: p.telatTulis.length,
       satuan: 'sub judul belum selesai ditulis', kosong: 'Tidak ada naskah yang terlambat',
       rinci: rinci(p.telatTulis, (d) => `${d.x.subJudul} (${Store.namaUser(d.x.userId)})`) },
@@ -5079,7 +5083,7 @@ function dasborBuku() {
   box.appendChild(el(`<div class="bk-stat-grid">
     ${[
       { ik: I.buku,      w: 'rgba(140,198,63,.16)', wc: '#4A7A1E', l: 'Proyek Dibuka', n: potongJudul(b.judul, 26), s: `dari ${Store.db.buku.length} proyek`, kecil: true },
-      { ik: I.alurKerja, w: 'rgba(240,149,30,.15)', wc: '#B87310', l: 'Tahap Berjalan', n: TAHAP_BUKU[b.tahap] || b.tahap, s: 'Tahap saat ini', kecil: true },
+      { ik: I.alurKerja, w: 'rgba(240,149,30,.15)', wc: '#B87310', l: 'Tahap Berjalan', n: TAHAP_BUKU[Store.tahapBuku(b)], s: 'Tahap saat ini', kecil: true },
       { ik: I.kalender,  w: 'rgba(62,127,184,.14)', wc: '#2C6091', l: 'Total Penulis', n: penulisUnik, s: 'Orang' },
       { ik: I.simpul,    w: 'rgba(124,92,214,.14)', wc: '#5F45AE', l: 'Target Terbit', n: tgl(b.targetTerbit), s: 'Estimasi selesai', kecil: true },
     ].map((s) => `<div class="bk-stat" style="--w:${s.w};--wc:${s.wc}">
@@ -5270,6 +5274,37 @@ Object.assign(MODUL, {
   }),
 });
 
+const STATUS_BK = {
+  rencana   : { l: 'Rencana',    c: 'l-abu'    },
+  berjalan  : { l: 'Berjalan',   c: 'l-kuning' },
+  terbit    : { l: 'Terbit',     c: 'l-hijau'  },
+  dihentikan: { l: 'Dihentikan', c: 'l-merah'  },
+};
+
+/** Mulai, terbitkan, hentikan, atau buka kembali sebuah proyek. */
+function dialogStatusBuku(b, ke) {
+  const perluAlasan = ke === 'dihentikan' || (ke === 'berjalan' && b.status !== 'rencana');
+  const judul = { berjalan: b.status === 'rencana' ? 'Mulai kerjakan proyek' : 'Buka kembali proyek', terbit: 'Nyatakan buku terbit', dihentikan: 'Hentikan proyek' }[ke];
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(b.judul)}</b> · kini ${esc(STATUS_BK[b.status].l.toLowerCase())}</p>
+    ${ke === 'terbit' ? `<div class="grup"><label>Tanggal Terbit</label><input type="date" data-tgl value="${nowTanggal()}" max="${nowTanggal()}">
+      <div class="bantu">Buku yang terbit tampil di katalog website publik.</div></div>` : ''}
+    ${perluAlasan ? `<div class="grup" style="margin:0"><label>Alasan</label>
+      <textarea data-alasan style="min-height:70px" placeholder="${ke === 'dihentikan' ? 'Contoh: dana belum tersedia, digabung ke proyek lain' : 'Contoh: cetak ulang, ada bab tambahan'}"></textarea>
+      ${ke === 'dihentikan' ? '<div class="bantu">Proyek tetap tercatat beserta seluruh isinya dan dapat dibuka kembali.</div>' : ''}</div>` : ''}
+    ${!perluAlasan && ke !== 'terbit' ? '<p style="margin:0;font-size:13.2px;color:var(--e-abu)">Proyek masuk antrean dasbor dan dihitung sebagai berjalan.</p>' : ''}
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn ${ke === 'dihentikan' ? 'btn-merah' : 'btn-lime'}" data-y>${esc(judul)}</button></div>`);
+  modal({ judul, isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => {
+    if (aman(() => Store.ubahStatusBuku(U, b.id, ke, { alasan: isi.querySelector('[data-alasan]')?.value, tanggal: isi.querySelector('[data-tgl]')?.value }))) {
+      tutupModal(); toast(`Proyek kini ${STATUS_BK[ke].l.toLowerCase()}.`); gambar();
+    }
+  };
+}
+
 /* --- Perencanaan: daftar proyek + rencana + timeline --- */
 HAL['buku-perencanaan'] = () => {
   const box = el('<div></div>');
@@ -5284,28 +5319,36 @@ HAL['buku-perencanaan'] = () => {
       <th>Sub Judul</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   Store.db.buku.forEach((b, i) => {
-    const tr = el(`<tr>
+    const dibuka = b.id === aktif?.id;
+    const st = STATUS_BK[b.status] || STATUS_BK.rencana;
+    const telat = Store.bukuJalan(b) && b.targetTerbit && b.targetTerbit < nowTanggal();
+    const jejak = (b.riwayatStatus || []).slice(-1)[0];
+    const tr = el(`<tr class="${dibuka ? 'baris-dibuka' : ''}">
       <td class="kol-no">${i + 1}</td>
-      <td><b>${esc(b.judul)}</b><br><span style="color:var(--e-abu);font-size:11.8px">${esc(b.ringkas || '')}</span></td>
-      <td class="utuh">${esc(TAHAP_BUKU[b.tahap] || b.tahap)}</td>
-      <td class="utuh">${tgl(b.targetTerbit)}</td>
+      <td><b>${esc(b.judul)}</b>${dibuka ? ' <span class="lencana l-biru">sedang dibuka</span>' : ''}<br><span style="color:var(--e-abu);font-size:11.8px">${esc(b.ringkas || '')}</span>
+        ${jejak?.alasan ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(jejak.ke)}: ${esc(jejak.alasan)}</span>` : ''}</td>
+      <td class="utuh">${esc(TAHAP_BUKU[Store.tahapBuku(b)])}</td>
+      <td class="utuh">${b.status === 'terbit' ? `terbit ${tgl(b.terbitPada)}` : tgl(b.targetTerbit)}${telat ? '<br><span class="lencana l-merah">terlewat</span>' : ''}</td>
       <td class="utuh">${(b.naskah || []).length}</td>
-      <td><span class="lencana ${b.status === 'aktif' ? 'l-hijau' : 'l-abu'}">${esc(b.status)}</span></td>
+      <td><span class="lencana ${st.c}">${st.l}</span></td>
       <td class="kol-aksi"><div class="sel-aksi">
-        ${b.status === 'aktif' ? '' : `<button class="ikon-aksi" data-aktif title="Jadikan proyek aktif">${I.cek}</button>`}
+        ${dibuka ? '' : `<button class="ikon-aksi" data-buka title="Buka proyek ini">${I.mata}</button>`}
         <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
-        <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>
+        ${b.status === 'rencana' ? `<button class="ikon-aksi" data-st="berjalan" title="Mulai kerjakan">${I.nyala}</button>` : ''}
+        ${b.status === 'berjalan' ? `<button class="ikon-aksi" data-st="terbit" title="Nyatakan terbit">${I.cek}</button>` : ''}
+        ${Store.bukuJalan(b) ? `<button class="ikon-aksi" data-st="dihentikan" title="Hentikan proyek">${I.tutup}</button>`
+          : `<button class="ikon-aksi" data-st="berjalan" title="Buka kembali">${I.putar}</button>`}
+        ${Store.bukuBerisi(b) ? '' : `<button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>`}
       </div></td></tr>`);
-    tr.querySelector('[data-aktif]')?.addEventListener('click', () => aman(() => {
-      Store.aktifkanBuku(U, b.id); toast(`"${b.judul}" kini proyek aktif.`); gambar();
-    }));
+    tr.querySelector('[data-buka]')?.addEventListener('click', () => { bukaProyek(b.id); gambar(); });
+    tr.querySelectorAll('[data-st]').forEach((x) => { x.onclick = () => dialogStatusBuku(b, x.dataset.st); });
     tr.querySelector('.sunting').onclick = () => formBuku(b);
-    tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus proyek buku',
-      `"${b.judul}" beserta seluruh tahapnya akan dihapus.`,
-      () => aman(() => { Store.hapusBuku(U, b.id); toast('Proyek dihapus.'); gambar(); }));
+    tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus proyek buku',
+      `"${b.judul}" akan dihapus. Proyek ini belum memuat naskah, dokumen, maupun transaksi.`,
+      () => { if (aman(() => Store.hapusBuku(U, b.id))) { toast('Proyek dihapus.'); gambar(); } }));
     tb.appendChild(tr);
   });
-  pasangPilih(t, Store.db.buku, { satuan: 'proyek buku', hapus: (b) => Store.hapusBuku(U, b.id) });
+  pasangPilih(t, Store.db.buku, { satuan: 'proyek buku', boleh: (b) => !Store.bukuBerisi(b), hapus: (b) => Store.hapusBuku(U, b.id) });
   daftar.appendChild(t);
   daftar.querySelector('[data-baru]').onclick = () => formBuku(null);
   box.appendChild(daftar);
@@ -5326,15 +5369,19 @@ HAL['buku-perencanaan'] = () => {
     <button class="btn btn-kecil" data-tl style="margin-left:auto">${I.tambah} Tahapan</button></div>
     <div class="bk-sub-isi" data-isi></div></div>`);
   const tlBody = el(`<div class="tabel-bungkus"><table class="t-org t-rapat">
-    <thead><tr><th class="kol-no">No.</th><th>Tahapan</th><th>Tanggal</th><th class="kol-aksi">Aksi</th></tr></thead>
+    <thead><tr><th class="kol-no">No.</th><th>Tahapan</th><th>Tanggal</th><th class="kol-tengah">Selesai</th><th class="kol-aksi">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tlTb = tlBody.querySelector('tbody');
+  aktif.timeline.sort((a, b) => String(a.tanggal).localeCompare(String(b.tanggal)));
   aktif.timeline.forEach((x, i) => {
+    const lewat = !x.selesai && x.tanggal && x.tanggal < nowTanggal();
     const tr = el(`<tr><td class="kol-no">${i + 1}</td><td>${esc(x.tahapan)}</td>
-      <td class="utuh">${tgl(x.tanggal)}</td>
+      <td class="utuh">${tgl(x.tanggal)}${lewat ? ' <span class="lencana l-merah">terlewat</span>' : ''}</td>
+      <td class="kol-tengah"><button class="cek-kotak ${x.selesai ? 'on' : ''}" title="${x.selesai ? 'Batalkan tanda selesai' : 'Tandai selesai'}">${I.cek}</button></td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting">${I.sunting}</button>
         <button class="ikon-aksi hapus">${I.hapus}</button></div></td></tr>`);
+    tr.querySelector('.cek-kotak').onclick = () => { if (aman(() => Store.simpanBagianBuku(U, 'timeline', { id: x.id, selesai: !x.selesai }))) gambar(); };
     tr.querySelector('.sunting').onclick = () => formTimeline(x);
     tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus tahapan',
       `"${x.tahapan}" akan dihapus dari timeline.`,
@@ -5351,24 +5398,35 @@ HAL['buku-perencanaan'] = () => {
 HAL['buku-perencanaan'].judul = () => ['Perencanaan', 'Proyek buku, rencana pokok, dan timeline penerbitan.'];
 
 function formBuku(b) {
+  const opsi = (pilih) => `<option value="">— belum ditentukan —</option>`
+    + pilihAnggota().map((o) => `<option value="${o.v}" ${pilih === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('');
+  let sampul = b?.sampul || '';
   const isi = el(`<div>
     <div class="grup"><label>Judul Besar Buku <span style="color:var(--e-merah)">*</span></label>
       <input id="bj" value="${esc(b?.judul || '')}" placeholder="Peta Intelektual Mufassir"></div>
     <div class="grup"><label>Ringkasan</label>
       <textarea id="br" style="min-height:70px" placeholder="Dua kalimat tentang isi dan cakupan buku.">${esc(b?.ringkas || '')}</textarea></div>
-    <div class="grid-form-3">
+    <div class="grid-form">
       <div class="grup"><label>Kumpul Perdana</label><input type="date" id="bk" value="${b?.kumpulPerdana || nowTanggal()}"></div>
-      <div class="grup"><label>Target Terbit</label><input type="date" id="bt" value="${b?.targetTerbit || nowTanggal()}"></div>
-      <div class="grup"><label>Tahap Berjalan</label><select id="bh">
-        ${Object.entries(TAHAP_BUKU).map(([v, l]) => `<option value="${v}" ${b?.tahap === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="grup"><label>Target Terbit</label><input type="date" id="bt" value="${b?.targetTerbit || ''}"></div>
     </div>
     <div class="grid-form">
-      <div class="grup"><label>PJ Utama</label><select id="bp">
-        ${pilihAnggota().map((o) => `<option value="${o.v}" ${b?.pjUtamaId === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></div>
-      <div class="grup"><label>PJ Produksi & Distribusi</label><select id="bd">
-        ${pilihAnggota().map((o) => `<option value="${o.v}" ${b?.pjProduksiId === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></div>
+      <div class="grup"><label>PJ Utama</label><select id="bp">${opsi(b?.pjUtamaId)}</select></div>
+      <div class="grup"><label>PJ Produksi & Distribusi</label><select id="bd">${opsi(b?.pjProduksiId)}</select></div>
     </div>
+    <div class="grup" style="margin:0"><label>Sampul Buku</label>
+      <div class="pratinjau-gambar">
+        <img id="bs" src="${sampul || window.__ph('SAMPUL', '#1E4D2B', '#0E2E1C', 'كتاب')}" style="aspect-ratio:3/4;object-fit:cover">
+        <div style="flex:1"><p style="margin:0 0 10px;font-size:12.4px;color:var(--e-abu)">Tampil di katalog website publik setelah buku dinyatakan terbit. Rasio 3:4.</p>
+        <label class="btn btn-garis btn-kecil" style="display:inline-flex;cursor:pointer;margin:0">${I.gambar} Pilih Gambar<input type="file" accept="image/*" hidden id="bf"></label></div>
+      </div>
+      <div class="bantu">Tahap proyek tidak diisi di sini: ia dibaca dari naskah, suntingan, dan tata letaknya.</div></div>
   </div>`);
+  isi.querySelector('#bf').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { sampul = await Store.unggahGambar(f, 900); isi.querySelector('#bs').src = sampul; }
+    catch (err) { toast(err.message, true); }
+  };
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
   modal({ judul: b ? 'Sunting Proyek Buku' : 'Proyek Buku Baru', isi, kaki, lebar: true });
@@ -5376,12 +5434,10 @@ function formBuku(b) {
   kaki.querySelector('[data-s]').onclick = () => {
     const g = (id) => isi.querySelector('#' + id).value;
     if (!g('bj').trim()) return toast('Judul buku wajib diisi.', true);
-    aman(() => {
-      Store.simpanBuku(U, { id: b?.id, judul: g('bj').trim(), ringkas: g('br').trim(),
-        kumpulPerdana: g('bk'), targetTerbit: g('bt'), tahap: g('bh'),
-        pjUtamaId: g('bp'), pjProduksiId: g('bd') });
+    if (aman(() => Store.simpanBuku(U, { id: b?.id, judul: g('bj').trim(), ringkas: g('br').trim(),
+      kumpulPerdana: g('bk'), targetTerbit: g('bt'), pjUtamaId: g('bp'), pjProduksiId: g('bd'), sampul }))) {
       tutupModal(); toast('Proyek buku tersimpan.'); gambar();
-    });
+    }
   };
 }
 
@@ -9388,7 +9444,7 @@ HAL.anggaran = () => {
     ${Store.db.buku.length ? `<div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Judul Buku</th><th>Rencana Biaya</th>
       <th>Sudah Keluar</th><th>Pemasukan</th><th>Sisa Rencana</th></tr></thead>
       <tbody>${Store.db.buku.map((b, i) => { const r = realisasiBuku(b); return `<tr><td class="kol-no">${i + 1}</td>
-        <td><b>${esc(b.judul)}</b><br><span class="sub-sel">${esc(TAHAP_BUKU[b.tahap] || b.tahap || '')}</span></td>
+        <td><b>${esc(b.judul)}</b><br><span class="sub-sel">${esc(TAHAP_BUKU[Store.tahapBuku(b)] || '')}</span></td>
         <td class="utuh">${rpFmt(r.rencanaRp)}${r.rencanaEgp ? `<br><span class="sub-sel">setara ${egpFmt(r.rencanaEgp)}</span>` : ''}</td><td class="utuh">${uangDua(r.keluarRp, r.keluarEgp)}</td>
         <td class="utuh">${uangDua(r.masukRp, r.masukEgp)}</td>
         <td class="utuh">${r.rencanaRp ? `<span class="${r.rencanaRp - r.keluarRp < 0 ? 'perlu' : ''}">${rpFmt(r.rencanaRp - r.keluarRp)}</span>${

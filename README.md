@@ -297,9 +297,21 @@ penulisan, editing–layouting–desain, lalu produksi, distribusi, dan kasaran 
 Seperti dasbor peran lain ia baca-saja; setiap penyuntingan dilakukan di halaman
 tahapnya masing-masing.
 
-Sistem mengenal **banyak proyek dengan satu yang aktif**. Menandai proyek lain
-sebagai aktif otomatis mengarsipkan yang lama, sehingga dasbor tak pernah bercabang
-dan buku terdahulu tetap utuh beserta timeline, pembagian tugas, dan modalnya.
+Sidebarnya mengikuti perjalanan sebuah buku: **Proyek**, **Naskah**, **Terbit**,
+**Keuangan & Arsip**. Seluruh halamannya mengerjakan **proyek yang dipilih di
+kanan atas** — membuka sebuah proyek tidak mengubah statusnya, sehingga
+beberapa proyek dapat berjalan bersamaan dan proyek lama dapat ditengok tanpa
+mengarsipkan yang lain. Dasbor dibuka dengan antrean dari seluruh proyek yang
+berjalan.
+
+**Siklus proyek**: rencana → berjalan → terbit, atau dihentikan dengan alasan;
+membuka kembali pun beralasan, dan semuanya tercatat di `riwayatStatus`. Buku
+baru dapat dinyatakan terbit setelah seluruh sub judulnya selesai disunting.
+**Tahap proyek diturunkan dari isinya** (`Store.tahapBuku()`), bukan dipilih
+tangan. **Proyek yang sudah memuat naskah, dokumen, kegiatan produksi, atau
+dirujuk transaksi Buku Kas tidak dapat dihapus** — ditegakkan juga `jagaBuku()`
+di server. Timeline bertanda selesai, dan tahapan yang lewat tanggalnya masuk
+antrean. Website publik menampilkan buku yang terbit dan yang sedang digarap.
 
 Tulang punggungnya adalah `naskah`: satu baris per sub judul yang memuat penulis,
 progress tulis, progress edit, dan bukti layout sekaligus. Halaman **Penulisan**,

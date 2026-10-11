@@ -781,6 +781,7 @@ async function muat() {
        menyimpannya (PJ Artikel), yang lain cukup tidak melihatnya —
        koleksi yang tak boleh ditulisnya memang tak pernah terkirim. */
     bersihkanPenugasanContoh(db);
+    migrasiBuku(db);
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -2767,7 +2768,73 @@ let bukuTerpilih = '';
     proyek lama dapat ditengok tanpa mengarsipkan yang lain. */
 function bukuAktif() {
   return db.buku.find((b) => b.id === bukuTerpilih)
-    || db.buku.find((b) => b.status === 'aktif') || db.buku[0] || null;
+    || db.buku.find((b) => b.status === 'berjalan') || db.buku[0] || null;
+}
+
+/* --- siklus proyek ---
+   rencana → berjalan → terbit, atau dihentikan (beralasan). Beberapa
+   proyek boleh berjalan bersamaan. */
+const STATUS_BUKU = ['rencana', 'berjalan', 'terbit', 'dihentikan'];
+const bukuJalan = (b) => b.status === 'rencana' || b.status === 'berjalan';
+
+/** Tahap proyek, DITURUNKAN dari isinya — dulu dipilih tangan dan kerap
+    tertinggal dari kenyataan. */
+function tahapBuku(b) {
+  const n = b.naskah || [];
+  if (b.status === 'terbit') return 'selesai';
+  if (!n.length) return 'perencanaan';
+  if (!b.pjUtamaId || !(b.editorIds || []).length || n.some((x) => !x.userId)) return 'pembagian';
+  if (n.some((x) => x.progressTulis !== 'siap')) return 'penulisan';
+  if (n.some((x) => x.progressEdit !== 'siap')) return 'editing';
+  if (n.some((x) => !x.buktiLayout) || !(b.desain || []).some((d) => d.bukti)) return 'layout';
+  return 'produksi';
+}
+/* Tahap tetap disimpan — website publik membacanya — tetapi selalu
+   disegarkan dari isinya tiap kali proyek berubah. */
+const segarkanTahap = (b) => { if (b) b.tahap = tahapBuku(b); return b; };
+
+/** Proyek yang sudah memuat pekerjaan atau uang: tak boleh dihapus. */
+function bukuBerisi(b) {
+  return (b.naskah || []).length > 0 || (b.dokumen || []).length > 0 || (b.produksi || []).length > 0
+    || (b.penjualan || []).length > 0 || (db.keuangan || []).some((t) => t.bukuId === b.id);
+}
+
+/** Ubah status proyek. `ke`: berjalan | terbit | dihentikan. */
+function ubahStatusBuku(user, id, ke, { alasan, tanggal } = {}) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = cariBuku(id);
+  if (!STATUS_BUKU.includes(ke) || ke === 'rencana') throw new Error('Status proyek tidak dikenal.');
+  if (b.status === ke) throw new Error(`Proyek ini sudah ${ke}.`);
+  const teks = String(alasan || '').trim();
+  if (ke === 'dihentikan' && !teks) throw new Error('Alasan menghentikan proyek wajib diisi.');
+  if (ke === 'berjalan' && ['terbit', 'dihentikan'].includes(b.status) && !teks)
+    throw new Error('Alasan membuka kembali proyek wajib diisi.');
+  if (ke === 'terbit') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal || '')) throw new Error('Tanggal terbit wajib diisi.');
+    if (!(b.naskah || []).length) throw new Error('Proyek ini belum punya naskah.');
+    const belum = b.naskah.filter((n) => n.progressEdit !== 'siap').length;
+    if (belum) throw new Error(`${belum} sub judul belum selesai disunting.`);
+    b.terbitPada = tanggal;
+  }
+  b.riwayatStatus = [...(b.riwayatStatus || []), { dari: b.status, ke, alasan: teks, oleh: user.id, pada: new Date().toISOString() }];
+  b.status = ke;
+  segarkanTahap(b);
+  catat(user, 'buku.status', b.id, `Proyek "${b.judul}" → ${ke}${teks ? ` — ${teks}` : ''}`);
+  simpan();
+}
+
+/** Migrasi bentuk proyek buku: status lama (aktif / arsip) dipetakan ke
+    siklus baru, proyek contoh kedua dibuang, tahap disegarkan. Berlaku di
+    memori bagi semua; tersimpan saat PJ Buku yang masuk. */
+function migrasiBuku(tersimpan) {
+  tersimpan.buku = (tersimpan.buku || []).filter((b) =>
+    !(b.id === 'bk2' && b.judul === 'Kaidah-Kaidah Tafsir Nusantara'));
+  tersimpan.buku.forEach((b) => {
+    if (b.status === 'aktif') b.status = 'berjalan';
+    else if (b.status === 'arsip') b.status = b.tahap === 'selesai' ? 'terbit' : 'dihentikan';
+    if (!STATUS_BUKU.includes(b.status)) b.status = 'rencana';
+    (b.timeline || []).forEach((t) => { if (t.selesai === undefined) t.selesai = false; });
+  });
 }
 function bukaBukuProyek(id) {
   if (db.buku.some((b) => b.id === id)) bukuTerpilih = id;
@@ -2782,9 +2849,16 @@ function cariBuku(id) {
 
 function simpanBuku(user, data) {
   RBAC.assertCan(user, 'buku.manage');
+  /* Status dan tahap tidak diubah lewat penyuntingan. */
+  const { status: _s, tahap: _t, ...isi } = data;
+  data = isi;
+  if (!String(data.judul ?? 'x').trim()) throw new Error('Judul buku wajib diisi.');
+  if (data.kumpulPerdana && data.targetTerbit && data.targetTerbit < data.kumpulPerdana)
+    throw new Error('Target terbit tidak boleh sebelum kumpul perdana.');
   if (data.id) {
     const b = cariBuku(data.id);
     Object.assign(b, data);
+    segarkanTahap(b);
     catat(user, 'buku.ubah', b.id, `Memperbarui proyek buku "${b.judul}"`);
   } else {
     const baru = {
@@ -2799,20 +2873,12 @@ function simpanBuku(user, data) {
   simpan();
 }
 
-/** Hanya satu proyek boleh aktif; menandai yang baru otomatis
-    mengarsipkan yang lama, jadi dasbor tak pernah bercabang. */
-function aktifkanBuku(user, id) {
-  RBAC.assertCan(user, 'buku.manage');
-  const b = cariBuku(id);
-  db.buku.forEach((x) => { if (x.status === 'aktif') x.status = 'arsip'; });
-  b.status = 'aktif';
-  catat(user, 'buku.aktif', b.id, `Menjadikan "${b.judul}" proyek buku yang aktif`);
-  simpan();
-}
-
 function hapusBuku(user, id) {
   RBAC.assertCan(user, 'buku.manage');
   const b = cariBuku(id);
+  /* Proyek yang sudah memuat naskah, dokumen, atau transaksi Buku Kas
+     dihentikan beserta alasannya, bukan dihapus. */
+  if (bukuBerisi(b)) throw new Error(`"${b.judul}" sudah memuat pekerjaan atau transaksi — hentikan, jangan dihapus.`);
   db.buku = db.buku.filter((x) => x.id !== id);
   catat(user, 'buku.hapus', id, `Menghapus proyek buku "${b.judul}"`);
   simpan();
@@ -2840,6 +2906,7 @@ function simpanBagianBuku(user, bagian, data, idBuku) {
     arr.push(baru);
     catat(user, `buku.${bagian}.tambah`, baru.id, `Menambah ${k.tunggal} "${k.judul(baru)}" pada "${b.judul}"`);
   }
+  segarkanTahap(b);
   simpan();
 }
 
@@ -2851,6 +2918,7 @@ function hapusBagianBuku(user, bagian, id, idBuku) {
   const item = (b[bagian] || []).find((x) => x.id === id);
   if (!item) return;
   b[bagian] = b[bagian].filter((x) => x.id !== id);
+  segarkanTahap(b);
   catat(user, `buku.${bagian}.hapus`, id, `Menghapus ${k.tunggal} "${k.judul(item)}" dari "${b.judul}"`);
   simpan();
 }
@@ -3056,7 +3124,7 @@ window.Store = {
   aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
-  bukuAktif, bukaBukuProyek, simpanBuku, aktifkanBuku, hapusBuku,
+  bukuAktif, bukaBukuProyek, simpanBuku, hapusBuku, ubahStatusBuku, tahapBuku, bukuBerisi, bukuJalan, STATUS_BUKU,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
   pindahArtikel, ALUR_ARTIKEL, naskahTugas, dikirimPada, progresTugas, wajibMenulis, capaianBulan,
   simpanPenugasan, tulisDariTugas, usulkanJudul, usulMenunggu, putuskanUsul,
