@@ -144,6 +144,69 @@ const IZIN_KOLEKSI = [
   'langganan'        => [],
 ];
 
+/* ------------------------------------------------------------
+   Izin MEMBACA tiap koleksi — yang dikirim muat.php kepada pengguna
+   yang sudah masuk. ['*'] berarti setiap yang masuk.
+
+   Dulu seluruh koleksi dikirim kepada siapa pun yang masuk dan hanya
+   layarnya yang menyembunyikan: anggota biasa menerima Buku Kas, arsip
+   surat, pesan pengunjung, dan gambar tanda tangan pengurus di
+   perambannya. Menyembunyikan bukan melindungi.
+
+   Aturan yang harus dijaga: siapa pun yang boleh MENULIS sebuah koleksi
+   harus boleh membacanya utuh — peramban mengirim balik seluruh koleksi,
+   dan yang tak terbaca akan terkirim kosong. bolehBaca() menjaminnya
+   dengan menggabungkan izin tulis ke sini.
+
+   Beberapa koleksi tidak sekadar boleh/tidak: `users` (surel),
+   `keuangan` (baris milik sendiri), `kajian`, `artikel`, `buku`,
+   `event`, `video`, `media`, `dataDiri`. Saringan per barisnya ada di
+   saringBaca() pada inti.php.
+   ------------------------------------------------------------ */
+const IZIN_BACA = [
+  /* Tampil di website publik, atau memang untuk semua anggota. */
+  'cms' => ['*'], 'seo' => ['*'], 'users' => ['*'], 'kajian' => ['*'], 'artikel' => ['*'], 'buku' => ['*'],
+  'event' => ['*'], 'video' => ['*'], 'media' => ['*'],
+  'redaksi' => ['*'], 'penugasan' => ['*'], 'aturKas' => ['*'], 'keuangan' => ['*'], 'dataDiri' => ['*'],
+  'pengurus' => ['*'], 'koordinator' => ['*'], 'kaleidoskop' => ['*'], 'pencapaian' => ['*'],
+
+  'cmsDraft'         => ['cms.page.edit', 'cms.theme.edit', 'cms.media.upload', 'cms.section.toggle',
+                         'cms.kategori.edit', 'cms.submit', 'cms.approve'],
+  'versi'            => ['cms.approve', 'cms.rollback', 'cms.page.edit'],
+  'pengajuan'        => ['cms.submit', 'cms.approve'],
+  'akunKas'          => ['keuangan.manage', 'keuangan.report', 'keuangan.akun', 'keuangan.approve'],
+  'kategoriKeuangan' => ['keuangan.manage', 'keuangan.report', 'keuangan.akun', 'keuangan.approve'],
+  'tutupBuku'        => ['keuangan.manage', 'keuangan.report', 'keuangan.approve'],
+  'anggaran'         => ['keuangan.manage', 'keuangan.report', 'keuangan.akun'],
+  'pesan'            => ['pesan.read'],
+  'surat'            => ['surat.manage', 'sekretariat.manage'],
+  'templatSurat'     => ['surat.manage', 'sekretariat.manage'],
+  'tandaTangan'      => ['ttd.manage', 'surat.manage', 'sertifikat.manage'],
+  'sertifikat'       => ['sertifikat.manage', 'sekretariat.manage'],
+  'evaluasi'         => ['organisasi.manage', 'organisasi.report', 'sekretariat.manage'],
+  'sosmed'           => ['mediaweb.manage'],
+  'desain'           => ['mediaweb.manage'],
+  'tugas'            => ['mediaweb.manage'],
+  'kunjungan'        => ['analitik.view'],
+  'langganan'        => ['mediaweb.manage', 'pesan.read'],
+  'pendaftaran'      => ['anggota.manage', 'user.manage'],
+  'audit'            => ['audit.view'],
+];
+
+/** Bolehkah pengguna ini menerima sebuah koleksi? Ketua Umum menerima
+    semuanya; koleksi yang tak terdaftar di IZIN_BACA hanya untuk yang
+    boleh menulisnya. */
+function bolehBaca(?array $user, string $nama): bool {
+  if (!$user) return false;
+  if (bolehkah($user, 'user.manage')) return true;
+  $baca = IZIN_BACA[$nama] ?? [];
+  if ($baca === ['*']) return true;
+  $tulis = IZIN_KOLEKSI[$nama] ?? [];
+  if ($tulis === ['*']) $tulis = [];          // `audit`: semua menambah, tak semua membaca
+  return bolehSalahSatu($user, array_merge($baca, $tulis));
+}
+
+
 /** Seluruh nama koleksi yang dikenal. */
 function daftarKoleksi(): array {
   return array_keys(IZIN_KOLEKSI);

@@ -129,6 +129,10 @@ if ($u && isset($semua['isi']['kajian']) && is_array($semua['isi']['kajian'])) {
   $semua['isi']['kajian'] = array_map(fn($k) => is_array($k) ? kajianUntuk($u, $k) : $k, $semua['isi']['kajian']);
 }
 
+/* Terakhir dan paling luas: tiap koleksi hanya sampai kepada yang boleh
+   membacanya. Saringan per baris di atas tetap berlaku lebih dulu. */
+if ($u) $semua['isi'] = saringBaca($u, $semua['isi']);
+
 jawab([
   'isi'      => $semua['isi'],
   'versi'    => $semua['versi'],

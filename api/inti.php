@@ -484,6 +484,81 @@ function jagaBuku($isiBaru): void {
   }
 }
 
+/** Boleh melihat alamat surel anggota lain? */
+function pembacaSurel(?array $user): bool {
+  return bolehSalahSatu($user, ['anggota.manage', 'user.manage', 'user.view']);
+}
+
+/**
+ * Saring seluruh muatan untuk pengguna yang sudah masuk: tiap koleksi
+ * hanya sampai kepada yang memang boleh membacanya (IZIN_BACA).
+ *
+ * Koleksi yang tak boleh dibaca TIDAK dibuang, melainkan dikirim kosong
+ * dengan bentuk yang sama (daftar atau objek). Kalau dibuang, peramban
+ * akan mengisinya dari data contoh — dan menampilkan angka yang tak
+ * pernah ada.
+ */
+function saringBaca(array $user, array $isi): array {
+  $aku = $user['id'] ?? '';
+
+  foreach ($isi as $nama => $nilai) {
+    if (bolehBaca($user, (string) $nama)) continue;
+    /* Draft website bagi yang bukan penyuntingnya: salinan versi tayang —
+       bentuknya utuh, isinya memang sudah publik. */
+    if ($nama === 'cmsDraft' && isset($isi['cms'])) { $isi[$nama] = $isi['cms']; continue; }
+    $isi[$nama] = is_array($nilai) && $nilai !== [] && !array_is_list($nilai) ? new stdClass() : [];
+  }
+
+  /* Surel adalah identitas masuk. Hanya pengelola anggota yang melihat
+     surel orang lain; yang lain menerima surelnya sendiri saja. Kolomnya
+     dikosongkan, bukan dibuang — pulihkanSurel() mengembalikannya saat
+     koleksi ini dikirim balik. */
+  if (!pembacaSurel($user) && isset($isi['users']) && is_array($isi['users'])) {
+    $isi['users'] = array_map(function ($u) use ($aku) {
+      if (is_array($u) && ($u['id'] ?? '') !== $aku) $u['email'] = '';
+      return $u;
+    }, $isi['users']);
+  }
+
+  /* Buku Kas: di luar pengurus keuangan, tiap orang hanya menerima
+     transaksi atas namanya sendiri (iurannya); PJ Buku menerima yang
+     tertaut ke proyek buku — realisasi dan setoran dibaca dari sana. */
+  if (!bolehSalahSatu($user, ['keuangan.manage', 'keuangan.report', 'keuangan.approve'])
+      && isset($isi['keuangan']) && is_array($isi['keuangan'])) {
+    $buku = bolehSalahSatu($user, ['buku.manage', 'buku.anggaran']);
+    $isi['keuangan'] = array_values(array_filter($isi['keuangan'], fn($t) => is_array($t)
+      && ((($t['userId'] ?? '') !== '' && ($t['userId'] ?? '') === $aku) || ($buku && ($t['bukuId'] ?? '') !== ''))));
+  }
+
+  /* Agenda, video, galeri: di luar pengelolanya, yang terlihat sama
+     dengan yang tampil di website. */
+  if (!bolehSalahSatu($user, ['mediaweb.manage', 'user.manage'])) {
+    foreach (['event' => 'terbit', 'video' => 'terbit'] as $nama => $status) {
+      if (isset($isi[$nama]) && is_array($isi[$nama])) {
+        $isi[$nama] = array_values(array_filter($isi[$nama], fn($x) => is_array($x) && ($x['status'] ?? '') === $status));
+      }
+    }
+  }
+  return $isi;
+}
+
+/** Kembalikan surel yang dikosongkan saringBaca() sebelum `users` yang
+    dikirim balik diperiksa dan ditulis — kalau tidak, menyimpan profil
+    sendiri akan menghapus surel semua orang lain. */
+function pulihkanSurel(array $user, $isiBaru) {
+  if (!is_array($isiBaru) || pembacaSurel($user)) return $isiBaru;
+  $lama = [];
+  foreach (bacaKoleksi('users')['isi'] ?? [] as $u) {
+    if (($u['id'] ?? '') !== '') $lama[$u['id']] = $u;
+  }
+  foreach ($isiBaru as &$u) {
+    $id = is_array($u) ? ($u['id'] ?? '') : '';
+    if ($id !== '' && $id !== ($user['id'] ?? null) && isset($lama[$id])) $u['email'] = $lama[$id]['email'] ?? '';
+  }
+  unset($u);
+  return $isiBaru;
+}
+
 /**
  * Proyek buku sebagaimana boleh dilihat pengguna ini. Kasaran modal,
  * dokumen, dan penjualan hanya untuk PJ Buku, Bendahara, dan Ketua;

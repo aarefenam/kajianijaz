@@ -691,6 +691,29 @@ Perhatikan juga: PJ Media & Website tidak akan menemukan menu Keuangan, dan Bend
 akan menemukan Editor Halaman. Pembatasan itu ditegakkan di lapisan data, bukan
 sekadar disembunyikan dari tampilan.
 
+## Siapa menerima data apa
+
+Wewenang menulis dijaga per koleksi dan per baris. **Wewenang membaca dijaga
+`IZIN_BACA`** di `api/rbac.php`, dan ditegakkan `saringBaca()` saat `api/muat.php`
+menjawab pengguna yang sudah masuk. Dulu seluruh koleksi dikirim kepada siapa
+pun yang masuk dan hanya layarnya yang menyembunyikan: anggota biasa menerima
+Buku Kas, arsip surat, pesan pengunjung beserta surelnya, dan gambar tanda
+tangan pengurus di perambannya.
+
+- Anggota biasa menerima jadwal kajian, artikel terbit, daftar nama anggota,
+  buku, penugasan, dan data miliknya sendiri — iurannya, naskahnya, data dirinya.
+- Buku Kas, akun, anggaran: pengurus keuangan dan Ketua. PJ Buku menerima
+  transaksi yang tertaut ke proyek buku saja.
+- Surat, templat, tanda tangan, sertifikat: Sekretaris dan Ketua.
+- Pesan form kontak: pemegang `pesan.read`. Jejak audit: pemegang `audit.view`.
+- **Surel adalah identitas masuk**: hanya pengelola anggota yang melihat surel
+  orang lain. Kolomnya dikosongkan saat dikirim dan dikembalikan
+  `pulihkanSurel()` saat `users` dikirim balik, sehingga menyimpan profil
+  sendiri tidak menghapus surel siapa pun.
+- Koleksi yang tak boleh dibaca dikirim kosong dengan bentuk yang sama, bukan
+  dibuang — kalau dibuang, peramban mengisinya dari data contoh.
+- Siapa pun yang boleh menulis sebuah koleksi otomatis boleh membacanya utuh.
+
 ## Susunan berkas
 
 ```

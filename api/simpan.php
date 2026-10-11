@@ -14,10 +14,14 @@ if (count($perubahan) > 40) galat('Terlalu banyak koleksi dalam satu permintaan.
 
 /* Periksa SELURUH wewenang lebih dulu. Kalau satu saja ditolak, tak ada
    yang ditulis — supaya penyimpanan tidak pernah setengah jadi. */
-foreach ($perubahan as $nama => $bagian) {
+foreach ($perubahan as $nama => &$bagian) {
   if (!is_array($bagian) || !array_key_exists('isi', $bagian)) galat("Bentuk kiriman '$nama' tidak sah.");
+  /* Surel orang lain dikosongkan saat dikirim ke peramban ini; pulihkan
+     dulu, baru bandingkan dengan yang tersimpan. */
+  if ($nama === 'users') $bagian['isi'] = pulihkanSurel($u, $bagian['isi']);
   periksaTulis($u, (string) $nama, $bagian['isi']);
 }
+unset($bagian);
 
 $sandiBaru = [];
 $versiBaru = [];
