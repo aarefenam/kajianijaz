@@ -744,6 +744,41 @@ const MENU_BUKU = [
   { id: 'buku-arsip', label: 'Dokumen' },
 ];
 
+/* ============================================================
+   SIDEBAR PJ MEDIA & WEBSITE — dari menyunting sampai memantau
+   ------------------------------------------------------------
+     Website      — isi halaman, tema, dan pengajuannya ke Ketua.
+     Publikasi    — yang langsung tampil: agenda, video, galeri, artikel.
+     Media Sosial — rencana posting, desain, kalender konten.
+     Pantau       — pengunjung, pesan masuk, SEO.
+   ============================================================ */
+const MENU_MEDIAWEB = [
+  { id: 'dasbor' },
+  { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
+  { id: 'buku-saya' },
+  { grup: 'Website' },
+  { id: 'konten-web', label: 'Konten Halaman' },
+  { id: 'atur-web', label: 'Tema & Identitas' },
+  { id: 'pengajuan', label: 'Pengajuan Saya', lipat: false,
+    lonceng: () => { const p = perluMedia(); return p.ditolak.length + (p.belumAjukan ? 1 : 0); } },
+  { grup: 'Publikasi' },
+  { id: 'agenda-event' },
+  { id: 'video' },
+  { id: 'galeri' },
+  { id: 'artikel-web', label: 'Artikel Terbit' },
+  { grup: 'Media Sosial' },
+  { id: 'sosmed', label: 'Rencana Posting' },
+  { id: 'desain-web' },
+  { id: 'kalender', tersembunyi: false },
+  { grup: 'Pantau' },
+  { id: 'pengunjung' },
+  { id: 'komentar', label: 'Kotak Masuk' },
+  { id: 'seo', label: 'SEO' },
+  { grup: 'Lainnya' },
+  { id: 'akun-web', label: 'Daftar Akun' },
+];
+
 /* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
    sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
@@ -751,12 +786,13 @@ const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
   sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
   bendahara : { menu: MENU_BENDAHARA,  tab: {},             alias: { keuangan: 'laporan-kas' } },
+  mediaweb  : { menu: MENU_MEDIAWEB,   tab: {},             alias: { cms: 'konten-web', tema: 'atur-web', pesan: 'komentar' } },
   buku      : { menu: MENU_BUKU,       tab: {},             alias: {} },
   artikel   : { menu: MENU_ARTIKEL,    tab: {},             alias: { artikel: 'daftar-artikel' } },
   kajian    : { menu: MENU_KAJIAN,     tab: {},             alias: { 'tugas-kajian': 'jadwal-kajian', notifikasi: 'dasbor', kajian: 'jadwal-kajian' } },
 };
 const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris
-  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : ruangRedaksi() ? RUANG_TUGAS.artikel : ruangBuku() ? RUANG_TUGAS.buku : null);
+  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : ruangRedaksi() ? RUANG_TUGAS.artikel : ruangBuku() ? RUANG_TUGAS.buku : ruangMediaWeb() ? RUANG_TUGAS.mediaweb : null);
 
 const idTugas = () => new Set([
   ...tugas().menu.map((m) => m.id).filter(Boolean),
@@ -6430,8 +6466,52 @@ function barisKalender(k) {
 }
 
 /* ---------------- dasbor ---------------- */
+/** Yang menuntut tindakan PJ Media & Website. */
+function perluMedia() {
+  const d = Store.db;
+  const kini = nowTanggal();
+  const ajuan = d.pengajuan || [];
+  const menunggu = ajuan.filter((p) => p.status === 'menunggu');
+  /* Penolakan yang belum ditindaklanjuti: pengajuan terakhir saya ditolak. */
+  const terakhir = ajuan.find((p) => p.olehId === U?.id);
+  return {
+    menunggu,
+    ditolak: terakhir && terakhir.status === 'ditolak' ? [terakhir] : [],
+    /* Ada suntingan di draft, dan tidak sedang menunggu keputusan. */
+    belumAjukan: !menunggu.length ? Store.ringkasPerubahan().length : 0,
+    pesan: (d.pesan || []).filter((p) => !p.dibaca),
+    agendaLewat: (d.event || []).filter((e) => e.status !== 'terbit' && e.tanggal && e.tanggal < kini),
+    videoLewat: (d.video || []).filter((v) => v.status !== 'terbit' && v.tanggal && v.tanggal < kini),
+    postingLewat: (d.sosmed || []).filter((x) => x.status !== 'terbit' && x.tanggal && x.tanggal < kini),
+    tugasLewat: (d.tugas || []).filter((t) => !t.selesai && t.tenggat && t.tenggat < kini),
+  };
+}
+function antreanMedia() {
+  const p = perluMedia();
+  return kartuAntrean('Perlu Ditindak', [
+    ...(p.ditolak.length ? [{ rute: 'pengajuan', ikon: I.peringatan, judul: 'Pengajuan Ditolak', n: 1,
+      satuan: 'pengajuan terakhir Anda ditolak Ketua', kosong: '', rinci: p.ditolak[0].catatanReview }] : []),
+    { rute: 'pengajuan', ikon: I.kirim, judul: 'Perubahan Belum Diajukan', n: p.belumAjukan,
+      satuan: 'perubahan di draft belum diajukan ke Ketua',
+      kosong: p.menunggu.length ? 'Pengajuan Anda sedang menunggu keputusan Ketua' : 'Draft sama dengan yang tayang' },
+    { rute: 'komentar', ikon: I.surat, judul: 'Pesan Belum Dibaca', n: p.pesan.length,
+      satuan: 'pesan dari form kontak', kosong: 'Semua pesan sudah dibaca',
+      rinci: p.pesan[0] && `${p.pesan[0].nama} — ${p.pesan[0].subjek}` },
+    { rute: 'agenda-event', ikon: I.agenda, judul: 'Agenda Terlewat', n: p.agendaLewat.length,
+      satuan: 'agenda lewat tanggalnya tanpa pernah tayang', kosong: 'Tidak ada agenda yang terlewat',
+      rinci: p.agendaLewat[0] && `${p.agendaLewat[0].judul} · ${tgl(p.agendaLewat[0].tanggal)}` },
+    { rute: 'video', ikon: I.videoIk, judul: 'Video Terlewat', n: p.videoLewat.length,
+      satuan: 'video lewat tanggal tayangnya', kosong: 'Tidak ada video yang terlewat',
+      rinci: p.videoLewat[0] && `${p.videoLewat[0].judul} · ${tgl(p.videoLewat[0].tanggal)}` },
+    { rute: 'sosmed', ikon: I.simpul, judul: 'Posting Terlewat', n: p.postingLewat.length,
+      satuan: 'posting lewat tanggalnya, belum ditandai terbit', kosong: 'Tidak ada posting yang terlewat',
+      rinci: p.postingLewat[0] && `${p.postingLewat[0].judul} · ${p.postingLewat[0].platform}` },
+  ]);
+}
+
 function dasborMediaWeb() {
   const box = el('<div></div>');
+  box.appendChild(antreanMedia());
   const d = Store.db;
   const kini = rekapKunjungan(30), lalu = rekapKunjungan(60, 30);
   const bulanIni = nowTanggal().slice(0, 7);
@@ -6503,7 +6583,7 @@ function dasborMediaWeb() {
   /* --- baris 2: tugas · media · pintasan --- */
   const baris2 = el('<div class="mw-baris"></div>');
 
-  const tug = panelMW('Tugas Saya', I.cekBulat, 'Lihat Semua', () => bukaModul('atur-web'));
+  const tug = panelMW('Tugas Saya', I.cekBulat, null, null);
   const tugasSaya = d.tugas.filter((t) => t.userId === U.id || !t.userId);
   const daftarTugas = (tugasSaya.length ? tugasSaya : d.tugas).slice(0, 5);
   if (!daftarTugas.length) tug.isi.appendChild(el(`<div class="kosong-erp" style="padding:26px">${I.kotak}<p>Tidak ada tugas</p></div>`));
@@ -6535,11 +6615,11 @@ function dasborMediaWeb() {
   const cepat = panelMW('Quick Links', I.tautan, null, null);
   const kisiCepat = el('<div class="mw-cepat"></div>');
   [
-    { ik: I.dok,        l: 'Tambah Artikel', r: 'artikel-web'  },
+    { ik: I.dok,        l: 'Artikel Terbit', r: 'artikel-web'  },
     { ik: I.agenda,     l: 'Buat Event',     r: 'agenda-event' },
     { ik: I.unggahAwan, l: 'Upload Media',   r: 'galeri'       },
     { ik: I.jam,        l: 'Jadwalkan Post', r: 'sosmed'       },
-    { ik: I.log,        l: 'Kelola Menu',    r: 'atur-web'     },
+    { ik: I.kuas,       l: 'Tema & Identitas', r: 'atur-web'   },
     { ik: I.analitik,   l: 'Pengaturan SEO', r: 'seo'          },
   ].forEach((x) => {
     const n = el(`<button class="mw-cepat-btn">${x.ik}<span>${esc(x.l)}</span></button>`);
@@ -6555,7 +6635,7 @@ function dasborMediaWeb() {
     <div class="mw-pusat-kepala">${I.petir}<h3>Pusat Kendali Cepat</h3></div>
     <div class="mw-pusat-kisi"></div></div>`);
   [
-    { ik: I.dok,       l: 'Buat Artikel Baru', r: 'artikel-web' },
+    { ik: I.dok,       l: 'Artikel Terbit',    r: 'artikel-web' },
     { ik: I.rumah,     l: 'Kelola Homepage',   r: 'konten-web'  },
     { ik: I.bagan,     l: 'Cek Analytics',     r: 'pengunjung'  },
     { ik: I.layout,    l: 'Kelola Sidebar',    r: 'konten-web'  },
