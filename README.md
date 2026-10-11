@@ -506,6 +506,13 @@ kembali, dan dapat dicetak sebagai lembar A4 berkop dengan data kajian dan
 kehadirannya. Teks polos `notulensi` tetap dipelihara dari keempat bagian itu,
 dan notulen lama yang hanya berupa teks dibaca sebagai sah.
 
+**Rekap & Statistik berperiode dan siap cetak.** Rentang tanggal menyaring
+angka, grafik, dan tabelnya; *Cetak Laporan* (`lembarLaporanKajian()`) menyusun
+lembar A4 berkop: ringkasan, tabel pertemuan, kehadiran tiap peserta, giliran
+tugas, serta kajian yang ditunda atau dibatalkan beserta alasannya. Lembar yang
+sama dapat dicetak Ketua dan Sekretaris dari Pantau Divisi untuk satu angkatan,
+dan pengajuan izin juga tampil di sana bagi pemegang izin presensi.
+
 **Kajian Saya** tersedia bagi setiap anggota yang masih berkajian, apa pun
 perannya: kajian mendatang angkatannya, tugas yang ia pegang, sisa jatah izin,
 dan riwayat kehadirannya.

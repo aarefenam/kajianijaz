@@ -385,7 +385,7 @@ const MENU = [
     /* PJ Kajian memegang izin yang sama, tetapi punya halaman Presensi dan
        Notulennya sendiri — tanpa ini sidebarnya memuat dua pintu serupa. */
     tersembunyiBila: () => !ruangSekretaris(),
-    lonceng: () => Store.db.kajian.filter((k) => statusKajian(k) === 'selesai' && !k.notulensi).length },
+    lonceng: () => Store.db.kajian.filter((k) => statusKajian(k) === 'selesai' && Store.statusNotulen(k) !== 'sah').length + Store.izinMenunggu(Store.db.kajian.filter(Store.kajianJalan)).length },
 
   /* --- ruang kerja Sekretaris --- */
   { grup: 'Pengelolaan Surat', izin: ['sekretariat.manage'] },
@@ -7580,33 +7580,129 @@ HAL.notulen = () => {
 };
 HAL.notulen.judul = () => ['Notulen', 'Catatan hasil tiap kajian: ditulis notulen, disahkan koordinator.'];
 
+/* --- laporan kajian per periode --- */
+let periodeRekap = { dari: '', sampai: '' };
+
+/** Kajian sebuah angkatan (dan jenjang, bila disebut) dalam satu rentang
+    tanggal — termasuk yang ditunda dan dibatalkan, supaya laporan dapat
+    menyebutnya. */
+const kajianRentang = ({ angkatan, level, dari, sampai }) => Store.db.kajian
+  .filter((k) => k.angkatan === angkatan && (!level || k.level === level)
+    && (!dari || k.tanggal >= dari) && (!sampai || k.tanggal <= sampai))
+  .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+
+/** Lembar laporan kajian siap cetak. Seluruh angkanya dari rumus yang sama
+    dengan layar — tak ada yang diketik. */
+function lembarLaporanKajian({ angkatan, level, dari, sampai }) {
+  const s = Store.cms.situs;
+  const semua = kajianRentang({ angkatan, level, dari, sampai });
+  const jalan = semua.filter(Store.kajianJalan);
+  const terlaksana = jalan.filter((k) => k.tanggal <= nowTanggal() && (k.presensi || []).length);
+  const rekap = terlaksana.map((k) => ({ k, r: Store.rekapKajian(k) }));
+  const rata = rekap.length ? Math.round(rekap.reduce((j, x) => j + x.r.persen, 0) / rekap.length) : 0;
+  const peserta = Store.pesertaAngkatan(angkatan).sort((a, b) => a.nama.localeCompare(b.nama));
+  const hadir = peserta.map((u) => ({ u, h: Store.kehadiranAnggota(u.id, terlaksana) }));
+  const beban = Store.bebanTugas(angkatan, jalan).sort((a, b) => a.u.nama.localeCompare(b.u.nama));
+  const henti = semua.filter((k) => !Store.kajianJalan(k));
+  const jml = (f) => jalan.filter(f).length;
+  const kosong = (n, teks) => `<tr><td colspan="${n}" class="lk-kosong">${teks}</td></tr>`;
+  const alasanHenti = (k) => [...(k.riwayat || [])].reverse().find((r) => r.jenis === 'batal' || r.jenis === 'tunda')?.alasan || '';
+  const awal = dari || semua[0]?.tanggal || nowTanggal();
+  const akhir = sampai || nowTanggal();
+  return el(`<div class="lk">
+    <div class="lk-kop">${lambang(40)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div></div>
+    <h2>Laporan Kajian</h2>
+    <p class="lk-periode">${esc(angkatan)}${level ? ` · ${esc(level)}` : ''} · ${esc(tglSurat(awal))} s.d. ${esc(tglSurat(akhir))}</p>
+
+    <h3>1. Ringkasan</h3>
+    <table><tbody>
+      ${[['Kajian terjadwal', jalan.length], ['Kajian terlaksana (berpresensi)', terlaksana.length],
+         ['Ditunda / dibatalkan', `${semua.filter((k) => Store.keadaanKajian(k) === 'ditunda').length} / ${semua.filter((k) => Store.keadaanKajian(k) === 'dibatalkan').length}`],
+         ['Peserta aktif', peserta.length], ['Rata-rata kehadiran', terlaksana.length ? `${rata}%` : '—'],
+         ['Notulen sah', `${jml((k) => Store.statusNotulen(k) === 'sah')} dari ${jml((k) => k.tanggal <= nowTanggal())} kajian yang sudah berlangsung`],
+         ['Makalah final', `${jml((k) => Store.statusRevisi(k) === 'final')} dari ${jalan.length}`]]
+        .map(([l, v]) => `<tr><td style="width:70mm">${l}</td><td><b>${esc(String(v))}</b></td></tr>`).join('')}
+    </tbody></table>
+
+    <h3>2. Pertemuan</h3>
+    <table><thead><tr><th>No.</th><th>Tanggal</th><th>Judul</th><th>Pemakalah</th><th class="lk-angka">Hadir</th><th class="lk-angka">Telat</th>
+      <th class="lk-angka">Izin</th><th class="lk-angka">Absen</th><th class="lk-angka">%</th><th>Notulen</th></tr></thead>
+      <tbody>${jalan.map((k, i) => { const r = Store.rekapKajian(k); const ada = (k.presensi || []).length;
+        return `<tr><td>${i + 1}</td><td style="white-space:nowrap">${tgl(k.tanggal)}</td><td>${esc(k.judul)}</td><td>${esc(namaPendek(k.pemakalahId))}</td>
+          ${ada ? `<td class="lk-angka">${r.hadir}</td><td class="lk-angka">${r.terlambat}</td><td class="lk-angka">${r.izin}</td><td class="lk-angka">${r.tidakHadir + r.belum}</td><td class="lk-angka">${r.persen}%</td>`
+            : `<td colspan="5" class="lk-kosong">${k.tanggal > nowTanggal() ? 'belum berlangsung' : 'presensi belum dicatat'}</td>`}
+          <td>${NOTULEN[Store.statusNotulen(k)].l}</td></tr>`; }).join('') || kosong(10, 'Tidak ada kajian pada rentang ini.')}</tbody></table>
+    ${henti.length ? `<p class="lk-catatan">Tidak dihitung: ${henti.map((k) => `${esc(k.judul)} (${tgl(k.tanggal)}, ${Store.keadaanKajian(k)}${alasanHenti(k) ? ` — ${esc(alasanHenti(k))}` : ''})`).join('; ')}.</p>` : ''}
+
+    <h3>3. Kehadiran Peserta <small>— dari ${terlaksana.length} kajian terlaksana</small></h3>
+    <table><thead><tr><th>No.</th><th>Nama</th><th>Kelompok</th><th class="lk-angka">Hadir</th><th class="lk-angka">Telat</th><th class="lk-angka">Izin</th>
+      <th class="lk-angka">Absen</th><th class="lk-angka">Dari</th><th class="lk-angka">%</th></tr></thead>
+      <tbody>${hadir.map(({ u, h }, i) => `<tr><td>${i + 1}</td><td>${esc(u.nama)}</td><td>${esc(u.kelompok || '—')}</td>
+        <td class="lk-angka">${h.hadir}</td><td class="lk-angka">${h.terlambat}</td><td class="lk-angka">${h.izin}</td><td class="lk-angka">${h.tidakHadir}</td>
+        <td class="lk-angka">${h.wajib}</td><td class="lk-angka">${h.wajib ? h.persen + '%' : '—'}</td></tr>`).join('') || kosong(9, 'Belum ada peserta aktif.')}</tbody></table>
+
+    <h3>4. Giliran Tugas</h3>
+    <table><thead><tr><th>No.</th><th>Nama</th><th class="lk-angka">Pemakalah</th><th class="lk-angka">Moderator</th><th class="lk-angka">Notulen</th><th class="lk-angka">Total</th></tr></thead>
+      <tbody>${beban.map((b, i) => `<tr><td>${i + 1}</td><td>${esc(b.u.nama)}</td><td class="lk-angka">${b.pemakalahId || '—'}</td>
+        <td class="lk-angka">${b.moderatorId || '—'}</td><td class="lk-angka">${b.notulenId || '—'}</td><td class="lk-angka">${b.total || '—'}</td></tr>`).join('') || kosong(6, 'Belum ada peserta aktif.')}</tbody></table>
+
+    <p class="lk-catatan">Kehadiran = (hadir + terlambat) ÷ peserta yang terdaftar pada kajian itu. Izin dan sakit dibatasi ${Store.JATAH_IZIN} kali per anggota per jenjang.
+      Dicetak ${esc(tglSurat(nowTanggal()))}.</p>
+    <div class="lk-ttd">
+      <div>PJ Koordinator Kajian,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'pj_kajian' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+      <div>Mengetahui, Ketua Umum,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'ketua' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+    </div>
+  </div>`);
+}
+const cetakLaporanKajian = (opsi) => cetakKhusus(lembarLaporanKajian(opsi), '@page { size: A4; margin: 14mm; }',
+  `Laporan Kajian ${opsi.angkatan}${opsi.level ? ' ' + opsi.level : ''}`);
+
 HAL['rekap-kajian'] = () => {
-  const semua = kajianAktif();
+  const { dari, sampai } = periodeRekap;
+  const dalam = (k) => (!dari || k.tanggal >= dari) && (!sampai || k.tanggal <= sampai);
+  const semua = kajianAktif().filter(dalam);
   const selesai = semua.filter((k) => statusKajian(k) === 'selesai');
   const box = el('<div></div>');
-  ringkasKehadiran(box);
+  ringkasKehadiran(box, semua);
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
     <h3>Rekap Kajian</h3><span class="hitung">(${selesai.length} pertemuan selesai)</span>
-    <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Export Rekap</button></div>
+    <div class="kanan">
+      <input type="date" class="pilih-saring" data-dari value="${esc(dari)}" title="Dari tanggal">
+      <input type="date" class="pilih-saring" data-sampai value="${esc(sampai)}" title="Sampai tanggal">
+      <button class="btn btn-garis btn-kecil" data-export>${I.unduh} CSV</button>
+      <button class="btn btn-kecil" data-cetak>${I.dok} Cetak Laporan</button></div>
   </div></div>`);
+  kartu.querySelector('[data-dari]').onchange = (e) => { periodeRekap.dari = e.target.value; gambar(); };
+  kartu.querySelector('[data-sampai]').onchange = (e) => { periodeRekap.sampai = e.target.value; gambar(); };
+  kartu.querySelector('[data-cetak]').onclick = () => cetakLaporanKajian({ angkatan: angkatanAktif(), level: levelAktif(), dari, sampai });
   kartu.querySelector('[data-export]').onclick = () => {
-    const baris = [['Tanggal', 'Judul', 'Pemakalah', 'Moderator', 'Notulen', 'Tempat', 'Hadir', 'Total', 'Persentase', 'Notulen Ditulis']];
+    const baris = [['Tanggal', 'Judul', 'Pemakalah', 'Moderator', 'Notulen', 'Tempat', 'Peserta', 'Hadir', 'Terlambat', 'Izin/Sakit', 'Tidak Hadir', 'Persentase', 'Status Notulen', 'Status Makalah']];
     selesai.forEach((k) => { const r = rekapPresensi(k);
       baris.push([k.tanggal, k.judul, Store.namaUser(k.pemakalahId), Store.namaUser(k.moderatorId),
-        Store.namaUser(k.notulenId), k.tempat, r.hadir + r.terlambat, r.total, r.persen + '%', k.notulensi ? 'ya' : 'belum']); });
+        Store.namaUser(k.notulenId), k.tempat, r.total, r.hadir, r.terlambat, r.izin, r.tidakHadir, r.persen + '%',
+        NOTULEN[Store.statusNotulen(k)].l, REVISI[Store.statusRevisi(k)].l]); });
     unduhCsv(`rekap-kajian-${angkatanAktif().replace(/\s/g, '-').toLowerCase()}.csv`, baris);
   };
+  if (!selesai.length) {
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kajian selesai${dari || sampai ? ' pada rentang ini' : ''}</p></div>`));
+    box.appendChild(kartu);
+    return box;
+  }
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Pemakalah</th>
-      <th>Tempat</th><th>Kehadiran</th><th class="kol-tengah">Notulen</th></tr></thead><tbody></tbody></table></div>`);
+      <th>Hadir</th><th>Terlambat</th><th>Izin/Sakit</th><th>Tidak Hadir</th><th style="min-width:130px">Kehadiran</th>
+      <th>Makalah</th><th>Notulen</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   selesai.forEach((k, i) => {
     const r = rekapPresensi(k);
+    const ada = (k.presensi || []).length;
     tb.appendChild(el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td>
-      <td><b>${esc(k.judul)}</b></td><td>${esc(namaPendek(k.pemakalahId))}</td>
-      <td class="utuh">${esc(k.tempat || '—')}</td>
-      <td class="utuh">${r.hadir + r.terlambat}/${r.total} · ${r.persen}%</td>
-      <td class="kol-tengah">${tandaLengkap(!!k.notulensi)}</td></tr>`));
+      <td><b>${esc(k.judul)}</b><br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.tempat || '—')}</span></td><td>${esc(namaPendek(k.pemakalahId))}</td>
+      ${ada ? `<td class="utuh">${r.hadir}</td><td class="utuh">${r.terlambat}</td><td class="utuh">${r.izin}</td><td class="utuh">${r.tidakHadir + r.belum}</td>
+        <td><div style="display:flex;align-items:center;gap:9px"><div class="bar-maju" style="flex:1"><span style="width:${r.persen}%"></span></div>
+          <b style="font-size:12.2px">${r.persen}%</b></div></td>`
+        : '<td colspan="5"><span class="lencana l-merah">presensi belum dicatat</span></td>'}
+      <td>${lencanaRevisi(k)}</td><td>${lencanaNotulen(k)}</td></tr>`));
   });
   kartu.appendChild(t);
   box.appendChild(kartu);
@@ -7615,8 +7711,7 @@ HAL['rekap-kajian'] = () => {
 HAL['rekap-kajian'].judul = () => ['Rekap & Statistik', 'Kehadiran per pertemuan dan ringkasan kajian yang sudah terlaksana.'];
 
 /** Angka ringkas dan grafik kehadiran per pertemuan — kepala halaman Rekap. */
-function ringkasKehadiran(box) {
-  const semua = kajianAktif();
+function ringkasKehadiran(box, semua = kajianAktif()) {
   const selesai = semua.filter((k) => (k.presensi || []).length);
   const anggota = anggotaAngkatan();
   const rata = selesai.length ? Math.round(selesai.reduce((a, k) => a + rekapPresensi(k).persen, 0) / selesai.length) : 0;
@@ -7624,7 +7719,7 @@ function ringkasKehadiran(box) {
     ${[{ ik: I.kalender, n: semua.length, l: 'Total pertemuan', w:'rgba(140,198,63,.16)', wc:'#4A7A1E' },
        { ik: I.grup, n: anggota.length, l: 'Anggota aktif', w:'rgba(62,127,184,.14)', wc:'#2C6091' },
        { ik: I.bagan, n: rata + '%', l: 'Rata-rata kehadiran', w:'rgba(47,169,140,.14)', wc:'#1F7A64' },
-       { ik: I.dok, n: semua.filter((k) => k.notulensi).length, l: 'Notulen tertulis', w:'rgba(240,149,30,.15)', wc:'#B87310' }]
+       { ik: I.dok, n: semua.filter((k) => Store.statusNotulen(k) === 'sah').length, l: 'Notulen sah', w:'rgba(240,149,30,.15)', wc:'#B87310' }]
       .map((s) => `<div class="stat" style="--w:${s.w};--wc:${s.wc}">
         <div class="stat-ik">${s.ik}</div><div class="stat-nilai">${esc(String(s.n))}</div>
         <div class="stat-label">${esc(s.l)}</div></div>`).join('')}
@@ -9709,7 +9804,7 @@ HAL['pantau-kajian'] = () => {
   /* "Perlu" menyaring yang masih menuntut kerja: kajian yang sudah lewat
      tetapi belum bernotulen, atau belum punya satu pun catatan presensi. */
   const lewat = (k) => statusKajian(k) === 'selesai';
-  const perlu = { notulen: (k) => lewat(k) && !k.notulensi, presensi: (k) => lewat(k) && !(k.presensi || []).length };
+  const perlu = { notulen: (k) => lewat(k) && Store.statusNotulen(k) !== 'sah', presensi: (k) => lewat(k) && !(k.presensi || []).length };
   const seAngkatan = semua.filter((k) => !saringPantau.angkatan || k.angkatan === saringPantau.angkatan);
   const data = seAngkatan.filter((k) => !perlu[saringPantau.perlu] || perlu[saringPantau.perlu](k));
 
@@ -9720,7 +9815,7 @@ HAL['pantau-kajian'] = () => {
       { ik: I.kalender,  n: seAngkatan.length,                l: 'Kajian terjadwal',          w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
       { ik: I.cekBulat,  n: selesai.length,                   l: 'Sudah terlaksana',          w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
       { ik: I.grup,      n: selesai.length ? `${rata}%` : '—', l: 'Rata-rata kehadiran',       w: 'rgba(240,149,30,.14)', wc: '#B87310' },
-      { ik: I.dok,       n: `${selesai.filter((k) => k.notulensi).length}/${selesai.length}`, l: 'Kajian selesai bernotulen', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
+      { ik: I.dok,       n: `${selesai.filter((k) => Store.statusNotulen(k) === 'sah').length}/${selesai.length}`, l: 'Kajian selesai bernotulen sah', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
     ].map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
       <div class="stat-nilai">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}
   </div></div>`);
@@ -9731,10 +9826,14 @@ HAL['pantau-kajian'] = () => {
       <select class="pilih-saring" data-angkatan><option value="">Semua Angkatan</option>
         ${angkatan.map((a) => `<option ${a === saringPantau.angkatan ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>
       <select class="pilih-saring" data-perlu>
-        ${[['', 'Semua kajian'], ['notulen', `Belum bernotulen (${seAngkatan.filter(perlu.notulen).length})`], ['presensi', `Belum ada presensi (${seAngkatan.filter(perlu.presensi).length})`]]
+        ${[['', 'Semua kajian'], ['notulen', `Notulen belum sah (${seAngkatan.filter(perlu.notulen).length})`], ['presensi', `Belum ada presensi (${seAngkatan.filter(perlu.presensi).length})`]]
           .map(([v, l]) => `<option value="${v}" ${v === saringPantau.perlu ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="btn btn-garis btn-kecil" data-cetak title="Laporan kajian satu angkatan, siap cetak">${I.dok} Cetak Laporan</button>
       ${bisaKelola ? `<button class="btn btn-kecil" data-tambah>${I.tambah} Jadwalkan Kajian</button>` : ''}
     </div></div></div>`);
+  kartu.querySelector('[data-cetak]').onclick = () => (saringPantau.angkatan
+    ? cetakLaporanKajian({ angkatan: saringPantau.angkatan }) : toast('Pilih satu angkatan lebih dulu.', true));
+  if (RBAC.can(U, 'kajian.attendance')) box.appendChild(kartuPengajuanIzin(seAngkatan));
   kartu.querySelector('[data-angkatan]').onchange = (e) => { saringPantau.angkatan = e.target.value; gambar(); };
   kartu.querySelector('[data-perlu]').onchange = (e) => { saringPantau.perlu = e.target.value; gambar(); };
   kartu.querySelector('[data-tambah]')?.addEventListener('click', () => formKajian(null));
@@ -9747,7 +9846,7 @@ HAL['pantau-kajian'] = () => {
   }
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Angkatan</th><th>Pemakalah</th>
-      <th>Kehadiran</th><th class="kol-tengah">Notulen</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead>
+      <th>Kehadiran</th><th>Notulen</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   data.forEach((k, i) => {
@@ -9759,22 +9858,22 @@ HAL['pantau-kajian'] = () => {
       <td><b>${esc(k.judul)}</b>${k.tempat ? `<br><span class="sub-sel">${esc(k.tempat)}</span>` : ''}</td>
       <td class="utuh">${esc(k.angkatan || '—')}<br><span class="sub-sel">${esc(k.level || '')}</span></td>
       <td>${esc(namaPendek(k.pemakalahId))}</td>
-      <td class="utuh">${sudah || h.hadir ? `${h.hadir}/${h.total} · ${h.persen}%` : '—'}</td>
-      <td class="kol-tengah">${tandaLengkap(!!k.notulensi)}</td>
+      <td class="utuh">${sudah || h.hadir ? `${h.hadir}/${h.total} · ${h.persen}%` : '—'}${k.presensiTutup ? ` <span title="Presensi ditutup">${I.gembok}</span>` : ''}</td>
+      <td>${lencanaNotulen(k)}</td>
       <td>${lencanaKajian(k)}</td>
       <td class="kol-aksi"><div class="sel-aksi">
         ${RBAC.can(U, 'kajian.attendance') ? `<button class="ikon-aksi" data-pindai title="Mode Presensi — pindai kartu">${I.qr}</button>
           <button class="ikon-aksi" data-absen title="Absensi manual">${I.grup}</button>` : ''}
         ${RBAC.can(U, 'kajian.notulensi') ? `<button class="ikon-aksi" data-notulen title="Notulensi">${I.dok}</button>` : ''}
         ${bisaKelola ? `<button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
-          <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>` : ''}
+          ${Store.kajianBerisi(k) ? '' : `<button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>`}` : ''}
       </div></td></tr>`);
     tr.querySelector('[data-pindai]')?.addEventListener('click', () => modePresensi(k));
     tr.querySelector('[data-absen]')?.addEventListener('click', () => dialogAbsensi(k));
     tr.querySelector('[data-notulen]')?.addEventListener('click', () => dialogNotulensi(k));
     tr.querySelector('.sunting')?.addEventListener('click', () => formKajian(k));
     tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus jadwal kajian',
-      `"${k.judul}" beserta presensinya akan dihapus.`,
+      `"${k.judul}" akan dihapus. Kajian ini belum memuat presensi maupun notulen.`,
       () => aman(() => { Store.hapusKajian(U, k.id); toast('Jadwal dihapus.'); gambar(); })));
     tb.appendChild(tr);
   });
