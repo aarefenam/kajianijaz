@@ -777,6 +777,10 @@ async function muat() {
     if (RBAC.can(userAktif(), 'keuangan.manage')) { tautkanKategori(db); nomoriTransaksi(db); }
     /* Peserta kajian lama dibekukan oleh penjadwalnya saja, dengan alasan yang sama. */
     if (RBAC.can(userAktif(), 'kajian.manage')) bekukanPesertaLama(db);
+    /* Penugasan contoh dibuang bagi SEMUA yang masuk: yang berwenang
+       menyimpannya (PJ Artikel), yang lain cukup tidak melihatnya —
+       koleksi yang tak boleh ditulisnya memang tak pernah terkirim. */
+    bersihkanPenugasanContoh(db);
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -1196,7 +1200,6 @@ function simpanArtikel(user, data) {
     simpul = baru;
     catat(user, 'artikel.buat', baru.id, `Membuat artikel "${baru.judul}"`);
   }
-  selaraskanPenugasan(simpul);
   simpan();
   return simpul;
 }
@@ -1270,7 +1273,6 @@ function ubahStatusArtikel(user, id, status, catatan) {
      lain titipan lama dibuang supaya tidak terbawa. */
   if (dari === 'terbit') a._catatan = teks; else delete a._catatan;
 
-  selaraskanPenugasan(a);
   catat(user, 'artikel.status', id, `Artikel "${a.judul}": ${NAMA_STATUS_ARTIKEL[dari]} → ${NAMA_STATUS_ARTIKEL[status]}${teks ? ` — ${teks}` : ''}`);
   simpan();
 }
@@ -1283,7 +1285,6 @@ function hapusArtikel(user, id) {
   if (a.status === 'review' && !RBAC.can(user, 'artikel.review'))
     throw new Error('Naskah sedang ditinjau. Tarik kembali ke draf untuk menghapusnya.');
   db.artikel = db.artikel.filter((x) => x.id !== id);
-  lepasPenugasan(id);
   catat(user, 'artikel.hapus', id, `Menghapus artikel "${a.judul}"`);
   simpan();
 }
@@ -2566,25 +2567,138 @@ function centangKegiatan(user, id, selesai) {
    REDAKSI — target & penugasan artikel bulanan
    ============================================================ */
 
-/** Sambungkan artikel ke penugasan penulisnya pada bulan yang sama,
-    lalu selaraskan progressnya. Dipanggil setiap kali artikel dibuat,
-    berubah status, atau dihapus — sehingga tabel progress PJ Artikel
-    tidak pernah mengaku sebuah naskah sudah siap padahal tidak ada. */
-function selaraskanPenugasan(artikel) {
-  const bulan = String(artikel.tanggal || nowISO().slice(0, 10)).slice(0, 7);
-  let t = db.penugasan.find((p) => p.artikelId === artikel.id);
-  if (!t) {
-    t = db.penugasan.find((p) => p.userId === artikel.penulisId && p.bulan === bulan && !p.artikelId);
-    if (t) t.artikelId = artikel.id;
+/* Tautan penugasan → naskah disimpan DI NASKAH (`penugasanId`), bukan di
+   penugasan: naskah milik penulisnya, sedangkan `penugasan` hanya boleh
+   ditulis PJ Artikel. Dengan begitu anggota dapat menautkan tulisannya
+   sendiri, dan progres tidak perlu diketik siapa pun. */
+const naskahTugas = (p) => db.artikel.find((a) => a.penugasanId === p.id) || null;
+
+/** Tanggal (setempat) sebuah naskah pertama kali dikirim untuk ditinjau.
+    Naskah lama tanpa riwayat memakai tanggalnya sendiri bila sudah dikirim. */
+function dikirimPada(a) {
+  const r = (a.riwayat || []).find((x) => x.ke === 'review' || x.ke === 'terbit');
+  if (r) {
+    const d = new Date(r.pada);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
-  if (!t) return;
-  t.progress = ['draft', 'revisi'].includes(artikel.status) ? 'proses' : 'siap';
+  return ['review', 'terbit'].includes(a.status) ? String(a.tanggal || '').slice(0, 10) : '';
 }
 
-function lepasPenugasan(idArtikel) {
-  db.penugasan.filter((p) => p.artikelId === idArtikel).forEach((p) => {
-    p.artikelId = ''; p.progress = 'belum';
+/** Progres sebuah penugasan, diturunkan dari naskahnya:
+    belum (belum ada naskah) · proses (draf / perlu revisi) · siap (sudah
+    dikirim). `tepat`: dikirim sebelum atau pada tenggat. `telat`: tenggat
+    lewat dan belum dikirim. */
+function progresTugas(p) {
+  const a = naskahTugas(p);
+  const dikirim = a ? dikirimPada(a) : '';
+  const status = !a ? 'belum' : dikirim && a.status !== 'draft' && a.status !== 'revisi' ? 'siap'
+    : dikirim ? 'proses' : 'proses';
+  return { naskah: a, status, dikirim, tepat: !!dikirim && (!p.deadline || dikirim <= p.deadline),
+    telat: status !== 'siap' && !!p.deadline && p.deadline < hariIni() };
+}
+
+/** Yang wajib menulis: anggota aktif yang masih berkajian. Alumni dan
+    pendiri boleh menulis, tetapi tidak ditagih target. */
+const wajibMenulis = () => db.users.filter(berkajian).sort((a, b) => a.nama.localeCompare(b.nama));
+
+/** Capaian satu bulan. Target dihitung dari NASKAH YANG DIKIRIM pada bulan
+    itu — bukan dari berapa judul yang dibagikan. */
+function capaianBulan(bulan) {
+  const target = db.redaksi.targetBulanan || 1;
+  const dikirimBulan = db.artikel.filter((a) => dikirimPada(a).slice(0, 7) === bulan);
+  const baris = wajibMenulis().map((u) => {
+    const kirim = dikirimBulan.filter((a) => a.penulisId === u.id);
+    const tugas = db.penugasan.filter((p) => p.userId === u.id && p.bulan === bulan);
+    return { u, kirim, tugas, terbit: kirim.filter((a) => a.status === 'terbit').length,
+      memenuhi: kirim.length >= target, kurang: Math.max(0, target - kirim.length) };
   });
+  const terhitung = baris.reduce((j, b) => j + Math.min(target, b.kirim.length), 0);
+  return { bulan, target, baris, naskah: dikirimBulan.length,
+    terbit: dikirimBulan.filter((a) => a.status === 'terbit').length,
+    memenuhi: baris.filter((b) => b.memenuhi).length,
+    persen: baris.length ? Math.round((terhitung / (baris.length * target)) * 100) : 0 };
+}
+
+function simpanPenugasan(user, data) {
+  RBAC.assertCan(user, 'redaksi.manage');
+  const lama = data.id ? db.penugasan.find((x) => x.id === data.id) : null;
+  if (data.id && !lama) throw new Error('Penugasan tidak ditemukan.');
+  const p = { ...(lama || {}), ...data };
+  if (!String(p.judul || '').trim()) throw new Error('Judul artikel wajib diisi.');
+  if (!/^\d{4}-\d{2}$/.test(p.bulan || '')) throw new Error('Bulan penugasan wajib dipilih.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.deadline || '')) throw new Error('Tenggat wajib diisi.');
+  if (p.deadline < `${p.bulan}-01`) throw new Error('Tenggat tidak boleh sebelum bulan penugasannya.');
+  const u = getUser(p.userId);
+  if (!u) throw new Error('Anggota penulis wajib dipilih.');
+  if ((!lama || lama.userId !== p.userId) && !berkajian(u))
+    throw new Error(`${u.nama} bukan anggota aktif yang masih berkajian.`);
+  if (lama && lama.userId !== p.userId && naskahTugas(lama))
+    throw new Error('Penugasan ini sudah bernaskah — penulisnya tidak dapat diganti.');
+  if (db.penugasan.some((x) => x.id !== p.id && x.userId === p.userId && x.bulan === p.bulan
+    && x.judul.trim().toLowerCase() === p.judul.trim().toLowerCase()))
+    throw new Error(`${u.nama} sudah ditugasi judul itu pada bulan yang sama.`);
+  const bersih = { userId: p.userId, bulan: p.bulan, judul: p.judul.trim(), deadline: p.deadline, catatan: String(p.catatan || '').trim() };
+  let hasil;
+  if (lama) { Object.assign(lama, bersih); hasil = lama; catat(user, 'penugasan.ubah', lama.id, `Mengubah penugasan "${lama.judul}" (${u.nama})`); }
+  else {
+    hasil = { id: uid('tg'), ...bersih, dibuat: new Date().toISOString() };
+    if (data.asal) hasil.asal = data.asal;
+    db.penugasan.push(hasil);
+    catat(user, 'penugasan.tambah', hasil.id, `Menugaskan "${hasil.judul}" kepada ${u.nama}`);
+  }
+  simpan();
+  return hasil;
+}
+
+/** Anggota mulai menulis penugasannya: draf baru yang tertaut ke sana. */
+function tulisDariTugas(user, idPenugasan) {
+  const p = db.penugasan.find((x) => x.id === idPenugasan);
+  if (!p) throw new Error('Penugasan tidak ditemukan.');
+  if (p.userId !== user.id) throw new Error('Penugasan ini bukan milik Anda.');
+  const ada = naskahTugas(p);
+  if (ada) return ada;
+  return simpanArtikel(user, { judul: p.judul, penugasanId: p.id, kategori: '', ringkas: '', isi: [], tag: [] });
+}
+
+/** Anggota mengusulkan judulnya sendiri untuk sebuah bulan. Usulan hidup
+    di naskah drafnya; ia baru menjadi penugasan setelah disetujui. */
+function usulkanJudul(user, { judul, bulan, catatan }) {
+  RBAC.assertCan(user, 'artikel.write');
+  if (!String(judul || '').trim()) throw new Error('Judul usulan wajib diisi.');
+  if (!/^\d{4}-\d{2}$/.test(bulan || '')) throw new Error('Bulan wajib dipilih.');
+  if (db.artikel.some((a) => a.penulisId === user.id && a.usul?.status === 'menunggu' && a.usul.bulan === bulan
+    && a.judul.trim().toLowerCase() === judul.trim().toLowerCase()))
+    throw new Error('Judul itu sudah Anda usulkan untuk bulan yang sama.');
+  return simpanArtikel(user, { judul: judul.trim(), kategori: '', ringkas: '', isi: [], tag: [],
+    usul: { bulan, catatan: String(catatan || '').trim(), status: 'menunggu', pada: new Date().toISOString() } });
+}
+const usulMenunggu = () => db.artikel.filter((a) => a.usul?.status === 'menunggu');
+
+/** PJ Artikel memutuskan usulan judul. Disetujui → menjadi penugasan yang
+    langsung tertaut ke naskahnya. */
+function putuskanUsul(user, idArtikel, setuju, { deadline, alasan } = {}) {
+  RBAC.assertCan(user, 'redaksi.manage');
+  const a = db.artikel.find((x) => x.id === idArtikel);
+  if (!a || a.usul?.status !== 'menunggu') throw new Error('Usulan tidak ditemukan atau sudah diputuskan.');
+  if (setuju) {
+    const p = simpanPenugasan(user, { userId: a.penulisId, bulan: a.usul.bulan, judul: a.judul, deadline, catatan: a.usul.catatan, asal: 'usulan' });
+    a.penugasanId = p.id;
+    a.usul = { ...a.usul, status: 'disetujui', oleh: user.id };
+  } else {
+    if (!String(alasan || '').trim()) throw new Error('Alasan penolakan wajib diisi.');
+    a.usul = { ...a.usul, status: 'ditolak', alasan: String(alasan).trim(), oleh: user.id };
+  }
+  catat(user, 'penugasan.usul', a.id, `${setuju ? 'Menyetujui' : 'Menolak'} usulan judul "${a.judul}" (${namaUser(a.penulisId)})`);
+  simpan();
+}
+
+/** Migrasi sekali: penugasan contoh bawaan (April–Juni 2025) dibuang.
+    Tak satu pun tertaut ke naskah, dan "progres"-nya hanya ketikan. */
+function bersihkanPenugasanContoh(tersimpan) {
+  if (!tersimpan.redaksi || tersimpan.redaksi.penugasanBersih) return;
+  tersimpan.penugasan = (tersimpan.penugasan || []).filter((p) =>
+    !(/^tg\d+$/.test(p.id) && p.bulan <= '2025-06' && !p.artikelId));
+  tersimpan.redaksi.penugasanBersih = 1;
 }
 
 function setTargetArtikel(user, jumlah) {
@@ -2911,7 +3025,8 @@ window.Store = {
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
-  pindahArtikel, ALUR_ARTIKEL,
+  pindahArtikel, ALUR_ARTIKEL, naskahTugas, dikirimPada, progresTugas, wajibMenulis, capaianBulan,
+  simpanPenugasan, tulisDariTugas, usulkanJudul, usulMenunggu, putuskanUsul,
   catatKunjungan, catatBaca, centangTugas, simpanSeo,
   KUNJUNG_SESI, KUNJUNG_BARU,
   kirimPesan, tandaiDibaca, berlanggananNewsletter,

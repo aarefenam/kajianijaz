@@ -208,17 +208,34 @@ ada dua pintu yang mengubah tulisan yang sama.
 
 ### Ruang kerja PJ Artikel
 
-Dasbornya memantau **target dan progress penulisan**. Panel atas menunjukkan
-capaian bulan berjalan terhadap target — rata-rata penugasan per penulis dibanding
-target yang ditetapkan — lalu di bawahnya tabel progress tiap anggota, dengan
-pemilih bulan dan tombol export.
+Sidebarnya disusun mengikuti perjalanan naskah, tiap kelompok dapat dilipat:
+**Tinjau** (Naskah Masuk, Menunggu Revisi), **Naskah** (Semua Naskah, Terbit,
+Tulisan Saya), **Target** (Penugasan, Capaian Anggota, Rekap Bulanan), dan
+**Pengaturan**. Dasbor dibuka dengan antrean *Perlu Ditindak*.
 
-Penugasan disimpan terpisah dari naskah (`db.penugasan`): PJ menetapkan judul di
-awal bulan, anggota menuliskannya kemudian. Begitu naskahnya benar-benar masuk,
-Store menyambungkan keduanya lewat `artikelId` dan menaikkan progress sendiri —
-`proses` saat masih draft, `siap` begitu dikirim untuk ditinjau, dan kembali
-`belum` bila naskahnya dihapus. Karena itu tabel progress tidak pernah mengaku
-sebuah artikel sudah siap padahal naskahnya tidak ada.
+**Target dihitung dari naskah yang dikirim, bukan dari judul yang dibagikan.**
+`Store.capaianBulan()` menghitung, untuk tiap anggota aktif yang masih
+berkajian, berapa naskah yang ia kirim untuk ditinjau pada bulan itu, lalu
+membandingkannya dengan target. Dulu yang dihitung adalah jumlah penugasan per
+penulis — membagikan dua judul per orang langsung menghasilkan capaian 100%
+tanpa satu naskah pun ditulis.
+
+**Progres penugasan diturunkan, tidak diketik.** Tautannya disimpan di naskah
+(`penugasanId`), bukan di penugasan — naskah milik penulisnya, sedangkan
+`penugasan` hanya boleh ditulis PJ Artikel — sehingga anggota dapat menautkan
+tulisannya sendiri. `Store.progresTugas()` membacanya: belum ada naskah,
+sedang ditulis, atau sudah dikirim; tepat waktu atau lewat tenggat. Anggota
+melihat penugasannya (judul, arahan, tenggat) di halaman tulisannya dan mulai
+menulis dari sana. Penugasan contoh bawaan — 222 baris "siap" tanpa naskah —
+dibuang sekali oleh `bersihkanPenugasanContoh()`.
+
+**Anggota boleh mengusulkan judul.** Usulan hidup di draf naskahnya (`usul`);
+disetujui PJ Artikel, ia menjadi penugasan bertenggat yang langsung tertaut;
+ditolak, wajib beralasan.
+
+**Capaian Anggota, Rekap Bulanan, dan Laporan Penulisan** semuanya dari rumus
+yang sama; laporan bulanan dapat dicetak sebagai lembar A4 berkop, juga oleh
+Ketua dari tab *Penulisan* di Pantau Divisi.
 
 **Kategori Artikel** menyunting CMS halaman Artikel, bukan koleksi tersendiri.
 Perubahannya masuk ke draft dan baru tayang setelah disetujui Ketua — filter di

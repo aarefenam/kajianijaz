@@ -380,6 +380,7 @@ const MENU = [
   { id: 'pantau-kajian', label: 'Kajian',       ikon: I.kalender, izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-kas',    label: 'Kas & Saldo',  ikon: I.uang,     izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-surat',  label: 'Arsip Surat',  ikon: I.arsip,    izin: ['organisasi.manage'], tersembunyi: true },
+  { id: 'pantau-artikel',label: 'Penulisan',    ikon: I.pena,     izin: ['organisasi.manage'], tersembunyi: true },
   /* Tabel kajian yang sama, sebagai halaman kerja Sekretaris. */
   { id: 'notulen-presensi', label: 'Notulen & Presensi', ikon: I.kalender, izin: ['kajian.notulensi', 'kajian.attendance'],
     /* PJ Kajian memegang izin yang sama, tetapi punya halaman Presensi dan
@@ -569,7 +570,7 @@ const MENU_KETUA = [
 
 /** Halaman bertab milik Ketua beserta modul yang menjadi tabnya. */
 const TAB_KETUA = {
-  'pantau-divisi': ['pantau-kajian', 'pantau-kas', 'pantau-surat'],
+  'pantau-divisi': ['pantau-kajian', 'pantau-artikel', 'pantau-kas', 'pantau-surat'],
   pengaturan: ['cms', 'tema', 'versi', 'kategori-artikel', 'log'],
 };
 const tabAktif = { 'pantau-divisi': 'pantau-kajian', pengaturan: 'pengajuan' };
@@ -1797,6 +1798,8 @@ function halamanArtikel(kunci, milik = false) {
     Anggota menulis <b>Draft</b> → kirim untuk <b>Tinjauan</b> → PJ Artikel menyetujui (<b>Terbit</b>) atau mengembalikan (<b>Perlu Revisi</b>). Hanya artikel berstatus Terbit yang muncul di halaman Artikel.
   </div></div>`));
 
+  if (!bisaTinjau && !kunci) box.appendChild(kartuTugasSaya());
+
   const kepala = el(`<div class="panel-kepala" style="background:#fff;border:1px solid var(--e-garis);border-radius:var(--e-radius);margin-bottom:18px">
     <h3>${kunci ? JUDUL_ART[kunci] : bisaTinjau ? 'Seluruh Naskah' : 'Tulisan Anda'}</h3>
     <div class="kanan">
@@ -1903,6 +1906,71 @@ function halamanArtikel(kunci, milik = false) {
   kepala.querySelector('#btnBaru')?.addEventListener('click', () => formArtikel(null));
   gambarDaftar();
   return box;
+}
+
+/** Penugasan, target, dan usulan judul milik penulis yang sedang masuk. */
+function kartuTugasSaya() {
+  const bulan = nowTanggal().slice(0, 7);
+  const target = Store.db.redaksi.targetBulanan || 1;
+  const wajib = Store.berkajian(U);
+  const kirim = Store.db.artikel.filter((a) => a.penulisId === U.id && Store.dikirimPada(a).slice(0, 7) === bulan).length;
+  /* Yang masih menuntut kerja, ditambah seluruh penugasan bulan ini. */
+  const tugas = Store.db.penugasan.filter((p) => p.userId === U.id
+    && (p.bulan === bulan || Store.progresTugas(p).status !== 'siap'))
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+  const usul = Store.db.artikel.filter((a) => a.penulisId === U.id && a.usul && a.usul.status !== 'disetujui');
+  const kartu = el(`<div class="kartu" style="margin-bottom:18px"><div class="kartu-kepala">
+    <h3>Penugasan Saya</h3>
+    <span class="hitung">${wajib ? `${esc(namaBulan(bulan))}: ${kirim} dari ${target} naskah dikirim${kirim >= target ? ' — target terpenuhi' : ''}` : 'Anda tidak ditagih target bulanan'}</span>
+    <div class="kanan"><button class="btn btn-garis btn-kecil" data-usul>${I.tag} Usulkan Judul</button></div></div></div>`);
+  kartu.querySelector('[data-usul]').onclick = () => dialogUsulJudul();
+  if (!tugas.length && !usul.length) {
+    kartu.appendChild(el(`<div class="kosong-erp" style="padding:22px">${I.kotak}<p>Belum ada penugasan</p>
+      <small>PJ Artikel akan membagikan judul, atau usulkan judul Anda sendiri.</small></div>`));
+    return kartu;
+  }
+  const t = el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Judul</th><th>Bulan</th><th>Tenggat</th><th>Progres</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+  const tb = t.querySelector('tbody');
+  tugas.forEach((p, i) => {
+    const g = Store.progresTugas(p);
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+      <td><b>${esc(p.judul)}</b>${p.catatan ? `<br><span style="color:var(--e-abu);font-size:11.8px">Arahan: ${esc(p.catatan)}</span>` : ''}</td>
+      <td class="utuh">${esc(namaBulan(p.bulan))}</td><td class="utuh">${tgl(p.deadline)}</td>
+      <td>${lencanaProgres(p)}</td>
+      <td class="kol-aksi"><div class="sel-aksi">${g.status === 'siap' ? ''
+        : `<button class="btn btn-lime btn-kecil">${g.naskah ? 'Lanjutkan Menulis' : 'Mulai Menulis'}</button>`}</div></td></tr>`);
+    tr.querySelector('button')?.addEventListener('click', () => {
+      let a = null;
+      if (aman(() => { a = Store.tulisDariTugas(U, p.id); })) formArtikel(a);
+    });
+    tb.appendChild(tr);
+  });
+  usul.forEach((a, i) => tb.appendChild(el(`<tr><td class="kol-no">${tugas.length + i + 1}</td>
+    <td><b>${esc(a.judul)}</b><br><span style="color:var(--e-abu);font-size:11.8px">Usulan Anda${a.usul.alasan ? ` — ditolak: ${esc(a.usul.alasan)}` : ''}</span></td>
+    <td class="utuh">${esc(namaBulan(a.usul.bulan))}</td><td class="utuh">—</td>
+    <td><span class="lencana ${a.usul.status === 'menunggu' ? 'l-kuning' : 'l-merah'}">usulan ${esc(a.usul.status)}</span></td><td></td></tr>`)));
+  kartu.appendChild(t);
+  return kartu;
+}
+
+function dialogUsulJudul() {
+  const isi = el(`<div>
+    <div class="grup"><label>Judul yang Diusulkan</label><input data-judul placeholder="Judul lengkap artikel"></div>
+    <div class="grup"><label>Untuk Bulan</label><select data-bulan>${bulanPilihan().filter((b) => b >= nowTanggal().slice(0, 7)).sort()
+      .map((b) => `<option value="${b}">${esc(namaBulan(b))}</option>`).join('')}</select></div>
+    <div class="grup" style="margin:0"><label>Catatan untuk PJ Artikel</label>
+      <textarea data-catatan style="min-height:70px" placeholder="Garis besar pembahasan atau rujukan utama — opsional"></textarea>
+      <div class="bantu">Usulan menjadi draf di daftar tulisan Anda. Bila disetujui PJ Artikel, ia menjadi penugasan bertenggat.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Usulkan</button></div>`);
+  modal({ judul: 'Usulkan judul artikel', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    if (aman(() => Store.usulkanJudul(U, { judul: isi.querySelector('[data-judul]').value, bulan: isi.querySelector('[data-bulan]').value,
+      catatan: isi.querySelector('[data-catatan]').value }))) { tutupModal(); toast('Usulan terkirim ke PJ Artikel.'); gambar(); }
+  };
 }
 
 /** Baca naskah utuh beserta riwayat tinjauannya — tanpa membuka formulir sunting. */
@@ -4047,33 +4115,37 @@ HAL.arsip.judul = () => ['Link Arsip Kepenulisan', 'Kumpulan arsip keilmuan, kar
    ============================================================ */
 const PROGRES = {
   belum : { l: 'Belum',     c: 'l-merah'  },
-  proses: { l: 'On Proses', c: 'l-kuning' },
-  siap  : { l: 'Siap',      c: 'l-hijau'  },
+  proses: { l: 'Ditulis',   c: 'l-kuning' },
+  siap  : { l: 'Dikirim',   c: 'l-hijau'  },
 };
 
 let bulanRedaksi = null;
 
-const bulanTersedia = () => [...new Set(Store.db.penugasan.map((p) => p.bulan))].sort().reverse();
+/** Bulan yang punya cerita: berpenugasan, bernaskah terkirim, atau bulan ini. */
+const bulanTersedia = () => [...new Set([nowTanggal().slice(0, 7),
+  ...Store.db.penugasan.map((p) => p.bulan),
+  ...Store.db.artikel.map((a) => Store.dikirimPada(a).slice(0, 7))].filter(Boolean))].sort().reverse();
 
-/** Bulan yang sedang dilihat. Bawaannya bulan terisi paling akhir, bukan
-    bulan hari ini — supaya dasbor tetap bercerita walau prototipe dibuka
-    jauh setelah data contohnya dibuat. */
+/** Bulan yang sedang dilihat — bawaannya bulan ini. */
 function bulanAktif() {
   const ada = bulanTersedia();
-  if (!bulanRedaksi || !ada.includes(bulanRedaksi)) bulanRedaksi = ada[0] || nowTanggal().slice(0, 7);
+  if (!bulanRedaksi || !ada.includes(bulanRedaksi)) bulanRedaksi = nowTanggal().slice(0, 7);
   return bulanRedaksi;
 }
 
 const tugasBulan = (b = bulanAktif()) => Store.db.penugasan.filter((p) => p.bulan === b);
 
-/** Capaian target: rata-rata penugasan per penulis dibanding target. */
+/** Capaian target sebuah bulan — lihat Store.capaianBulan(). */
 function capaianTarget(b = bulanAktif()) {
-  const target = Store.db.redaksi.targetBulanan || 1;
-  const tugas = tugasBulan(b);
-  const penulis = new Set(tugas.map((t) => t.userId)).size;
-  const rata = penulis ? tugas.length / penulis : 0;
-  return { target, penulis, rata, persen: Math.min(100, Math.round((rata / target) * 100)) };
+  const c = Store.capaianBulan(b);
+  return { ...c, penulis: c.baris.length, rata: c.baris.length ? c.naskah / c.baris.length : 0 };
 }
+const lencanaProgres = (p) => {
+  const g = Store.progresTugas(p);
+  const utama = `<span class="lencana ${PROGRES[g.status].c}">${PROGRES[g.status].l}</span>`;
+  return utama + (g.telat ? ' <span class="lencana l-merah">lewat tenggat</span>'
+    : g.status === 'siap' && !g.tepat ? ' <span class="lencana l-kuning">terlambat dikirim</span>' : '');
+};
 
 /** Unduh CSV. BOM UTF-8 di depan supaya Excel membaca huruf beraksen
     dengan benar alih-alih menampilkannya sebagai simbol acak. */
@@ -4125,7 +4197,10 @@ function perluArtikel() {
     revisi: art.filter((a) => a.status === 'revisi'),
     /* Tulisan sendiri tak dapat diterbitkan sendiri: ia menunggu Ketua. */
     milikTunggu: art.filter((a) => a.status === 'review' && a.penulisId === U?.id),
-    telat: Store.db.penugasan.filter((p) => p.progress !== 'siap' && p.deadline && p.deadline < kini),
+    telat: Store.db.penugasan.filter((p) => Store.progresTugas(p).telat),
+    usul: Store.usulMenunggu(),
+    /* Bulan ini: wajib menulis, belum mengirim cukup, dan belum ditugasi apa pun. */
+    tanpaTugas: Store.capaianBulan(kini.slice(0, 7)).baris.filter((b) => !b.memenuhi && !b.tugas.length),
   };
 }
 function antreanArtikel() {
@@ -4137,6 +4212,12 @@ function antreanArtikel() {
     { rute: 'artikel-revisi', ikon: I.putar, judul: 'Menunggu Revisi', n: p.revisi.length,
       satuan: 'naskah dikembalikan, belum dikirim ulang', kosong: 'Tidak ada naskah yang dikembalikan',
       rinci: p.revisi[0] && `${p.revisi[0].judul} — ${Store.namaUser(p.revisi[0].penulisId)}` },
+    { rute: 'target-artikel', ikon: I.tag, judul: 'Usulan Judul', n: p.usul.length,
+      satuan: 'usulan judul menunggu keputusan', kosong: 'Tidak ada usulan judul',
+      rinci: p.usul[0] && `${Store.namaUser(p.usul[0].penulisId)} — ${p.usul[0].judul}` },
+    { rute: 'target-artikel', sebelum: () => { bulanRedaksi = nowTanggal().slice(0, 7); }, ikon: I.grup, judul: 'Belum Ditugasi Bulan Ini', n: p.tanpaTugas.length,
+      satuan: 'anggota belum memenuhi target dan belum ditugasi', kosong: 'Semua anggota sudah ditugasi atau memenuhi target',
+      rinci: p.tanpaTugas[0] && p.tanpaTugas[0].u.nama },
     { rute: 'target-artikel', ikon: I.jam, judul: 'Penugasan Lewat Tenggat', n: p.telat.length,
       satuan: 'penugasan belum dikirim naskahnya', kosong: 'Tidak ada penugasan yang terlambat',
       rinci: p.telat[0] && `${Store.namaUser(p.telat[0].userId)} — ${p.telat[0].judul}` },
@@ -4158,11 +4239,11 @@ function dasborRedaksi() {
       <div class="rd-kepala">
         <span class="rd-ik">${I.sasaran}</span>
         <div><h3>Target Bulanan</h3>
-          <p>Setiap anggota wajib membuat minimal ${c.target} artikel setiap bulannya.</p></div>
+          <p>Setiap anggota yang masih berkajian wajib mengirim minimal ${c.target} artikel setiap bulannya.</p></div>
       </div>
       <div class="rd-kotak">
         <div class="rd-angka">${rataTampil} / ${c.target} <span>Artikel</span></div>
-        <div class="rd-ket">Target per anggota per bulan · ${esc(namaBulan(b))}</div>
+        <div class="rd-ket">Rata-rata naskah dikirim per anggota · ${esc(namaBulan(b))} · ${c.memenuhi} dari ${c.penulis} anggota memenuhi target</div>
         <div class="bar-maju"><span style="width:${c.persen}%"></span></div>
         <div class="rd-capai ${c.persen >= 100 ? 'penuh' : ''}">${I.cekBulat} ${c.persen}% Tercapai</div>
       </div>
@@ -4201,7 +4282,7 @@ function dasborRedaksi() {
   kartu.querySelector('[data-export]').onclick = () => {
     const baris = [['No.', 'Nama Anggota', 'Judul Artikel', 'Progress', 'Deadline']];
     tugasBulan(b).forEach((t, i) => baris.push([
-      i + 1, Store.namaUser(t.userId), t.judul, PROGRES[t.progress]?.l || t.progress, tgl(t.deadline),
+      i + 1, Store.namaUser(t.userId), t.judul, PROGRES[Store.progresTugas(t).status].l, tgl(t.deadline),
     ]));
     unduhCsv(`progress-artikel-${b}.csv`, baris);
   };
@@ -4212,7 +4293,7 @@ function dasborRedaksi() {
 
   if (!daftar.length) {
     wadah.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada penugasan pada ${esc(namaBulan(b))}</p>
-      <small>Tetapkan penugasan dari halaman Target Artikel.</small></div>`));
+      <small>Tetapkan penugasan dari halaman Penugasan.</small></div>`));
   } else {
     const t = el(`<div class="tabel-bungkus"><table class="t-org">
       <thead><tr><th class="kol-no">No.</th><th>Nama Anggota</th><th>Judul Artikel</th>
@@ -4224,7 +4305,7 @@ function dasborRedaksi() {
         <td class="kol-no">${i + 1}</td>
         <td>${selAnggota(Store.getUser(tg.userId))}</td>
         <td>${esc(tg.judul)}</td>
-        <td><span class="lencana ${PROGRES[tg.progress]?.c || 'l-abu'}">${esc(PROGRES[tg.progress]?.l || tg.progress)}</span></td>
+        <td>${lencanaProgres(tg)}</td>
         <td class="utuh">${tgl(tg.deadline)}</td>
         <td class="kol-aksi"><div class="sel-aksi">
           <button class="ikon-aksi sunting" title="Sunting penugasan">${I.sunting}</button></div></td>
@@ -4239,33 +4320,36 @@ function dasborRedaksi() {
   return box;
 }
 
+/* Penulis yang dipilihkan lebih dulu saat formulir penugasan dibuka dari
+   tombol "Tugaskan" pada baris seorang anggota. */
+let calonPenulis = '';
+
 /* --- Target Artikel: setelan target + daftar penugasan bulan terpilih --- */
 MODUL['target-artikel'] = {
   ruang: 'redaksi', izin: 'redaksi.manage', koleksi: 'penugasan',
   judul: 'Penugasan Artikel', satuan: 'Penugasan',
   sub: 'Tetapkan target bulanan dan bagikan judul kepada setiap anggota.',
   sumber: () => tugasBulan(),
-  bawaanBaru: () => ({ artikelId: '' }),
+  simpan: (data) => Store.simpanPenugasan(U, data),
   cari: (x) => `${Store.namaUser(x.userId)} ${x.judul}`,
   tajuk: (x) => x.judul,
   pratinjau: { awal: 3, akhir: 1 },
   kolom: [
     { l: 'Nama Anggota', isi: (x) => selAnggota(Store.getUser(x.userId)) },
     { l: 'Judul Artikel', isi: (x) => esc(x.judul) },
-    { l: 'Progress', isi: (x) => `<span class="lencana ${PROGRES[x.progress]?.c || 'l-abu'}">${esc(PROGRES[x.progress]?.l || x.progress)}</span>` },
-    { l: 'Deadline', kelas: 'utuh', isi: (x) => tgl(x.deadline) },
+    { l: 'Progres', isi: (x) => lencanaProgres(x) },
+    { l: 'Naskah', isi: (x) => { const a = Store.naskahTugas(x); return a
+      ? `<span class="lencana ${STATUS_ART[a.status].c}">${STATUS_ART[a.status].l}</span>` : '<span style="color:var(--e-abu)">belum ada</span>'; } },
+    { l: 'Tenggat', kelas: 'utuh', isi: (x) => tgl(x.deadline) },
   ],
   form: [
-    { k: 'userId', l: 'Anggota Penulis', jenis: 'pilih',
-      pilihan: () => Store.db.users.filter((u) => u.status === 'aktif')
-        .map((u) => ({ v: u.id, l: u.nama })) },
+    { k: 'userId', l: 'Anggota Penulis', jenis: 'pilih', bawaan: () => calonPenulis || undefined,
+      /* Hanya yang wajib menulis: anggota aktif yang masih berkajian. */
+      pilihan: () => Store.wajibMenulis().map((u) => ({ v: u.id, l: `${u.nama} · ${u.angkatan}` })) },
     { k: 'judul', l: 'Judul Artikel', wajib: true, jenis: 'area', ph: 'Muhammad Abduh dan Pembaruan Tafsir' },
     { k: 'bulan', l: 'Bulan Penugasan', jenis: 'pilih', bawaan: () => bulanAktif(),
       pilihan: () => bulanPilihan().map((v) => ({ v, l: namaBulan(v) })) },
     { k: 'deadline', l: 'Tenggat', jenis: 'tanggal', wajib: true, bawaan: () => akhirBulan(bulanAktif()) },
-    { k: 'progress', l: 'Progress', jenis: 'pilih', bawaan: 'belum',
-      pilihan: Object.entries(PROGRES).map(([v, x]) => ({ v, l: x.l })),
-      bantu: 'Progress ikut menyesuaikan sendiri begitu anggota mengirim naskahnya lewat ERP.' },
     { k: 'catatan', l: 'Catatan untuk Penulis', jenis: 'area', ph: 'Arahan tema, rujukan yang disarankan, atau batasan pembahasan.' },
   ],
 };
@@ -4290,12 +4374,12 @@ HAL['target-artikel'] = () => {
 
   const setelan = el(`<div class="kartu" style="margin-bottom:20px">
     <div class="kartu-kepala"><h3>Target Bulanan</h3>
-      <span class="hitung">berlaku untuk seluruh anggota</span></div>
+      <span class="hitung">berlaku untuk anggota aktif yang masih berkajian</span></div>
     <div class="panel-isi" style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end">
       <div class="grup" style="margin:0;width:220px">
         <label>Minimal artikel per anggota</label>
         <input type="number" min="1" max="20" id="tg" value="${c.target}">
-        <div class="bantu">Dipakai menghitung capaian di dasbor dan rekap.</div>
+        <div class="bantu">Dihitung dari naskah yang dikirim untuk ditinjau pada bulan itu, oleh anggota aktif yang masih berkajian.</div>
       </div>
       <button class="btn btn-lime btn-kecil" id="simpanTg">${I.cek} Simpan Target</button>
       <div style="margin-left:auto;text-align:right">
@@ -4311,7 +4395,7 @@ HAL['target-artikel'] = () => {
 
   const pilih = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
     <h3>Penugasan ${esc(namaBulan(bulanAktif()))}</h3>
-    <span class="hitung">(${tugasBulan().length} Penugasan · ${c.penulis} penulis)</span>
+    <span class="hitung">(${tugasBulan().length} penugasan · ${c.naskah} naskah dikirim · ${c.memenuhi} dari ${c.penulis} anggota memenuhi target)</span>
     <div class="kanan">
       <span class="bungkus-bulan">${I.kalender}
         <select class="pilih-bulan" data-bulan>${bulanTersedia().map((x) =>
@@ -4321,86 +4405,204 @@ HAL['target-artikel'] = () => {
   pilih.querySelector('[data-bulan]').onchange = (e) => { bulanRedaksi = e.target.value; gambar(); };
   box.appendChild(pilih);
 
+  box.appendChild(kartuUsulJudul());
   box.appendChild(halamanOrg('target-artikel'));
+  box.appendChild(kartuBelumTarget());
   return box;
 };
+
+/** Usulan judul dari anggota yang menunggu keputusan. Kosong → tak tampil. */
+function kartuUsulJudul() {
+  const usul = Store.usulMenunggu();
+  if (!usul.length) return el('<div></div>');
+  const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Usulan Judul</h3><span class="hitung">(${usul.length} menunggu keputusan)</span></div><div class="kj-izin"></div></div>`);
+  usul.forEach((a) => {
+    const u = Store.getUser(a.penulisId);
+    const b = el(`<div class="kj-izin-br"><img src="${u?.foto || ''}" alt="">
+      <div class="isi"><b>${esc(a.judul)}</b>
+        <div class="kt">${esc(u?.nama || '—')} · untuk ${esc(namaBulan(a.usul.bulan))}</div>
+        ${a.usul.catatan ? `<div class="al">"${esc(a.usul.catatan)}"</div>` : ''}
+        <div class="alasan-izin"><input type="date" data-tenggat value="${akhirBulan(a.usul.bulan)}" title="Tenggat" style="flex:none;width:170px">
+          <input data-alasan placeholder="Alasan — wajib hanya bila ditolak"></div></div>
+      <div class="aksi"><button class="btn btn-lime btn-kecil" data-ya>Setujui</button>
+        <button class="btn btn-garis btn-kecil" data-tidak>Tolak</button></div></div>`);
+    const putus = (setuju) => {
+      if (aman(() => Store.putuskanUsul(U, a.id, setuju, { deadline: b.querySelector('[data-tenggat]').value, alasan: b.querySelector('[data-alasan]').value }))) {
+        toast(setuju ? 'Usulan disetujui dan menjadi penugasan.' : 'Usulan ditolak.'); gambar();
+      }
+    };
+    b.querySelector('[data-ya]').onclick = () => putus(true);
+    b.querySelector('[data-tidak]').onclick = () => putus(false);
+    kartu.querySelector('.kj-izin').appendChild(b);
+  });
+  return kartu;
+}
+
+/** Anggota wajib menulis yang belum memenuhi target bulan terpilih. */
+function kartuBelumTarget() {
+  const c = Store.capaianBulan(bulanAktif());
+  const belum = c.baris.filter((b) => !b.memenuhi);
+  const kartu = el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala">
+    <h3>Belum Memenuhi Target</h3><span class="hitung">(${belum.length} dari ${c.baris.length} anggota · target ${c.target} naskah dikirim · ${esc(namaBulan(c.bulan))})</span></div></div>`);
+  if (!belum.length) { kartu.appendChild(el(`<div class="kosong-erp">${I.cekBulat}<p>Semua anggota sudah memenuhi target</p></div>`)); return kartu; }
+  const t = el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Nama Anggota</th><th>Angkatan</th><th>Dikirim</th><th>Penugasan</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+  belum.forEach((b, i) => {
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td>${selAnggota(b.u)}</td><td class="utuh">${esc(b.u.angkatan || '—')}</td>
+      <td class="utuh"><b>${b.kirim.length}</b> / ${c.target}</td>
+      <td>${b.tugas.length ? b.tugas.map((p) => `${esc(potongJudul(p.judul, 38))} ${lencanaProgres(p)}`).join('<br>') : '<span class="lencana l-merah">belum ditugasi</span>'}</td>
+      <td class="kol-aksi"><div class="sel-aksi"><button class="btn btn-garis btn-kecil">${I.tambah} Tugaskan</button></div></td></tr>`);
+    tr.querySelector('button').onclick = () => { calonPenulis = b.u.id; formOrg('target-artikel', null); setTimeout(() => { calonPenulis = ''; }, 0); };
+    t.querySelector('tbody').appendChild(tr);
+  });
+  kartu.appendChild(t);
+  return kartu;
+}
 HAL['target-artikel'].judul = () => ['Target Artikel', 'Tetapkan target bulanan dan bagikan judul kepada setiap anggota.'];
 
-/* --- Performa Anggota --- */
+/* --- Capaian Anggota: dari naskah yang benar-benar dikirim --- */
+/** Capaian tiap anggota wajib menulis sepanjang bulan-bulan yang tercatat. */
+function capaianAnggota() {
+  const bulan = bulanTersedia().filter((b) => b <= nowTanggal().slice(0, 7));
+  const per = new Map();
+  bulan.forEach((b) => Store.capaianBulan(b).baris.forEach((x) => {
+    const o = per.get(x.u.id) || { u: x.u, dikirim: 0, terbit: 0, bulanPenuh: 0, tugas: 0, tepat: 0, telat: 0 };
+    o.dikirim += x.kirim.length; o.terbit += x.terbit; o.bulanPenuh += x.memenuhi ? 1 : 0;
+    x.tugas.forEach((p) => { const g = Store.progresTugas(p); o.tugas += 1; if (g.status === 'siap' && g.tepat) o.tepat += 1; if (g.telat || (g.status === 'siap' && !g.tepat)) o.telat += 1; });
+    per.set(x.u.id, o);
+  }));
+  return { bulan, daftar: [...per.values()].map((o) => ({ ...o, persen: bulan.length ? Math.round((o.bulanPenuh / bulan.length) * 100) : 0 }))
+    .sort((a, b) => b.persen - a.persen || b.dikirim - a.dikirim || a.u.nama.localeCompare(b.u.nama)) };
+}
+
 HAL.performa = () => {
-  const semua = Store.db.penugasan;
   const target = Store.db.redaksi.targetBulanan || 1;
-  const perOrang = {};
-  semua.forEach((t) => {
-    const o = (perOrang[t.userId] ||= { total: 0, siap: 0, proses: 0, belum: 0 });
-    o.total += 1; o[t.progress] = (o[t.progress] || 0) + 1;
-  });
-  const daftar = Object.entries(perOrang)
-    .map(([id, o]) => ({ id, ...o, persen: Math.round((o.siap / o.total) * 100) }))
-    .sort((a, b) => b.persen - a.persen || b.siap - a.siap);
+  const { bulan, daftar } = capaianAnggota();
 
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
-    <b>Dihitung dari seluruh bulan yang tercatat</b>
-    Persentase adalah bagian penugasan yang naskahnya sudah siap — bukan sekadar
-    yang ditandai manual, sebab progress ikut menyesuaikan ketika naskah benar-benar masuk.
+    <b>Dihitung dari naskah yang dikirim, bukan dari yang ditugaskan</b>
+    Sebuah bulan terpenuhi bila anggota mengirim sedikitnya ${target} naskah untuk ditinjau pada bulan itu.
+    Yang dihitung: anggota aktif yang masih berkajian, pada ${bulan.length} bulan tercatat.
   </div></div></div>`);
 
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Performa Anggota</h3><span class="hitung">(${daftar.length} penulis · target ${target}/bulan)</span>
+    <h3>Capaian Anggota</h3><span class="hitung">(${daftar.length} anggota · target ${target}/bulan · ${bulan.length} bulan)</span>
     <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Export Excel</button></div>
   </div></div>`);
   kartu.querySelector('[data-export]').onclick = () => {
-    const baris = [['No.', 'Nama Anggota', 'Total Penugasan', 'Siap', 'On Proses', 'Belum', 'Persentase Siap']];
-    daftar.forEach((d, i) => baris.push([i + 1, Store.namaUser(d.id), d.total, d.siap, d.proses || 0, d.belum || 0, d.persen + '%']));
-    unduhCsv('performa-anggota.csv', baris);
+    const baris = [['No.', 'Nama Anggota', 'Angkatan', 'Naskah Dikirim', 'Terbit', 'Bulan Memenuhi Target', 'Dari Bulan', 'Penugasan', 'Tepat Waktu', 'Terlambat', 'Persentase']];
+    daftar.forEach((d, i) => baris.push([i + 1, d.u.nama, d.u.angkatan || '', d.dikirim, d.terbit, d.bulanPenuh, bulan.length, d.tugas, d.tepat, d.telat, d.persen + '%']));
+    unduhCsv('capaian-anggota.csv', baris);
   };
 
   if (!daftar.length) {
-    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada penugasan tercatat</p></div>`));
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada anggota yang wajib menulis</p></div>`));
     box.appendChild(kartu); return box;
   }
 
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Nama Anggota</th><th>Penugasan</th>
-      <th>Siap</th><th style="min-width:170px">Capaian</th></tr></thead><tbody></tbody></table></div>`);
+    <thead><tr><th class="kol-no">No.</th><th>Nama Anggota</th><th>Dikirim</th><th>Terbit</th>
+      <th>Penugasan</th><th>Tepat Waktu</th><th>Terlambat</th><th style="min-width:190px">Bulan Memenuhi Target</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   daftar.forEach((d, i) => tb.appendChild(el(`<tr>
     <td class="kol-no">${i + 1}</td>
-    <td>${selAnggota(Store.getUser(d.id))}</td>
-    <td class="utuh">${d.total}</td>
-    <td class="utuh"><b style="color:#4A7A1E">${d.siap}</b></td>
+    <td>${selAnggota(d.u)}</td>
+    <td class="utuh"><b>${d.dikirim}</b></td>
+    <td class="utuh"><b style="color:#4A7A1E">${d.terbit}</b></td>
+    <td class="utuh">${d.tugas}</td><td class="utuh">${d.tepat}</td>
+    <td class="utuh">${d.telat ? `<b style="color:#B23E37">${d.telat}</b>` : '0'}</td>
     <td><div style="display:flex;align-items:center;gap:10px">
       <div class="bar-maju" style="flex:1"><span style="width:${d.persen}%"></span></div>
-      <b style="font-size:12.4px;min-width:38px;text-align:right">${d.persen}%</b>
+      <b style="font-size:12.4px;min-width:64px;text-align:right">${d.bulanPenuh}/${bulan.length} · ${d.persen}%</b>
     </div></td>
   </tr>`)));
   kartu.appendChild(t);
   box.appendChild(kartu);
   return box;
 };
-HAL.performa.judul = () => ['Performa Anggota', 'Capaian penulisan setiap anggota sepanjang periode.'];
+HAL.performa.judul = () => ['Capaian Anggota', 'Naskah yang dikirim, terbit, dan ketepatan waktu tiap anggota.'];
 
 /* --- Rekap Bulanan --- */
+/** Lembar laporan penulisan satu bulan, siap cetak. */
+function lembarLaporanArtikel(bulan) {
+  const s = Store.cms.situs;
+  const c = Store.capaianBulan(bulan);
+  const tugas = tugasBulan(bulan);
+  const kosong = (n, teks) => `<tr><td colspan="${n}" class="lk-kosong">${teks}</td></tr>`;
+  const semuaKirim = Store.db.artikel.filter((a) => Store.dikirimPada(a).slice(0, 7) === bulan)
+    .sort((a, b) => Store.dikirimPada(a).localeCompare(Store.dikirimPada(b)));
+  return el(`<div class="lk">
+    <div class="lk-kop">${lambang(40)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div></div>
+    <h2>Laporan Penulisan Artikel</h2>
+    <p class="lk-periode">${esc(namaBulan(bulan))}</p>
+    <h3>1. Ringkasan</h3>
+    <table><tbody>${[['Target per anggota', `${c.target} naskah dikirim`], ['Anggota wajib menulis', c.baris.length],
+      ['Memenuhi target', `${c.memenuhi} anggota (${c.baris.length ? Math.round((c.memenuhi / c.baris.length) * 100) : 0}%)`],
+      ['Capaian target', `${c.persen}%`], ['Naskah dikirim', semuaKirim.length], ['Sudah terbit', semuaKirim.filter((a) => a.status === 'terbit').length],
+      ['Penugasan', `${tugas.length} · ${tugas.filter((p) => Store.progresTugas(p).status === 'siap').length} dikirim · ${tugas.filter((p) => Store.progresTugas(p).telat).length} lewat tenggat`]]
+      .map(([l, v]) => `<tr><td style="width:70mm">${l}</td><td><b>${esc(String(v))}</b></td></tr>`).join('')}</tbody></table>
+    <h3>2. Naskah Dikirim</h3>
+    <table><thead><tr><th>No.</th><th>Dikirim</th><th>Judul</th><th>Penulis</th><th>Status</th></tr></thead>
+      <tbody>${semuaKirim.map((a, i) => `<tr><td>${i + 1}</td><td style="white-space:nowrap">${tgl(Store.dikirimPada(a))}</td><td>${esc(a.judul)}</td>
+        <td>${esc(Store.namaUser(a.penulisId))}</td><td>${STATUS_ART[a.status].l}</td></tr>`).join('') || kosong(5, 'Tidak ada naskah dikirim pada bulan ini.')}</tbody></table>
+    <h3>3. Capaian per Anggota</h3>
+    <table><thead><tr><th>No.</th><th>Nama</th><th>Angkatan</th><th class="lk-angka">Dikirim</th><th class="lk-angka">Terbit</th><th class="lk-angka">Ditugasi</th><th>Keterangan</th></tr></thead>
+      <tbody>${c.baris.map((b, i) => `<tr><td>${i + 1}</td><td>${esc(b.u.nama)}</td><td>${esc(b.u.angkatan || '—')}</td>
+        <td class="lk-angka">${b.kirim.length}</td><td class="lk-angka">${b.terbit}</td><td class="lk-angka">${b.tugas.length}</td>
+        <td>${b.memenuhi ? 'Memenuhi' : `Kurang ${b.kurang}`}</td></tr>`).join('') || kosong(7, 'Belum ada anggota yang wajib menulis.')}</tbody></table>
+    <p class="lk-catatan">Target dihitung dari naskah yang dikirim untuk ditinjau pada bulan ini oleh anggota aktif yang masih berkajian. Dicetak ${esc(tglSurat(nowTanggal()))}.</p>
+    <div class="lk-ttd">
+      <div>PJ Artikel,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'pj_kti' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+      <div>Mengetahui, Ketua Umum,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'ketua' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+    </div>
+  </div>`);
+}
+const cetakLaporanArtikel = (bulan) => cetakKhusus(lembarLaporanArtikel(bulan), '@page { size: A4; margin: 14mm; }', `Laporan Artikel ${bulan}`);
+
+/** Penulisan artikel dari kursi Ketua: angka bulan ini dan rekap tiap
+    bulan, hanya-baca, dengan laporan yang dapat dicetak. */
+HAL['pantau-artikel'] = () => {
+  const kini = Store.capaianBulan(nowTanggal().slice(0, 7));
+  const art = Store.db.artikel;
+  const telat = Store.db.penugasan.filter((p) => Store.progresTugas(p).telat).length;
+  const box = el(`<div><div class="grid-stat">
+    ${[{ ik: I.dokCek, n: art.filter((a) => a.status === 'review').length, l: 'Naskah menunggu ditinjau', w: 'rgba(240,149,30,.14)', wc: '#B87310' },
+       { ik: I.sasaran, n: `${kini.persen}%`, l: `Capaian target ${namaBulan(kini.bulan)}`, w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
+       { ik: I.grup, n: `${kini.memenuhi}/${kini.baris.length}`, l: 'Anggota memenuhi target', w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+       { ik: I.jam, n: telat, l: 'Penugasan lewat tenggat', w: 'rgba(229,83,75,.13)', wc: '#B23E37' }]
+      .map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
+        <div class="stat-nilai">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}
+  </div></div>`);
+  const baris = bulanTersedia().map((b) => Store.capaianBulan(b));
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Penulisan per Bulan</h3><span class="hitung">(target ${kini.target} naskah dikirim per anggota per bulan)</span></div>
+    <div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Bulan</th><th>Wajib Menulis</th><th>Memenuhi</th><th>Dikirim</th><th>Terbit</th>
+        <th style="min-width:160px">Capaian Target</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div></div>`);
+  baris.forEach((c, i) => {
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh"><b>${esc(namaBulan(c.bulan))}</b></td>
+      <td class="utuh">${c.baris.length}</td><td class="utuh">${c.memenuhi}</td><td class="utuh">${c.naskah}</td><td class="utuh">${c.terbit}</td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="bar-maju" style="flex:1"><span style="width:${c.persen}%"></span></div>
+        <b style="font-size:12.4px;min-width:38px;text-align:right">${c.persen}%</b></div></td>
+      <td class="kol-aksi"><div class="sel-aksi"><button class="ikon-aksi" title="Cetak laporan bulan ini">${I.dok}</button></div></td></tr>`);
+    tr.querySelector('button').onclick = () => cetakLaporanArtikel(c.bulan);
+    kartu.querySelector('tbody').appendChild(tr);
+  });
+  box.appendChild(kartu);
+  return box;
+};
+HAL['pantau-artikel'].judul = () => ['Penulisan', 'Capaian target dan naskah yang dikirim tiap bulan.'];
+
 HAL.rekap = () => {
   const target = Store.db.redaksi.targetBulanan || 1;
-  const baris = bulanTersedia().map((b) => {
-    const t = tugasBulan(b);
-    const penulis = new Set(t.map((x) => x.userId)).size;
-    const siap = t.filter((x) => x.progress === 'siap').length;
-    return { b, total: t.length, penulis, siap,
-      proses: t.filter((x) => x.progress === 'proses').length,
-      belum: t.filter((x) => x.progress === 'belum').length,
-      persen: t.length ? Math.round((siap / t.length) * 100) : 0,
-      kuota: penulis ? Math.min(100, Math.round((t.length / penulis / target) * 100)) : 0 };
-  });
-
+  const baris = bulanTersedia().map((b) => ({ c: Store.capaianBulan(b), tugas: tugasBulan(b) }));
   const box = el('<div></div>');
-  const total = baris.reduce((s, r) => s + r.total, 0);
-  const siapTotal = baris.reduce((s, r) => s + r.siap, 0);
+  const jml = (f) => baris.reduce((s, r) => s + f(r), 0);
 
   box.appendChild(el(`<div class="grid-stat">
-    ${[{ ik: I.dok, n: total, l: 'Total penugasan', w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
-       { ik: I.cekBulat, n: siapTotal, l: 'Naskah siap', w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+    ${[{ ik: I.dok, n: jml((r) => r.c.naskah), l: 'Naskah dikirim', w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+       { ik: I.cekBulat, n: jml((r) => r.c.terbit), l: 'Sudah terbit', w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
        { ik: I.sasaran, n: target, l: 'Target per anggota/bulan', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
        { ik: I.bagan, n: baris.length, l: 'Bulan tercatat', w: 'rgba(240,149,30,.14)', wc: '#B87310' }]
       .map((s) => `<div class="stat" style="--w:${s.w};--wc:${s.wc}">
@@ -4413,41 +4615,41 @@ HAL.rekap = () => {
     <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Export Excel</button></div>
   </div></div>`);
   kartu.querySelector('[data-export]').onclick = () => {
-    const csv = [['Bulan', 'Penulis', 'Penugasan', 'Siap', 'On Proses', 'Belum', '% Siap', '% Kuota Terpenuhi']];
-    baris.forEach((r) => csv.push([namaBulan(r.b), r.penulis, r.total, r.siap, r.proses, r.belum, r.persen + '%', r.kuota + '%']));
+    const csv = [['Bulan', 'Wajib Menulis', 'Memenuhi Target', 'Naskah Dikirim', 'Terbit', 'Penugasan', 'Lewat Tenggat', 'Capaian Target']];
+    baris.forEach(({ c, tugas }) => csv.push([namaBulan(c.bulan), c.baris.length, c.memenuhi, c.naskah, c.terbit, tugas.length,
+      tugas.filter((p) => Store.progresTugas(p).telat).length, c.persen + '%']));
     unduhCsv('rekap-bulanan-artikel.csv', csv);
   };
 
-  if (!baris.length) {
-    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada bulan tercatat</p></div>`));
-    box.appendChild(kartu); return box;
-  }
-
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Bulan</th><th>Penulis</th><th>Penugasan</th>
-      <th>Siap</th><th>On Proses</th><th>Belum</th><th style="min-width:160px">Naskah Siap</th></tr></thead>
+    <thead><tr><th class="kol-no">No.</th><th>Bulan</th><th>Wajib Menulis</th><th>Memenuhi</th><th>Dikirim</th>
+      <th>Terbit</th><th>Penugasan</th><th>Lewat Tenggat</th><th style="min-width:160px">Capaian Target</th><th class="kol-aksi">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
-  baris.forEach((r, i) => {
+  baris.forEach(({ c, tugas }, i) => {
+    const telat = tugas.filter((p) => Store.progresTugas(p).telat).length;
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td>
-      <td class="utuh"><b>${esc(namaBulan(r.b))}</b></td>
-      <td class="utuh">${r.penulis}</td><td class="utuh">${r.total}</td>
-      <td class="utuh"><b style="color:#4A7A1E">${r.siap}</b></td>
-      <td class="utuh">${r.proses}</td><td class="utuh">${r.belum}</td>
+      <td class="utuh"><b>${esc(namaBulan(c.bulan))}</b></td>
+      <td class="utuh">${c.baris.length}</td><td class="utuh"><b style="color:#4A7A1E">${c.memenuhi}</b></td>
+      <td class="utuh">${c.naskah}</td><td class="utuh">${c.terbit}</td>
+      <td class="utuh">${tugas.length}</td><td class="utuh">${telat ? `<b style="color:#B23E37">${telat}</b>` : '0'}</td>
       <td><div style="display:flex;align-items:center;gap:10px">
-        <div class="bar-maju" style="flex:1"><span style="width:${r.persen}%"></span></div>
-        <b style="font-size:12.4px;min-width:38px;text-align:right">${r.persen}%</b></div></td>
+        <div class="bar-maju" style="flex:1"><span style="width:${c.persen}%"></span></div>
+        <b style="font-size:12.4px;min-width:38px;text-align:right">${c.persen}%</b></div></td>
+      <td class="kol-aksi"><div class="sel-aksi">
+        <button class="ikon-aksi" data-buka title="Buka penugasan bulan ini">${I.kanan}</button>
+        <button class="ikon-aksi" data-cetak title="Cetak laporan bulan ini">${I.dok}</button></div></td>
     </tr>`);
-    tr.style.cursor = 'pointer';
-    tr.onclick = () => { bulanRedaksi = r.b; rute = 'target-artikel'; location.hash = rute; gambar(); };
+    tr.querySelector('[data-buka]').onclick = () => { bulanRedaksi = c.bulan; bukaModul('target-artikel'); };
+    tr.querySelector('[data-cetak]').onclick = () => cetakLaporanArtikel(c.bulan);
     tb.appendChild(tr);
   });
   kartu.appendChild(t);
   box.appendChild(kartu);
   return box;
 };
-HAL.rekap.judul = () => ['Rekap Bulanan', 'Ringkasan penugasan dan capaian penulisan tiap bulan.'];
+HAL.rekap.judul = () => ['Rekap Bulanan', 'Naskah dikirim dan capaian target tiap bulan.'];
 
 /* ============================================================
    KATEGORI ARTIKEL — menyunting CMS, jadi tetap lewat persetujuan

@@ -840,54 +840,10 @@ const SEED = {
    penulis per bulan selama tiga bulan menghasilkan ratusan baris,
    yang kalau ditulis manual justru menyembunyikan polanya.
    ========================================================== */
-const JUDUL_TUGAS = [
-  'Muhammad Abduh dan Pembaruan Tafsir', "Metode Tafsir Ma'tsur dan Ra'yi",
-  "Kaidah-Kaidah Ulumul Quran", 'Makna Takwa dalam al-Quran',
-  'Tafsir Tematik: Keadilan Sosial', 'Pendekatan Linguistik dalam Tafsir',
-  'Sejarah Kodifikasi al-Quran', 'Muhkam dan Mutasyabih',
-  'Nasikh dan Mansukh dalam al-Quran', 'Qiraat Sab‘ah dan Implikasinya',
-  'Israiliyyat dalam Kitab Tafsir', 'Amtsal al-Quran dan Fungsi Didaktisnya',
-  'Qasam al-Quran: Sumpah dan Maknanya', 'Fawatih as-Suwar',
-  'Munasabah Ayat dan Surat', "I'jaz al-Quran dari Sisi Ilmiah",
-  'Tafsir Maqashidi Kontemporer', 'Wujuh dan Nazhair',
-  'Asbabun Nuzul dan Batas Keberlakuannya', 'Balaghah dalam Ayat Hukum',
-  'Tafsir Sufi: Antara Isyarat dan Takwil', 'Perempuan dalam Narasi al-Quran',
-  'Kisah Nabi Yusuf: Struktur Naratif', 'Konsep Ummah dalam al-Quran',
-  'Tafsir al-Mizan dan Metodologinya', 'Ayat-Ayat Kauniyah dan Sains Modern',
-  'Terjemah al-Quran: Batas dan Problemnya', 'Tafsir Nusantara Abad ke-20',
-  'Makna Hidayah dan Dhalalah', 'Konsep Rizki dalam al-Quran',
-];
-
-/* Bulan berjalan dalam data contoh sengaja tetap (bukan bulan hari ini)
-   supaya angka pada dasbor tidak berubah-ubah saat prototipe dibuka
-   kapan pun. Pemilih bulan di ERP membuka bulan terbaru yang berisi. */
-function bangunPenugasan(users) {
-  const penulis = users.filter((u) => u.status === 'aktif'
-    && !['ketua', 'sekretaris', 'bendahara'].includes(u.role));
-  const bulan = ['2025-04', '2025-05', '2025-06'];
-  const akhir = { '2025-04': '2025-04-30', '2025-05': '2025-05-31', '2025-06': '2025-06-30' };
-  const hasil = [];
-  let n = 0, j = 0;
-  bulan.forEach((bl, bi) => {
-    penulis.forEach((u, ui) => {
-      for (let k = 0; k < 2; k++) {
-        n += 1;
-        const judul = JUDUL_TUGAS[j++ % JUDUL_TUGAS.length];
-        /* Bulan lampau hampir rampung; bulan berjalan masih beragam. */
-        const putar = (ui * 2 + k) % 3;
-        const progress = bi < 2 ? (putar === 2 && ui % 4 === 0 ? 'proses' : 'siap')
-          : ['belum', 'proses', 'siap'][putar];
-        hasil.push({
-          id: 'tg' + n, userId: u.id, bulan: bl, judul, progress,
-          deadline: akhir[bl], artikelId: '', catatan: '',
-        });
-      }
-    });
-  });
-  return hasil;
-}
-
-SEED.penugasan = bangunPenugasan(SEED.users);
+/* Penugasan contoh sudah ditiadakan: 222 baris bangkitan itu mengaku
+   "siap" tanpa satu pun naskah di baliknya. Penugasan kini dimulai kosong
+   dan progresnya diturunkan dari naskah yang benar-benar ada. */
+SEED.penugasan = [];
 
 /* Target & panduan redaksi — disunting PJ Artikel dari ERP. */
 SEED.redaksi = {
