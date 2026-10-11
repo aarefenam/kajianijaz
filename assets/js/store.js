@@ -1635,35 +1635,39 @@ function hariIni() {
    seluruh koleksi — sehingga beberapa ponsel dapat memindai bersamaan tanpa
    saling menolak. Server mengembalikan baris kajiannya yang terbaru (sudah
    memuat catatan pemindai lain); baris itu menggantikan yang di memori. */
-const aksiPresensi = (aksi, data) => aksiKajian('presensi.php', aksi, data);
+const aksiPresensi = (aksi, data) => aksiBaris('kajian', 'presensi.php', aksi, data);
 /** Tulisan petugas (pemakalah, notulen) atas kajiannya sendiri. */
-const aksiPetugas = (aksi, data) => aksiKajian('petugas-kajian.php', aksi, data);
+const aksiPetugas = (aksi, data) => aksiBaris('kajian', 'petugas-kajian.php', aksi, data);
+/** Tulisan penulis dan editor atas proyek buku yang menugasinya. */
+const aksiPetugasBuku = (aksi, data) => aksiBaris('buku', 'petugas-buku.php', aksi, data);
 
-async function aksiKajian(jalur, aksi, data) {
+/** Satu perubahan kecil pada SATU baris sebuah koleksi, lewat titik akhir
+    tersendiri. `nama`: koleksinya — juga kunci baris dalam jawaban server. */
+async function aksiBaris(nama, jalur, aksi, data) {
   /* Suntingan jadwal yang belum terkirim didahulukan, supaya baris yang
      kembali dari server tidak menimpanya. */
-  if (koleksiKotor().kajian !== undefined) await kirimPerubahan();
+  if (koleksiKotor()[nama] !== undefined) await kirimPerubahan();
   const d = await panggil(jalur, { method: 'POST',
-    body: JSON.stringify({ aksi, versi: versiKoleksi.kajian ?? 0, ...data }) });
+    body: JSON.stringify({ aksi, versi: versiKoleksi[nama] ?? 0, ...data }) });
   /* Isi baris diganti DI TEMPAT: layar yang sedang memegang objek kajian
      ini langsung melihat keadaan terbarunya. */
   const timpa = (k, baru) => { Object.keys(k).forEach((kunci) => delete k[kunci]); Object.assign(k, baru); };
   if (Array.isArray(d.semua)) {
     /* Peramban ini tertinggal dari ponsel lain: server mengirim seluruh
        koleksi, dan semuanya disegarkan sekaligus. */
-    const lama = new Map(db.kajian.map((k) => [k.id, k]));
-    db.kajian = d.semua.map((baru) => {
+    const lama = new Map(db[nama].map((k) => [k.id, k]));
+    db[nama] = d.semua.map((baru) => {
       const k = lama.get(baru.id);
       if (!k) return baru;
       timpa(k, baru);
       return k;
     });
   } else {
-    const k = db.kajian.find((x) => x.id === d.kajian?.id);
-    if (k) timpa(k, d.kajian);
+    const k = db[nama].find((x) => x.id === d[nama]?.id);
+    if (k) timpa(k, d[nama]);
   }
-  if (d.versi?.kajian) versiKoleksi.kajian = d.versi.kajian;
-  bayangan.kajian = JSON.stringify(db.kajian);
+  if (d.versi?.[nama]) versiKoleksi[nama] = d.versi[nama];
+  bayangan[nama] = JSON.stringify(db[nama]);
   beritahu();
   return d;
 }
@@ -2799,6 +2803,96 @@ function bukuBerisi(b) {
     || (b.penjualan || []).length > 0 || (db.keuangan || []).some((t) => t.bukuId === b.id);
 }
 
+/* --- naskah: diserahkan petugasnya, dinyatakan siap PJ Buku ---
+   progressTulis / progressEdit tetap tiga nilai (belum, proses, siap)
+   sebab tahap proyek membacanya, tetapi tidak lagi diketik: "proses"
+   berarti sudah diserahkan atau dikembalikan, "siap" berarti DITERIMA. */
+function cariNaskah(idBuku, idNaskah) {
+  const b = cariBuku(idBuku);
+  const n = (b.naskah || []).find((x) => x.id === idNaskah);
+  if (!n) throw new Error('Sub judul tidak ditemukan.');
+  return { b, n };
+}
+/** Keadaan sebuah naskah pada tahap tulis atau sunting, untuk layar. */
+function keadaanNaskah(n, tahap = 'tulis') {
+  const [prog, taut, kembali, tenggat] = tahap === 'tulis'
+    ? [n.progressTulis, n.tautan, n.dikembalikan, n.deadline]
+    : [n.progressEdit, n.tautanSunting, n.suntingDikembalikan, n.tenggatEdit];
+  const kunci = prog === 'siap' ? 'siap' : kembali ? 'perbaiki' : taut ? 'diserahkan' : prog === 'proses' ? 'proses' : 'belum';
+  return { kunci, telat: prog !== 'siap' && !!tenggat && tenggat < hariIni() };
+}
+
+/** PJ Buku menerima atau mengembalikan naskah / suntingan.
+    `tahap`: tulis | sunting. `putusan`: terima | kembalikan | buka. */
+function putuskanNaskah(user, idBuku, idNaskah, tahap, putusan, catatan) {
+  RBAC.assertCan(user, 'buku.manage');
+  const { b, n } = cariNaskah(idBuku, idNaskah);
+  const [kProg, kKembali, kCatatan] = tahap === 'tulis'
+    ? ['progressTulis', 'dikembalikan', 'catatanTulis'] : ['progressEdit', 'suntingDikembalikan', 'catatanSunting'];
+  const teks = String(catatan || '').trim();
+  if (tahap === 'sunting' && n.progressTulis !== 'siap') throw new Error('Naskah ini belum diterima — belum dapat disunting.');
+  if (putusan === 'terima') {
+    if (n[kProg] === 'siap') throw new Error('Sudah diterima.');
+    if (!(tahap === 'tulis' ? n.tautan : n.tautanSunting))
+      throw new Error(`Belum ada ${tahap === 'tulis' ? 'naskah' : 'suntingan'} yang diserahkan. Isi tautannya lebih dulu.`);
+    Object.assign(n, { [kProg]: 'siap', [kKembali]: false, [kCatatan]: '' });
+  } else if (putusan === 'kembalikan') {
+    if (!teks) throw new Error('Tuliskan apa yang perlu diperbaiki.');
+    Object.assign(n, { [kProg]: 'proses', [kKembali]: true, [kCatatan]: teks });
+  } else if (putusan === 'buka') {
+    if (n[kProg] !== 'siap') throw new Error('Belum diterima.');
+    if (tahap === 'tulis' && n.progressEdit === 'siap') throw new Error('Suntingannya sudah diterima — buka suntingannya lebih dulu.');
+    Object.assign(n, { [kProg]: 'proses', [kKembali]: false });
+  } else throw new Error('Putusan tidak dikenal.');
+  segarkanTahap(b);
+  catat(user, `buku.naskah.${putusan}`, n.id, `${tahap === 'tulis' ? 'Naskah' : 'Suntingan'} "${n.subJudul}" pada "${b.judul}": ${putusan}${teks ? ` — ${teks}` : ''}`);
+  simpan();
+}
+
+/** Simpan data pokok sebuah sub judul (bukan progresnya). */
+function simpanNaskahBuku(user, data, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  if (!b) throw new Error('Belum ada proyek buku. Buat proyeknya lebih dulu.');
+  const lama = data.id ? (b.naskah || []).find((x) => x.id === data.id) : null;
+  if (data.id && !lama) throw new Error('Sub judul tidak ditemukan.');
+  const n = { ...(lama || {}), ...data };
+  if (!String(n.subJudul || '').trim()) throw new Error('Sub judul wajib diisi.');
+  if (b.naskah.some((x) => x.id !== n.id && x.subJudul.trim().toLowerCase() === n.subJudul.trim().toLowerCase()))
+    throw new Error('Sub judul itu sudah ada pada proyek ini.');
+  if (n.deadline && n.tenggatEdit && n.tenggatEdit < n.deadline) throw new Error('Tenggat sunting tidak boleh sebelum tenggat tulis.');
+  if (n.tenggatEdit && n.tenggatLayout && n.tenggatLayout < n.tenggatEdit) throw new Error('Tenggat tata letak tidak boleh sebelum tenggat sunting.');
+  const t = String(n.tautan || '').trim();
+  if (!tautanSah(t)) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+  if (lama && lama.userId !== n.userId && lama.progressTulis === 'siap') throw new Error('Naskah ini sudah diterima — penulisnya tidak dapat diganti.');
+  const ts = String(n.tautanSunting || '').trim();
+  if (!tautanSah(ts)) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+  const bersih = { userId: n.userId || '', subJudul: n.subJudul.trim(), deadline: n.deadline || '', tenggatEdit: n.tenggatEdit || '',
+    tenggatLayout: n.tenggatLayout || '', tautan: t, tautanSunting: ts };
+  if (lama) Object.assign(lama, bersih);
+  else b.naskah.push({ id: uid('nk'), progressTulis: 'belum', progressEdit: 'belum', buktiLayout: '', ...bersih });
+  segarkanTahap(b);
+  catat(user, lama ? 'buku.naskah.ubah' : 'buku.naskah.tambah', n.id || '', `${lama ? 'Mengubah' : 'Menambah'} sub judul "${bersih.subJudul}" pada "${b.judul}"`);
+  simpan();
+}
+
+/** Penulis menyerahkan naskahnya; anggota tim editor suntingannya. */
+async function serahkanNaskah(idBuku, idNaskah, tautan, tahap = 'tulis') {
+  const t = String(tautan || '').trim();
+  if (!t || !tautanSah(t)) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+  await aksiPetugasBuku(tahap === 'tulis' ? 'naskah' : 'sunting', { idBuku, idNaskah, tautan: t });
+}
+
+/** Proyek yang melibatkan seorang anggota, beserta perannya di sana. */
+function bukuSaya(userId) {
+  return db.buku.filter((b) => b.status !== 'dihentikan').map((b) => {
+    const peran = [b.pjUtamaId === userId && 'PJ Utama', b.pjProduksiId === userId && 'PJ Produksi & Distribusi',
+      (b.editorIds || []).includes(userId) && 'Editor', (b.layouterIds || []).includes(userId) && 'Layouter',
+      (b.desainerIds || []).includes(userId) && 'Desainer', (b.naskah || []).some((n) => n.userId === userId) && 'Penulis'].filter(Boolean);
+    return peran.length ? { b, peran } : null;
+  }).filter(Boolean);
+}
+
 /** Ubah status proyek. `ke`: berjalan | terbit | dihentikan. */
 function ubahStatusBuku(user, id, ke, { alasan, tanggal } = {}) {
   RBAC.assertCan(user, 'buku.manage');
@@ -3124,6 +3218,7 @@ window.Store = {
   aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
+  keadaanNaskah, putuskanNaskah, simpanNaskahBuku, serahkanNaskah, bukuSaya,
   bukuAktif, bukaBukuProyek, simpanBuku, hapusBuku, ubahStatusBuku, tahapBuku, bukuBerisi, bukuJalan, STATUS_BUKU,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
   pindahArtikel, ALUR_ARTIKEL, naskahTugas, dikirimPada, progresTugas, wajibMenulis, capaianBulan,

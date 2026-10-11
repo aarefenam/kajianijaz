@@ -313,10 +313,20 @@ dirujuk transaksi Buku Kas tidak dapat dihapus** — ditegakkan juga `jagaBuku()
 di server. Timeline bertanda selesai, dan tahapan yang lewat tanggalnya masuk
 antrean. Website publik menampilkan buku yang terbit dan yang sedang digarap.
 
-Tulang punggungnya adalah `naskah`: satu baris per sub judul yang memuat penulis,
-progress tulis, progress edit, dan bukti layout sekaligus. Halaman **Penulisan**,
-**Editing**, dan **Layouting** hanyalah tiga cara memandang daftar yang sama — nama
-penulis dan sub judulnya mustahil berbeda antar tahap.
+Tulang punggungnya adalah `naskah`: satu baris per sub judul. Halaman
+**Penulisan**, **Editing**, dan **Layout** adalah tiga cara memandang daftar yang
+sama. **Progresnya tidak lagi diketik**: penulis menyerahkan tautan naskahnya,
+anggota tim editor menyerahkan tautan suntingannya — keduanya dari halaman
+*Buku Saya*, lewat `api/petugas-buku.php` yang mencocokkan petugas dengan sesi —
+dan **PJ Buku yang menerima atau mengembalikan** (wajib bercatatan). Yang sudah
+diterima terkunci bagi petugasnya sampai PJ Buku membukanya kembali. Tiap sub
+judul punya tenggat tulis, sunting, dan tata letak; yang terlewat masuk antrean.
+Tim editor bekerja bersama: siapa pun anggotanya boleh menyerahkan suntingan,
+dan namanya tercatat.
+
+**Kasaran modal, dokumen, dan penjualan hanya dikirim kepada PJ Buku,
+Bendahara, dan Ketua** (`bukuUntuk()`); penulis dan editor tetap menerima
+naskah, tim, dan timeline proyeknya.
 
 **Keuangan Buku** memuat kasaran modal, yaitu *rencana* biaya penerbitan. Uang yang
 benar-benar keluar tetap dicatat Bendahara di Buku Kas; keduanya sengaja tidak

@@ -362,6 +362,9 @@ const MENU = [
   { id: 'dasbor',    label: () => ruangKetua() ? 'Dashboard Ketua Umum' : ruangBuku() ? 'Dashboard' : 'Dasbor',
     ikon: () => ruangKetua() ? I.rumah : I.dasbor, izin: null },
   { id: 'kartu-saya', label: 'Kartu Saya', ikon: I.qr, izin: null },
+  /* Tugas pada proyek buku — hanya bagi yang dilibatkan sebuah proyek. */
+  { id: 'buku-saya', label: 'Buku Saya', ikon: I.buku, izin: null, tersembunyiBila: () => !Store.bukuSaya(U?.id).length,
+    lonceng: () => tugasBukuSaya().length },
   /* Jadwal, tugas, dan izin kajian milik sendiri — hanya bagi yang masih berkajian. */
   { id: 'kajian-saya', label: 'Kajian Saya', ikon: I.kalender, izin: null, tersembunyiBila: () => !Store.berkajian(U),
     lonceng: () => tugasKajianSaya().length },
@@ -546,6 +549,7 @@ const MENU_KETUA = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Putuskan' },
   { id: 'pengajuan', label: 'Persetujuan Website' },
   { id: 'persetujuan-kas' },
@@ -593,6 +597,7 @@ const MENU_SEKRETARIS = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Tindak Lanjuti' },
   { id: 'pesan' },
   { id: 'surat-masuk' },
@@ -630,6 +635,7 @@ const MENU_BENDAHARA = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Terima' },
   { id: 'iuran-anggota' },
   { id: 'masuk-internal' },
@@ -661,6 +667,7 @@ const MENU_KAJIAN = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Kajian' },
   { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => { const p = perluKajian(); return p.berhalangan.length + p.belumLengkap.filter((x) => x.sisa <= 3).length; } },
   { id: 'presensi', lonceng: () => { const p = perluKajian(); return p.izin.length + p.tanpaPresensi.length + p.belumTutup.length; } },
@@ -688,6 +695,7 @@ const MENU_ARTIKEL = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Tinjau' },
   { id: 'artikel-masuk', label: 'Naskah Masuk' },
   { id: 'artikel-revisi' },
@@ -718,6 +726,7 @@ const MENU_BUKU = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
+  { id: 'buku-saya' },
   { grup: 'Proyek' },
   { id: 'buku-perencanaan', label: 'Proyek & Timeline' },
   { id: 'buku-tugas', label: 'Tim & Tugas' },
@@ -3717,7 +3726,7 @@ function halamanOrg(nama) {
       <div class="kanan">
         <input class="cari-org" placeholder="Cari ${esc(m.satuan.toLowerCase())}…" data-cari>
         ${bisa ? (m.tombolLain || []).map((t, i) => `<button class="btn btn-garis btn-kecil" data-tombol="${i}">${t.ikon} ${esc(t.label)}</button>`).join('') : ''}
-        ${bisa ? `<button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Data</button>` : ''}
+        ${bisa && !m.tanpaTambah ? `<button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Data</button>` : ''}
       </div>
     </div>
     <div data-wadah></div>
@@ -5035,6 +5044,9 @@ function perluBuku() {
   const dari = (f) => jalan.flatMap((b) => f(b).map((x) => ({ b, x })));
   return {
     telatTulis: dari((b) => (b.naskah || []).filter((n) => n.progressTulis !== 'siap' && n.deadline && n.deadline < kini)),
+    serahTulis: dari((b) => (b.naskah || []).filter((n) => Store.keadaanNaskah(n, 'tulis').kunci === 'diserahkan')),
+    serahSunting: dari((b) => (b.naskah || []).filter((n) => n.progressTulis === 'siap' && Store.keadaanNaskah(n, 'sunting').kunci === 'diserahkan')),
+    telatSunting: dari((b) => (b.naskah || []).filter((n) => n.progressTulis === 'siap' && Store.keadaanNaskah(n, 'sunting').telat)),
     siapEdit: dari((b) => (b.naskah || []).filter((n) => n.progressTulis === 'siap' && n.progressEdit !== 'siap')),
     siapLayout: dari((b) => (b.naskah || []).filter((n) => n.progressEdit === 'siap' && !n.buktiLayout)),
     telatTerbit: jalan.filter((b) => b.targetTerbit && b.targetTerbit < kini),
@@ -5053,6 +5065,14 @@ function antreanBuku() {
     { ...ke('buku-perencanaan', p.telatTimeline), ikon: I.kalender, judul: 'Tahapan Timeline Terlewat', n: p.telatTimeline.length,
       satuan: 'tahapan lewat tanggal dan belum ditandai selesai', kosong: 'Timeline berjalan sesuai tanggal',
       rinci: rinci(p.telatTimeline, (d) => `${d.x.tahapan} (${tgl(d.x.tanggal)})`) },
+    { ...ke('buku-penulisan', p.serahTulis), ikon: I.dokCek, judul: 'Naskah Diserahkan', n: p.serahTulis.length,
+      satuan: 'naskah menunggu Anda terima atau kembalikan', kosong: 'Tidak ada naskah yang menunggu keputusan',
+      rinci: rinci(p.serahTulis, (d) => `${d.x.subJudul} (${Store.namaUser(d.x.userId)})`) },
+    { ...ke('buku-editing', p.serahSunting), ikon: I.dokCek, judul: 'Suntingan Diserahkan', n: p.serahSunting.length,
+      satuan: 'suntingan menunggu Anda terima atau kembalikan', kosong: 'Tidak ada suntingan yang menunggu keputusan',
+      rinci: rinci(p.serahSunting, (d) => d.x.subJudul) },
+    ...(p.telatSunting.length ? [{ ...ke('buku-editing', p.telatSunting), ikon: I.jam, judul: 'Suntingan Lewat Tenggat', n: p.telatSunting.length,
+      satuan: 'sub judul belum selesai disunting', kosong: '', rinci: rinci(p.telatSunting, (d) => d.x.subJudul) }] : []),
     { ...ke('buku-penulisan', p.telatTulis), ikon: I.jam, judul: 'Naskah Lewat Tenggat', n: p.telatTulis.length,
       satuan: 'sub judul belum selesai ditulis', kosong: 'Tidak ada naskah yang terlambat',
       rinci: rinci(p.telatTulis, (d) => `${d.x.subJudul} (${Store.namaUser(d.x.userId)})`) },
@@ -5191,47 +5211,96 @@ const modulBuku = (bagian, spec) => ({
   ...spec,
 });
 
+const NASKAH_ST = {
+  belum     : { l: 'Belum',              c: 'l-merah'  },
+  proses    : { l: 'Dikerjakan',         c: 'l-kuning' },
+  diserahkan: { l: 'Diserahkan',         c: 'l-biru'   },
+  perbaiki  : { l: 'Perlu Perbaikan',    c: 'l-merah'  },
+  siap      : { l: 'Diterima',           c: 'l-hijau'  },
+};
+const lencanaNaskah = (n, tahap) => {
+  const k = Store.keadaanNaskah(n, tahap);
+  return `<span class="lencana ${NASKAH_ST[k.kunci].c}">${NASKAH_ST[k.kunci].l}</span>${k.telat ? ' <span class="lencana l-merah">lewat tenggat</span>' : ''}`;
+};
+/** Terima, kembalikan (bercatatan), atau buka kembali naskah / suntingan. */
+function putusNaskah(n, tahap, putusan) {
+  const b = bk();
+  const apa = tahap === 'tulis' ? 'naskah' : 'suntingan';
+  const jalan = (catatan) => {
+    if (aman(() => Store.putuskanNaskah(U, b.id, n.id, tahap, putusan, catatan))) {
+      tutupModal(); toast(putusan === 'terima' ? `${apa[0].toUpperCase() + apa.slice(1)} diterima.` : putusan === 'buka' ? 'Dibuka kembali.' : 'Dikembalikan dengan catatan.'); gambar();
+    }
+  };
+  if (putusan !== 'kembalikan') return jalan('');
+  const isi = el(`<div><p style="margin:0 0 12px;font-size:13.4px;color:#44534A"><b>${esc(n.subJudul)}</b></p>
+    <div class="grup" style="margin:0"><label>Yang perlu diperbaiki</label>
+      <textarea data-c style="min-height:80px" placeholder="Terbaca oleh ${tahap === 'tulis' ? 'penulisnya' : 'tim editor'} di halaman Buku Saya"></textarea></div></div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-y>Kembalikan</button></div>`);
+  modal({ judul: `Kembalikan ${apa}`, isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => jalan(isi.querySelector('[data-c]').value);
+}
+
 const pilihAnggota = () => Store.db.users.filter((u) => u.status === 'aktif')
   .map((u) => ({ v: u.id, l: u.nama }));
 
 Object.assign(MODUL, {
   'buku-penulisan': modulBuku('naskah', {
-    judul: 'Tahap Penulisan', satuan: 'Naskah',
-    sub: 'Penulis, sub judul, dan progress penulisannya.',
+    judul: 'Tahap Penulisan', satuan: 'Sub Judul',
+    sub: 'Penulis menyerahkan naskahnya; PJ Buku menerima atau mengembalikan.',
+    simpan: (d) => Store.simpanNaskahBuku(U, d),
     cari: (x) => `${Store.namaUser(x.userId)} ${x.subJudul}`,
     tajuk: (x) => x.subJudul,
     kolom: [
-      { l: 'Nama', isi: (x) => selAnggota(Store.getUser(x.userId)) },
-      { l: 'Sub Judul', isi: (x) => esc(x.subJudul) },
-      { l: 'Progress', isi: (x) => lencanaProg(x.progressTulis) },
-      { l: 'Deadline', kelas: 'utuh', isi: (x) => tgl(x.deadline) },
+      { l: 'Penulis', isi: (x) => (x.userId ? selAnggota(Store.getUser(x.userId)) : '<span class="lencana l-merah">belum ditunjuk</span>') },
+      { l: 'Sub Judul', isi: (x) => `${esc(x.subJudul)}${x.dikembalikan && x.catatanTulis ? `<br><span class="sub-sel">Dikembalikan: ${esc(x.catatanTulis)}</span>` : ''}` },
+      { l: 'Naskah', isi: (x) => tautLuar(x.tautan, 'Buka') || '<span style="color:var(--e-abu)">belum ada</span>' },
+      { l: 'Status', isi: (x) => lencanaNaskah(x, 'tulis') },
+      { l: 'Tenggat', kelas: 'utuh', isi: (x) => (x.deadline ? tgl(x.deadline) : '—') },
+    ],
+    aksiLain: [
+      { ikon: I.cek, judul: 'Terima naskah — siap disunting', klik: (x) => putusNaskah(x, 'tulis', 'terima') },
+      { ikon: I.putar, judul: 'Kembalikan / buka kembali', klik: (x) => putusNaskah(x, 'tulis', x.progressTulis === 'siap' ? 'buka' : 'kembalikan') },
     ],
     form: [
-      { k: 'userId', l: 'Penulis', jenis: 'pilih', pilihan: pilihAnggota },
+      { k: 'userId', l: 'Penulis', jenis: 'pilih', pilihan: () => [{ v: '', l: '— belum ditunjuk —' }, ...pilihAnggota()] },
       { k: 'subJudul', l: 'Sub Judul', wajib: true, ph: 'Tafsir Al-Manar' },
-      { k: 'progressTulis', l: 'Progress Penulisan', jenis: 'pilih', bawaan: 'belum',
-        pilihan: [{ v: 'belum', l: 'Belum' }, { v: 'proses', l: 'On Proses' }, { v: 'siap', l: 'Siap' }] },
-      { k: 'deadline', l: 'Tenggat', jenis: 'tanggal', wajib: true },
+      { k: 'deadline', l: 'Tenggat Tulis', jenis: 'tanggal', wajib: true },
+      { k: 'tenggatEdit', l: 'Tenggat Sunting', jenis: 'tanggal' },
+      { k: 'tenggatLayout', l: 'Tenggat Tata Letak', jenis: 'tanggal' },
+      { k: 'tautan', l: 'Tautan Naskah', ph: 'https://drive.google.com/…',
+        bantu: 'Biasanya diisi penulisnya sendiri dari halaman Buku Saya. Status tidak diketik: naskah diserahkan, lalu Anda terima atau kembalikan.' },
     ],
-    bawaanBaru: () => ({ progressEdit: 'belum', buktiLayout: '' }),
   }),
 
   'buku-editing': modulBuku('naskah', {
-    judul: 'Tahap Editing', satuan: 'Naskah',
-    sub: 'Progress penyuntingan tiap sub judul oleh tim editor.',
+    judul: 'Tahap Editing', satuan: 'Sub Judul',
+    sub: 'Tim editor menyerahkan suntingan; PJ Buku menerima atau mengembalikan.',
+    simpan: (d) => Store.simpanNaskahBuku(U, d),
+    tanpaTambah: true,
     cari: (x) => `${Store.namaUser(x.userId)} ${x.subJudul}`,
     tajuk: (x) => x.subJudul,
     kolom: [
-      { l: 'Nama', isi: (x) => selAnggota(Store.getUser(x.userId)) },
-      { l: 'Sub Judul', isi: (x) => esc(x.subJudul) },
-      { l: 'Progress Tulis', isi: (x) => lencanaProg(x.progressTulis) },
-      { l: 'Progress Edit', isi: (x) => lencanaProg(x.progressEdit) },
+      { l: 'Sub Judul', isi: (x) => `<b>${esc(x.subJudul)}</b><br><span class="sub-sel">${esc(Store.namaUser(x.userId))}</span>${
+        x.suntingDikembalikan && x.catatanSunting ? `<br><span class="sub-sel">Dikembalikan: ${esc(x.catatanSunting)}</span>` : ''}` },
+      { l: 'Naskah', isi: (x) => `${lencanaNaskah(x, 'tulis')} ${tautLuar(x.tautan, 'Buka')}` },
+      { l: 'Suntingan', isi: (x) => tautLuar(x.tautanSunting, 'Buka') || '<span style="color:var(--e-abu)">belum ada</span>' },
+      { l: 'Penyunting', isi: (x) => esc(x.penyuntingId ? namaPendek(x.penyuntingId) : '—') },
+      { l: 'Status Sunting', isi: (x) => (x.progressTulis === 'siap' ? lencanaNaskah(x, 'sunting') : '<span class="lencana l-abu">menunggu naskah</span>') },
+      { l: 'Tenggat', kelas: 'utuh', isi: (x) => (x.tenggatEdit ? tgl(x.tenggatEdit) : '—') },
+    ],
+    aksiLain: [
+      { ikon: I.cek, judul: 'Terima suntingan — siap ditata letak', klik: (x) => putusNaskah(x, 'sunting', 'terima') },
+      { ikon: I.putar, judul: 'Kembalikan / buka kembali', klik: (x) => putusNaskah(x, 'sunting', x.progressEdit === 'siap' ? 'buka' : 'kembalikan') },
     ],
     form: [
       { k: 'subJudul', l: 'Sub Judul', wajib: true },
-      { k: 'progressEdit', l: 'Progress Editing', jenis: 'pilih', bawaan: 'belum',
-        pilihan: [{ v: 'belum', l: 'Belum' }, { v: 'proses', l: 'On Proses' }, { v: 'siap', l: 'Siap' }],
-        bantu: 'Naskah baru bisa dilayout setelah editingnya siap.' },
+      { k: 'tenggatEdit', l: 'Tenggat Sunting', jenis: 'tanggal' },
+      { k: 'tenggatLayout', l: 'Tenggat Tata Letak', jenis: 'tanggal',
+        bantu: 'Naskah baru dapat ditata letak setelah suntingannya Anda terima.' },
+      { k: 'tautanSunting', l: 'Tautan Suntingan', ph: 'https://drive.google.com/…',
+        bantu: 'Biasanya diisi anggota tim editor dari halaman Buku Saya.' },
     ],
   }),
 
@@ -5773,6 +5842,99 @@ HAL['buku-keuangan'].judul = () => ['Keuangan Buku', 'Rencana biaya penerbitan d
         <small>Mulai dari halaman Perencanaan.</small></div></div>`));
   HAL[nama].judul = () => [MODUL[nama].judul, MODUL[nama].sub];
 });
+
+/* ============================================================
+   BUKU SAYA — tugas seorang anggota pada proyek buku
+   ============================================================ */
+/** Yang menunggu saya: naskah saya yang belum diterima, dan — bila saya
+    editor — naskah yang sudah diterima tetapi belum disunting. */
+function tugasBukuSaya() {
+  if (!U) return [];
+  return Store.bukuSaya(U.id).filter(({ b }) => Store.bukuJalan(b)).flatMap(({ b }) => [
+    ...(b.naskah || []).filter((n) => n.userId === U.id && ['belum', 'proses', 'perbaiki'].includes(Store.keadaanNaskah(n, 'tulis').kunci)),
+    ...((b.editorIds || []).includes(U.id) ? (b.naskah || []).filter((n) => n.progressTulis === 'siap'
+      && ['belum', 'proses', 'perbaiki'].includes(Store.keadaanNaskah(n, 'sunting').kunci)) : []),
+  ]);
+}
+
+function dialogSerahNaskah(b, n, tahap) {
+  const sunting = tahap === 'sunting';
+  const catatan = sunting ? n.suntingDikembalikan && n.catatanSunting : n.dikembalikan && n.catatanTulis;
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(n.subJudul)}</b> · ${esc(b.judul)}
+      ${(sunting ? n.tenggatEdit : n.deadline) ? ` · tenggat <b>${tgl(sunting ? n.tenggatEdit : n.deadline)}</b>` : ''}</p>
+    ${catatan ? `<div class="notis notis-kuning" style="margin-bottom:14px">${I.info}<div><b>Catatan PJ Buku</b>${esc(catatan)}</div></div>` : ''}
+    ${sunting && n.tautan ? `<p style="margin:0 0 12px;font-size:13px">Naskah penulis: ${tautLuar(n.tautan, 'buka naskah')}</p>` : ''}
+    <div class="grup" style="margin:0"><label>Tautan ${sunting ? 'Suntingan' : 'Naskah'}</label>
+      <input data-t type="url" value="${esc((sunting ? n.tautanSunting : n.tautan) || '')}" placeholder="https://drive.google.com/…">
+      <div class="bantu">Unggah berkasnya ke Google Drive atau sejenisnya, atur agar dapat dibuka PJ Buku, lalu tempel tautannya.
+        PJ Buku yang menerima atau mengembalikannya.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Serahkan</button></div>`);
+  modal({ judul: sunting ? 'Serahkan suntingan' : 'Serahkan naskah', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = async (e) => {
+    if (await amanTunggu(e.currentTarget, async () => { await Store.serahkanNaskah(b.id, n.id, isi.querySelector('[data-t]').value, tahap); return true; })) {
+      tutupModal(); toast('Diserahkan kepada PJ Buku.'); gambar();
+    }
+  };
+}
+
+HAL['buku-saya'] = () => {
+  const daftar = Store.bukuSaya(U.id);
+  const box = el('<div></div>');
+  if (!daftar.length) {
+    box.appendChild(el(`<div class="kartu"><div class="kosong-erp">${I.kotak}<p>Anda belum dilibatkan dalam proyek buku</p></div></div>`));
+    return box;
+  }
+  daftar.forEach(({ b, peran }) => {
+    const jalan = Store.bukuJalan(b);
+    const milik = (b.naskah || []).filter((n) => n.userId === U.id);
+    const editor = (b.editorIds || []).includes(U.id);
+    const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+      <h3>${esc(b.judul)}</h3>
+      <span class="hitung">${peran.map((x) => `<span class="lencana l-kuning">${esc(x)}</span>`).join(' ')}
+        &nbsp;<span class="lencana ${STATUS_BK[b.status].c}">${STATUS_BK[b.status].l}</span> · ${esc(TAHAP_BUKU[Store.tahapBuku(b)])}
+        · ${b.status === 'terbit' ? `terbit ${tgl(b.terbitPada)}` : `target ${tgl(b.targetTerbit)}`}</span></div></div>`);
+    const tabel = (judul, kepala, baris) => {
+      kartu.appendChild(el(`<div class="bk-saya-judul">${judul}</div>`));
+      const t = el(`<div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th>${kepala.map((k) => `<th>${k}</th>`).join('')}
+        <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+      baris.forEach((tr) => t.querySelector('tbody').appendChild(tr));
+      kartu.appendChild(t);
+    };
+    if (milik.length) tabel('Sub judul yang saya tulis', ['Sub Judul', 'Tenggat', 'Naskah', 'Status'], milik.map((n, i) => {
+      const k = Store.keadaanNaskah(n, 'tulis');
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+        <td><b>${esc(n.subJudul)}</b>${n.dikembalikan && n.catatanTulis ? `<br><span style="color:#B23E37;font-size:11.8px">Perlu diperbaiki: ${esc(n.catatanTulis)}</span>` : ''}</td>
+        <td class="utuh">${n.deadline ? tgl(n.deadline) : '—'}</td><td>${tautLuar(n.tautan, 'Buka') || '—'}</td><td>${lencanaNaskah(n, 'tulis')}</td>
+        <td class="kol-aksi"><div class="sel-aksi">${jalan && k.kunci !== 'siap' ? `<button class="btn btn-lime btn-kecil">${n.tautan ? 'Perbarui Naskah' : 'Serahkan Naskah'}</button>` : ''}</div></td></tr>`);
+      tr.querySelector('button')?.addEventListener('click', () => dialogSerahNaskah(b, n, 'tulis'));
+      return tr;
+    }));
+    if (editor) {
+      const siap = (b.naskah || []).filter((n) => n.progressTulis === 'siap');
+      if (siap.length) tabel('Naskah untuk disunting tim editor', ['Sub Judul', 'Penulis', 'Naskah', 'Tenggat Sunting', 'Suntingan', 'Status'], siap.map((n, i) => {
+        const k = Store.keadaanNaskah(n, 'sunting');
+        const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+          <td><b>${esc(n.subJudul)}</b>${n.suntingDikembalikan && n.catatanSunting ? `<br><span style="color:#B23E37;font-size:11.8px">Perlu diperbaiki: ${esc(n.catatanSunting)}</span>` : ''}</td>
+          <td>${esc(namaPendek(n.userId))}</td><td>${tautLuar(n.tautan, 'Buka') || '—'}</td>
+          <td class="utuh">${n.tenggatEdit ? tgl(n.tenggatEdit) : '—'}</td>
+          <td>${tautLuar(n.tautanSunting, 'Buka') || '—'}${n.penyuntingId ? `<br><span class="sub-sel">${esc(namaPendek(n.penyuntingId))}</span>` : ''}</td>
+          <td>${lencanaNaskah(n, 'sunting')}</td>
+          <td class="kol-aksi"><div class="sel-aksi">${jalan && k.kunci !== 'siap' ? `<button class="btn btn-lime btn-kecil">${n.tautanSunting ? 'Perbarui' : 'Serahkan Suntingan'}</button>` : ''}</div></td></tr>`);
+        tr.querySelector('button')?.addEventListener('click', () => dialogSerahNaskah(b, n, 'sunting'));
+        return tr;
+      }));
+      else kartu.appendChild(el(`<div class="bk-saya-judul">Belum ada naskah yang diterima PJ Buku untuk disunting.</div>`));
+    }
+    if (!milik.length && !editor) kartu.appendChild(el(`<div class="bk-saya-judul">Peran Anda di proyek ini dikoordinasikan langsung dengan PJ Buku.</div>`));
+    box.appendChild(kartu);
+  });
+  return box;
+};
+HAL['buku-saya'].judul = () => ['Buku Saya', 'Sub judul yang Anda tulis dan naskah yang Anda sunting.'];
 
 /* ============================================================
    RUANG KERJA PJ MEDIA & WEBSITE

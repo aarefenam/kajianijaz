@@ -1823,3 +1823,5 @@ b.perlu { color: var(--e-merah); }
 .naskah-riwayat .ct { margin-top: 3px; color: #44534A; }
 
 .t-org tr.baris-dibuka td { background: rgba(140,198,63,.07); }
+
+.bk-saya-judul { padding: 12px 20px 6px; font-size: 12.6px; font-weight: 700; color: var(--e-abu); border-top: 1px solid var(--e-garis); }

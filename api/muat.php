@@ -111,6 +111,12 @@ if ($u && !bolehSalahSatu($u, ['anggota.manage', 'user.manage'])) {
   }
 }
 
+/* Modal, dokumen, dan penjualan proyek buku hanya untuk PJ Buku,
+   Bendahara, dan Ketua. (Pengunjung publik sudah disaring lebih ketat di atas.) */
+if ($u && isset($semua['isi']['buku']) && is_array($semua['isi']['buku'])) {
+  $semua['isi']['buku'] = array_map(fn($b) => is_array($b) ? bukuUntuk($u, $b) : $b, $semua['isi']['buku']);
+}
+
 /* Naskah yang belum terbit hanya untuk penulisnya dan pengurus artikel —
    pengunjung yang belum masuk menerima yang terbit saja. */
 if (isset($semua['isi']['artikel']) && is_array($semua['isi']['artikel'])) {

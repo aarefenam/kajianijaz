@@ -484,6 +484,18 @@ function jagaBuku($isiBaru): void {
   }
 }
 
+/**
+ * Proyek buku sebagaimana boleh dilihat pengguna ini. Kasaran modal,
+ * dokumen, dan penjualan hanya untuk PJ Buku, Bendahara, dan Ketua;
+ * anggota lain — penulis dan editornya — tetap menerima naskah, tim, dan
+ * timeline, sebab itu memang tugas mereka.
+ */
+function bukuUntuk(?array $user, array $b): array {
+  if (bolehSalahSatu($user, ['buku.manage', 'buku.anggaran', 'keuangan.manage', 'keuangan.report', 'organisasi.manage'])) return $b;
+  unset($b['modal'], $b['dokumen'], $b['penjualan'], $b['setoran'], $b['harga']);
+  return $b;
+}
+
 /** Boleh melihat naskah orang lain yang belum terbit? */
 function pengurusArtikel(?array $user): bool {
   return bolehSalahSatu($user, ['artikel.review', 'artikel.publish', 'artikel.view', 'redaksi.manage']);
