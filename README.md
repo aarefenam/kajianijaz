@@ -364,6 +364,13 @@ serta keuangan. Ketua membacanya dari tab *Buku* di Pantau Divisi.
 
 ### Ruang kerja PJ Media & Website
 
+**Kartu Struktur Organisasi dapat berfoto.** Tiap jabatan punya medan `foto`
+yang diunggah dari Editor Halaman; tanpa foto, kartunya memakai ikon jabatan.
+Editor mengenali medan gambar dari isinya, sehingga foto yang masih kosong
+dulu tampil sebagai kotak teks — `KUNCI_GAMBAR` membuat medan bernama `foto`
+selalu berupa kotak unggah, lengkap dengan tombol hapus. Seperti perubahan CMS
+lain, foto masuk draft dan tayang setelah disetujui.
+
 Dua peran lama — PJ Website dan PJ Media — kini satu. Kunci peran lamanya tetap
 dikenali lewat `ROLE_LAMA` di `rbac.js`, sehingga akun, isi CMS, dan catatan audit
 yang menyebut kunci lama tidak kehilangan artinya.

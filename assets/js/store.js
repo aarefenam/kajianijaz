@@ -232,6 +232,14 @@ function rombakHero(tersimpan) {
       sec.data.kategori = baru;
     });
 
+    /* Kartu Struktur Organisasi kini dapat berfoto. Medannya dilengkapi di
+       sini karena editor CMS menyusun formulirnya dari bentuk data: tanpa
+       `foto` pada datanya, kotak unggahnya tak akan pernah muncul. */
+    Object.values(sisi.halaman || {}).forEach((hal) => (hal.sections || []).forEach((sec) => {
+      if (sec.tipe !== 'organisasi' || !Array.isArray(sec.data?.jabatan)) return;
+      sec.data.jabatan.forEach((j) => { if (j && typeof j === 'object' && j.foto === undefined) j.foto = ''; });
+    }));
+
     /* Menghapus menu dijaga penanda sekali-jalan. Tanpa itu, Sekretaris
        yang sengaja menambahkan kembali tautan Artikel akan mendapatinya
        lenyap lagi pada pemuatan berikutnya — dan tidak akan pernah tahu

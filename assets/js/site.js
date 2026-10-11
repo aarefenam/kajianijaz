@@ -994,8 +994,11 @@ const RENDER = {
 
 
   organisasi(d) {
-    const kartu = d.jabatan.map((j) => `<div class="kartu-org">
-      <div class="org-ikon">${ikonOrg(j.ikon)}</div>
+    /* Foto diunggah dari ERP (Editor Halaman → Struktur Organisasi). Tanpa
+       foto, kartunya memakai ikon jabatan seperti semula. */
+    const kartu = d.jabatan.map((j) => `<div class="kartu-org${j.foto ? ' berfoto' : ''}">
+      ${j.foto ? `<div class="org-foto"><img src="${esc(j.foto)}" alt="Foto ${esc(j.nama)}" loading="lazy"></div>`
+        : `<div class="org-ikon">${ikonOrg(j.ikon)}</div>`}
       <div class="org-jabatan">${esc(RBAC.roleLabel(j.role))}</div>
       <div class="org-nama">${esc(j.nama)}</div>
     </div>`).join('');

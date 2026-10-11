@@ -1278,7 +1278,7 @@ const dasborUmum = () => {
    ============================================================ */
 const LABEL = {
   skrip: 'Teks Skrip (tulisan tangan)', judul: 'Judul', subjudul: 'Sub Judul',
-  cariPetunjuk: 'Teks Bayangan Kolom Cari',
+  cariPetunjuk: 'Teks Bayangan Kolom Cari', foto: 'Foto',
   jenis: 'Jenis Berkas Ditampilkan',
   tombol2Teks: 'Label Tombol Kedua', tombol2Link: 'Tautan Tombol Kedua', tema: 'Tema Panel',
   lencana: 'Teks Lencana Melingkar',
@@ -1300,12 +1300,18 @@ const BANTU = {
   logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
   favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
   faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
+  foto      : 'Foto pengurus pada kartu Struktur Organisasi. Paling pas potret persegi dengan wajah di tengah; tampil sebagai lingkaran. Tanpa foto, kartunya memakai ikon jabatan.',
   masjid    : 'Sosok yang berdiri di tengah hero, di depan judul raksasa — kepalanya sengaja menutupi sebagian baris bawah judul. Paling pas berupa POTRET tegak berlatar transparan (PNG atau WebP) dengan objek rata bawah. Gambar yang melebar akan dikecilkan sendiri agar tidak menutupi kolom pencarian. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
 };
 
 /* Batas lebar unggahan per jenis medan. Logo dan ikon tidak perlu besar;
    membatasinya menjaga penyimpanan tetap lapang. */
-const LEBAR_MAKS = { logo: 512, favicon: 180, faviconErp: 180, masjid: 900 };
+const LEBAR_MAKS = { logo: 512, favicon: 180, faviconErp: 180, masjid: 900, foto: 600 };
+/* Medan yang SELALU berupa gambar, juga selagi kosong. Tanpa daftar ini
+   medan gambar hanya dikenali dari isinya — foto yang belum diunggah akan
+   tampil sebagai kotak teks, dan tak pernah bisa diisi. */
+const KUNCI_GAMBAR = ['foto'];
+const medanGambar = (kunci, nilai) => adalahGambar(nilai) || (KUNCI_GAMBAR.includes(kunci) && typeof nilai === 'string');
 const labelKunci = (k) => LABEL[k] || k.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 
 const adalahGambar = (v) => typeof v === 'string' && (v.startsWith('data:image') || /\.(jpe?g|png|webp|svg|gif)$/i.test(v));
@@ -1322,21 +1328,29 @@ function medan(kunci, nilai, path, bisaEdit, bisaGambar) {
   };
 
   /* --- gambar --- */
-  if (adalahGambar(nilai)) {
+  if (medanGambar(kunci, nilai)) {
     const lebarMaks = LEBAR_MAKS[kunci] || 1400;
     const kecil = lebarMaks <= 512;   // logo & ikon: pratinjau di atas kotak-kotak
+    const foto = KUNCI_GAMBAR.includes(kunci);
+    const kosong = window.__ph('BELUM ADA FOTO', '#D9E2DB', '#C5D1C8', '');
     const p = el(`<div class="pratinjau-gambar">
-      <img src="${nilai}" alt="" class="${kecil ? 'pratinjau-alfa' : ''}"
-           style="${kecil ? 'width:92px;height:92px;object-fit:contain;padding:8px' : ''}">
+      <img src="${nilai || kosong}" alt="" class="${kecil ? 'pratinjau-alfa' : ''}"
+           style="${kecil ? 'width:92px;height:92px;object-fit:contain;padding:8px' : foto ? 'width:92px;height:92px;border-radius:50%;object-fit:cover' : ''}">
       <div style="flex:1;min-width:0">
         <p style="margin:0 0 10px;font-size:12.4px;color:var(--e-abu)">
           ${esc(BANTU[kunci] || `Format JPG, PNG, WebP, atau SVG. Gambar dikecilkan otomatis ke lebar maks ${lebarMaks}px agar hemat penyimpanan.`)}
         </p>
         <label class="btn btn-garis btn-kecil" style="display:inline-flex;cursor:${bisaGambar ? 'pointer' : 'not-allowed'};margin:0;opacity:${bisaGambar ? 1 : .5}">
-          ${I.gambar} Ganti Gambar<input type="file" accept="image/*" hidden ${bisaGambar ? '' : 'disabled'}>
+          ${I.gambar} ${nilai ? 'Ganti' : 'Unggah'} ${foto ? 'Foto' : 'Gambar'}<input type="file" accept="image/*" hidden ${bisaGambar ? '' : 'disabled'}>
         </label>
+        ${foto && nilai && bisaGambar ? `<button class="btn btn-garis btn-kecil" data-kosongkan style="margin-left:6px">${I.hapus} Hapus Foto</button>` : ''}
       </div>
     </div>`);
+    /* Foto boleh dikosongkan lagi: kartunya kembali memakai ikon jabatan. */
+    p.querySelector('[data-kosongkan]')?.addEventListener('click', () => {
+      try { RBAC.assertCan(U, 'cms.media.upload'); simpan('', 'cms.media.upload'); toast('Foto dihapus dari draft.'); gambar(); }
+      catch (e) { toast(e.message, true); }
+    });
     const inp = p.querySelector('input[type=file]');
     inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
@@ -1347,7 +1361,8 @@ function medan(kunci, nilai, path, bisaEdit, bisaGambar) {
         p.querySelector('img').src = dataUri;
         toast(kunci === 'logo' || kunci.startsWith('favicon')
           ? 'Tersimpan di draft. Baru berlaku setelah Ketua menyetujui.'
-          : 'Gambar diperbarui pada draft.');
+          : foto ? 'Foto tersimpan di draft. Tayang setelah perubahan disetujui.' : 'Gambar diperbarui pada draft.');
+        if (foto && !nilai) gambar();   // tombol "Hapus Foto" baru muncul sesudah ada fotonya
       } catch (e) { toast(e.message, true); }
       inp.value = '';
     };
