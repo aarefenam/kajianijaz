@@ -98,7 +98,12 @@ const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 const tgl = (s) => s ? new Date(s).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const tglJam = (s) => new Date(s).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const tglPanjang = (d = new Date()) => d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const nowTanggal = () => new Date().toISOString().slice(0, 10);
+/* Tanggal menurut jam SETEMPAT. Dulu diambil dari toISOString(), yaitu
+   UTC: selepas tengah malam di Kairo "hari ini" masih kemarin sampai
+   pukul dua atau tiga pagi, dan transaksi yang dicatat saat itu
+   bertanggal salah. */
+const tanggalLokal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const nowTanggal = () => tanggalLokal(new Date());
 const tglRingkas = (d = new Date()) => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 const namaHari = (d = new Date()) => d.toLocaleDateString('id-ID', { weekday: 'long' });
 const namaBulan = (b) => new Date(b + '-01').toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
@@ -600,14 +605,42 @@ const MENU_SEKRETARIS = [
 ];
 const TAB_SEKRETARIS = { pengaturan: ['cms', 'pengajuan', 'log'] };
 
+/* ============================================================
+   SIDEBAR BENDAHARA — mengikuti jalannya uang
+   ------------------------------------------------------------
+     Terima     — uang apa yang masuk?
+     Keluarkan  — uang apa yang keluar?
+     Periksa    — apakah bukunya cocok dengan uang yang ada?
+     Laporkan   — apa yang kusampaikan kepada pengurus?
+     Pengaturan — yang jarang disentuh.
+   ============================================================ */
+const MENU_BENDAHARA = [
+  { id: 'dasbor' },
+  { id: 'kartu-saya' },
+  { grup: 'Terima' },
+  { id: 'iuran-anggota' },
+  { id: 'masuk-internal' },
+  { id: 'masuk-eksternal' },
+  { grup: 'Keluarkan' },
+  { id: 'pengeluaran' },
+  { grup: 'Periksa' },
+  { id: 'saldo', label: 'Saldo & Akun' },
+  { grup: 'Laporkan' },
+  { id: 'laporan-kas' },
+  { grup: 'Pengaturan' },
+  { id: 'kategori-akun' },
+];
+
 /* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
    sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
 const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
   sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
+  bendahara : { menu: MENU_BENDAHARA,  tab: {},             alias: { keuangan: 'laporan-kas' } },
 };
-const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris : null);
+const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris
+  : ruangBendahara() ? RUANG_TUGAS.bendahara : null);
 
 const idTugas = () => new Set([
   ...tugas().menu.map((m) => m.id).filter(Boolean),
@@ -2340,7 +2373,7 @@ function formTransaksi(t) {
       <div class="grup"><label>Jenis</label><select id="j">
         <option value="masuk" ${t?.jenis === 'masuk' ? 'selected' : ''}>Kas Masuk</option>
         <option value="keluar" ${t?.jenis === 'keluar' ? 'selected' : ''}>Kas Keluar</option></select></div>
-      <div class="grup"><label>Tanggal</label><input type="date" id="tg" value="${t?.tanggal || new Date().toISOString().slice(0, 10)}"></div>
+      <div class="grup"><label>Tanggal</label><input type="date" id="tg" value="${t?.tanggal || nowTanggal()}"></div>
     </div>
     <div class="grid-form">
       <div class="grup"><label>Kategori</label><input id="k" value="${esc(t?.kategori || '')}" list="katList" placeholder="Iuran Anggota">
@@ -6991,23 +7024,45 @@ const kategoriUntuk = (jenis) => Store.db.kategoriKeuangan.filter((k) => k.jenis
 const pilihanAkun = () => Store.db.akunKas.map((a) => ({ v: a.id, l: a.nama }));
 
 /* ---------------- dasbor ---------------- */
+/* Antrean Bendahara: yang menuntut tindakannya hari ini. Ditambah
+   seiring bertambahnya alat — bukti, tutup buku, persetujuan. */
+function antreanBendahara() {
+  const bulan = bulanIni();
+  const aktif = Store.db.users.filter((u) => u.status === 'aktif');
+  const menunggak = aktif.filter((u) => Store.iuranAnggota(u.id, bulan).status !== 'lunas');
+  const minus = Store.db.akunKas.map((a) => ({ a, s: Store.saldoAkun(a.id) })).filter((x) => x.s.rp < 0 || x.s.egp < 0);
+  return kartuAntrean('Perlu Ditindak', [
+    { rute: 'iuran-anggota', sebelum: () => { saringIuran = { bulan, angkatan: '', status: 'belum' }; },
+      ikon: I.grup, judul: `Iuran ${namaBulan(bulan)}`, n: menunggak.length,
+      satuan: `dari ${aktif.length} anggota belum lunas`, kosong: 'Semua anggota aktif sudah lunas',
+      rinci: menunggak[0] && menunggak[0].nama },
+    { rute: 'saldo', ikon: I.peringatan, judul: 'Akun Bersaldo Minus', n: minus.length,
+      satuan: 'akun perlu diperiksa', kosong: 'Tidak ada akun yang minus',
+      rinci: minus[0] && `${minus[0].a.nama}: ${minus[0].s.rp < 0 ? rpFmt(minus[0].s.rp) : egpFmt(minus[0].s.egp)}` },
+  ]);
+}
+
 function dasborBendahara() {
   const box = el('<div></div>');
   const bulanIni = nowTanggal().slice(0, 7);
   const ini = kasBulan(bulanIni);
   const saldo = saldoTotal();
-  const masukRp = jumlahKas(ini.filter((t) => t.jenis === 'masuk'), 'rp');
-  const keluarRp = jumlahKas(ini.filter((t) => t.jenis === 'keluar'), 'rp');
+  const masuk = ini.filter((t) => t.jenis === 'masuk'), keluar = ini.filter((t) => t.jenis === 'keluar');
+  /* Dua mata uang berdampingan. Dulu kartu ini hanya menghitung rupiah,
+     sehingga pemasukan pound sebulan penuh tampak seperti nol. */
+  const dua = (d) => [jumlahKas(d, 'rp') ? rpFmt(jumlahKas(d, 'rp')) : '', jumlahKas(d, 'egp') ? egpFmt(jumlahKas(d, 'egp')) : '']
+    .filter(Boolean).join(' + ') || 'Rp 0';
+  box.appendChild(antreanBendahara());
 
   box.appendChild(el(`<div class="bd-stat-grid">
     ${[
       { ik: I.masukKas,  w:'rgba(140,198,63,.16)', wc:'#4A7A1E', l:'Saldo Keseluruhan (Rp)',  n: rpFmt(saldo.rp),   s:'Total saldo rupiah' },
       { ik: I.masukKas,  w:'rgba(240,149,30,.15)', wc:'#B87310', l:'Saldo Keseluruhan (EGP)', n: egpFmt(saldo.egp), s:'Total saldo pound' },
-      { ik: I.naik,      w:'rgba(140,198,63,.16)', wc:'#4A7A1E', l:'Total Pemasukan',  n: rpFmt(masukRp),  s:'Bulan ini' },
-      { ik: I.turun,     w:'rgba(217,83,111,.14)', wc:'#B23E5F', l:'Total Pengeluaran',n: rpFmt(keluarRp), s:'Bulan ini' },
+      { ik: I.naik,      w:'rgba(140,198,63,.16)', wc:'#4A7A1E', l:'Total Pemasukan',  n: dua(masuk),  s: namaBulan(bulanIni) },
+      { ik: I.turun,     w:'rgba(217,83,111,.14)', wc:'#B23E5F', l:'Total Pengeluaran',n: dua(keluar), s: namaBulan(bulanIni) },
     ].map((x) => `<div class="bd-stat">
       <span class="bd-stat-ik" style="--w:${x.w};--wc:${x.wc}">${x.ik}</span>
-      <div><div class="bd-stat-l">${esc(x.l)}</div><div class="bd-stat-n">${esc(x.n)}</div>
+      <div><div class="bd-stat-l">${esc(x.l)}</div><div class="bd-stat-n"${String(x.n).length > 15 ? ' style="font-size:16.5px;letter-spacing:-.2px"' : ''}>${esc(x.n)}</div>
         <div class="bd-stat-s">${esc(x.s)}</div></div></div>`).join('')}
   </div>`));
 
@@ -7272,7 +7327,9 @@ HAL.saldo.judul = () => ['Saldo Keseluruhan', 'Saldo tiap tempat penyimpanan dan
 /* ---------------- laporan ---------------- */
 const awalBulan = (mundur = 0) => {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() - mundur, 1).toISOString().slice(0, 10);
+  /* Tanggal satu, tengah malam setempat. Lewat toISOString() ia mundur
+     ke hari terakhir bulan sebelumnya di zona timur UTC. */
+  return tanggalLokal(new Date(d.getFullYear(), d.getMonth() - mundur, 1));
 };
 const LAPORAN_KAS = [
   { judul: 'Laporan Bulanan', ket: 'Rekap pemasukan dan pengeluaran bulanan.', ik: I.dok,
