@@ -358,7 +358,7 @@ const MENU = [
   { grup: 'Ringkasan', lipat: true },
   { grup: 'Dashboard', izin: ['redaksi.manage'] },
   { grup: 'Ringkasan', izin: ['buku.manage', 'bendahara.manage'] },
-  { grup: 'Menu Utama', izin: ['mediaweb.manage', 'koordinator.manage'] },
+  { grup: 'Menu Utama', izin: ['mediaweb.manage'] },
   { id: 'dasbor',    label: () => ruangKetua() ? 'Dashboard Ketua Umum' : ruangBuku() ? 'Dashboard' : 'Dasbor',
     ikon: () => ruangKetua() ? I.rumah : I.dasbor, izin: null },
   { id: 'kartu-saya', label: 'Kartu Saya', ikon: I.qr, izin: null },
@@ -457,13 +457,10 @@ const MENU = [
   { id: 'jadwal-kajian', label: 'Jadwal Kajian',   ikon: I.kalender,  izin: ['koordinator.manage'] },
   { id: 'anggota-kajian',label: 'Data Anggota',    ikon: I.grup,      izin: ['anggota.kelompok'] },
   { id: 'presensi',      label: 'Presensi Kajian', ikon: I.daftarCek, izin: ['kajian.attendance'], tersembunyiBila: () => !ruangKoordinator() },
-  { id: 'tugas-kajian',  label: 'Pembagian Tugas', ikon: I.orang,     izin: ['koordinator.manage'] },
   { id: 'materi',        label: 'Materi & PPT',    ikon: I.papan,     izin: ['kajian.materi'] },
   { id: 'notulen',       label: 'Revisi & Notulen',ikon: I.dok,       izin: ['kajian.notulensi'], tersembunyiBila: () => !ruangKoordinator() },
   { id: 'rekap-kajian',  label: 'Rekap Kajian',    ikon: I.bagan,     izin: ['koordinator.manage'] },
   { id: 'statistik',     label: 'Statistik',       ikon: I.ukur,      izin: ['koordinator.manage'] },
-  { id: 'notifikasi',    label: 'Notifikasi',      ikon: I.lonceng,   izin: ['koordinator.manage'],
-    lonceng: () => notifikasiKajian().filter((n) => n.penting).length },
   { id: 'atur-kajian',   label: 'Pengaturan',      ikon: I.gerigi,    izin: ['koordinator.manage'] },
   { id: 'kartu-qr',      label: 'Kartu QR Anggota',ikon: I.qr,        izin: ['koordinator.manage'], tersembunyi: true },
 
@@ -641,6 +638,34 @@ const MENU_BENDAHARA = [
   { id: 'kategori-akun' },
 ];
 
+/* ============================================================
+   SIDEBAR PJ KOORDINATOR KAJIAN — mengikuti perjalanan satu kajian
+   ------------------------------------------------------------
+     Kajian     — menjadwalkan, membagi tugas, mencatat hadir, menulis hasil.
+     Peserta    — siapa pesertanya dan seberapa rajin mereka.
+     Laporan    — apa yang kusampaikan kepada pengurus?
+     Pengaturan — yang jarang disentuh.
+   Pembagian Tugas melebur ke Jadwal (formulirnya memang satu), dan
+   Notifikasi menjadi antrean di dasbor.
+   ============================================================ */
+const MENU_KAJIAN = [
+  { id: 'dasbor' },
+  { id: 'kartu-saya' },
+  { grup: 'Kajian' },
+  { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => perluKajian().belumLengkap.filter((x) => x.sisa <= 3).length },
+  { id: 'presensi', lonceng: () => perluKajian().tanpaPresensi.length + perluKajian().belumTutup.length },
+  { id: 'materi', label: 'Materi & Makalah' },
+  { id: 'notulen', label: 'Notulen', lonceng: () => perluKajian().tanpaNotulen.length },
+  { grup: 'Peserta' },
+  { id: 'anggota-kajian', label: 'Anggota & Kelompok' },
+  { id: 'statistik', label: 'Kehadiran Anggota' },
+  { grup: 'Laporan' },
+  { id: 'rekap-kajian', label: 'Rekap & Statistik' },
+  { grup: 'Pengaturan' },
+  { id: 'atur-kajian', label: 'Lingkup Kajian' },
+  { id: 'kartu-qr' },
+];
+
 /* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
    sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
@@ -648,9 +673,10 @@ const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
   sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
   bendahara : { menu: MENU_BENDAHARA,  tab: {},             alias: { keuangan: 'laporan-kas' } },
+  kajian    : { menu: MENU_KAJIAN,     tab: {},             alias: { 'tugas-kajian': 'jadwal-kajian', notifikasi: 'dasbor', kajian: 'jadwal-kajian' } },
 };
 const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris
-  : ruangBendahara() ? RUANG_TUGAS.bendahara : null);
+  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : null);
 
 const idTugas = () => new Set([
   ...tugas().menu.map((m) => m.id).filter(Boolean),
@@ -990,8 +1016,8 @@ function kerangka() {
     </main>
   </div>`);
 
-  n.querySelector('[data-angkatan]')?.addEventListener('change', (e) => { angkatanPilihan = e.target.value; gambar(); });
-  n.querySelector('[data-level]')?.addEventListener('change', (e) => { levelPilihan = e.target.value; gambar(); });
+  n.querySelector('[data-angkatan]')?.addEventListener('change', (e) => { aturLingkup(e.target.value); gambar(); });
+  n.querySelector('[data-level]')?.addEventListener('change', (e) => { aturLingkup(undefined, e.target.value); gambar(); });
   n.querySelector('[data-buat-kajian]')?.addEventListener('click', () => formKajian(null));
 
   const tutupSidebar = () => n.querySelector('#sidebar').classList.remove('buka');
@@ -5792,7 +5818,18 @@ HAL.seo.judul = () => ['SEO & Analytics', 'Metadata halaman dan cara website tam
    dihitung dari kelengkapan datanya — sehingga mustahil sebuah
    kajian tertulis "Siap" padahal notulen dan PPT-nya belum ada.
    ============================================================ */
-let angkatanPilihan = null, levelPilihan = null;
+/* Lingkup diingat per peramban: koordinator yang memegang satu angkatan
+   tak perlu memilihnya ulang tiap kali halaman dimuat. */
+const KUNCI_LINGKUP = 'erp.lingkupKajian';
+let [angkatanPilihan, levelPilihan] = (() => {
+  try { const x = JSON.parse(localStorage.getItem(KUNCI_LINGKUP) || '{}'); return [x.angkatan || null, x.level || null]; }
+  catch (_) { return [null, null]; }
+})();
+function aturLingkup(angkatan, level) {
+  if (angkatan !== undefined) angkatanPilihan = angkatan;
+  if (level !== undefined) levelPilihan = level;
+  try { localStorage.setItem(KUNCI_LINGKUP, JSON.stringify({ angkatan: angkatanPilihan, level: levelPilihan })); } catch (_) {}
+}
 
 const angkatanTersedia = () => [...new Set(Store.db.kajian.map((k) => k.angkatan).filter(Boolean))]
   .sort((a, b) => urutAngkatan(a) - urutAngkatan(b));
@@ -5867,28 +5904,52 @@ const kajianHariIni = () => kajianAktif().find((k) => k.tanggal === nowTanggal()
   || kajianAktif().find((k) => k.tanggal >= nowTanggal())
   || kajianAktif()[kajianAktif().length - 1];
 
-/* --- notifikasi diturunkan, bukan koleksi tersendiri --- */
-function notifikasiKajian() {
-  const n = [];
-  Store.db.kajian.filter((k) => k.tanggal >= nowTanggal()).forEach((k) => {
-    const kurang = CEKLIS.filter((c) => !lengkapKah(k, c.k)).map((c) => c.l);
-    const selisih = Math.round((new Date(k.tanggal) - new Date(nowTanggal())) / 86400000);
-    if (kurang.length && selisih <= 7) n.push({
-      penting: selisih <= 3, ikon: I.peringatan,
-      judul: `${k.judul} belum lengkap`,
-      ket: `Kurang: ${kurang.join(', ')} · ${selisih === 0 ? 'hari ini' : selisih + ' hari lagi'}`,
-      rute: 'jadwal-kajian',
-    });
-  });
-  Store.db.kajian.filter((k) => k.tanggal < nowTanggal() && !(k.presensi || []).length).forEach((k) => n.push({
-    penting: true, ikon: I.daftarCek, judul: `Presensi "${k.judul}" belum diisi`,
-    ket: `Kajian berlangsung ${tgl(k.tanggal)}`, rute: 'presensi',
-  }));
-  Store.db.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi).forEach((k) => n.push({
-    penting: false, ikon: I.dok, judul: `Notulen "${k.judul}" belum ditulis`,
-    ket: `Kajian berlangsung ${tgl(k.tanggal)}`, rute: 'notulen',
-  }));
-  return n;
+/* --- yang perlu ditindak: diturunkan, bukan koleksi tersendiri ---
+   Dihitung dalam lingkup angkatan & level yang sedang dibuka, sama
+   seperti seluruh halaman lain di ruang kerja ini. */
+const selisihHari = (tanggal) => Math.round((new Date(tanggal) - new Date(nowTanggal())) / 86400000);
+function perluKajian() {
+  const semua = kajianAktif();
+  const lampau = semua.filter((k) => k.tanggal < nowTanggal());
+  const anggota = anggotaAngkatan();
+  const tercatat = lampau.filter((k) => (k.presensi || []).length);
+  return {
+    belumLengkap: semua.filter((k) => k.tanggal >= nowTanggal() && selisihHari(k.tanggal) <= 7)
+      .map((k) => ({ k, sisa: selisihHari(k.tanggal), kurang: CEKLIS.filter((c) => !lengkapKah(k, c.k)).map((c) => c.l) }))
+      .filter((x) => x.kurang.length),
+    tanpaPresensi: lampau.filter((k) => !(k.presensi || []).length),
+    belumTutup: tercatat.filter((k) => !k.presensiTutup && rekapPresensi(k).belum > 0),
+    tanpaNotulen: lampau.filter((k) => !String(k.notulensi || '').trim()),
+    tanpaKelompok: anggota.filter((u) => !u.kelompok),
+    jarangHadir: tercatat.length >= 3 ? anggota.filter((u) => {
+      const ikut = tercatat.filter((k) => k.presensi.some((p) => p.userId === u.id && p.status !== 'tidak-hadir')).length;
+      return ikut / tercatat.length < 0.75;
+    }) : [],
+  };
+}
+function antreanKajian() {
+  const p = perluKajian();
+  const dekat = p.belumLengkap[0];
+  return kartuAntrean('Perlu Ditindak', [
+    { rute: 'jadwal-kajian', ikon: I.peringatan, judul: 'Kajian Belum Lengkap', n: p.belumLengkap.length,
+      satuan: 'kajian dalam 7 hari masih kurang data', kosong: 'Kajian sepekan ke depan sudah lengkap',
+      rinci: dekat && `${dekat.k.judul} (${dekat.sisa === 0 ? 'hari ini' : dekat.sisa + ' hari lagi'}) — kurang ${dekat.kurang.join(', ')}` },
+    { rute: 'presensi', ikon: I.daftarCek, judul: 'Presensi Belum Diisi', n: p.tanpaPresensi.length,
+      satuan: 'kajian lampau tanpa presensi', kosong: 'Semua kajian lampau berpresensi',
+      rinci: p.tanpaPresensi[0] && `${p.tanpaPresensi[0].judul} · ${tgl(p.tanpaPresensi[0].tanggal)}` },
+    { rute: 'presensi', ikon: I.gembok, judul: 'Presensi Belum Ditutup', n: p.belumTutup.length,
+      satuan: 'kajian masih menyisakan peserta tanpa keterangan', kosong: 'Tidak ada presensi yang menggantung',
+      rinci: p.belumTutup[0] && `${p.belumTutup[0].judul} — ${rekapPresensi(p.belumTutup[0]).belum} orang belum absen` },
+    { rute: 'notulen', ikon: I.dok, judul: 'Notulen Belum Ditulis', n: p.tanpaNotulen.length,
+      satuan: 'kajian lampau tanpa notulen', kosong: 'Semua kajian lampau bernotulen',
+      rinci: p.tanpaNotulen[0] && `${p.tanpaNotulen[0].judul} · ${tgl(p.tanpaNotulen[0].tanggal)}` },
+    { rute: 'anggota-kajian', ikon: I.grup, judul: 'Anggota Tanpa Kelompok', n: p.tanpaKelompok.length,
+      satuan: `anggota ${angkatanAktif()} belum berkelompok`, kosong: 'Semua anggota sudah berkelompok',
+      rinci: p.tanpaKelompok[0] && p.tanpaKelompok[0].nama },
+    { rute: 'statistik', ikon: I.ukur, judul: 'Kehadiran di Bawah 75%', n: p.jarangHadir.length,
+      satuan: 'anggota jarang hadir', kosong: 'Tidak ada anggota yang jarang hadir',
+      rinci: p.jarangHadir[0] && p.jarangHadir[0].nama },
+  ]);
 }
 
 /* ---------------- dasbor ---------------- */
@@ -5904,6 +5965,7 @@ function dasborKoordinator() {
     ? Math.round(berpresensi.reduce((a, k) => a + rekapPresensi(k).persen, 0) / berpresensi.length) : 0;
   const belumLengkap = mendatang.filter((k) => kesiapan(k) < 100).length;
 
+  box.appendChild(antreanKajian());
   box.appendChild(el(`<div class="kj-stat-grid">
     ${[
       { ik: I.kalender,  w:'rgba(140,198,63,.16)', wc:'#4A7A1E', l:'Kajian Bulan Ini', n: semua.filter((k) => k.tanggal.startsWith(bulanIni)).length },
@@ -5965,11 +6027,12 @@ function dasborKoordinator() {
           <div><div class="l">${x.l}</div><div class="n">${x.n}</div></div></div>`).join('')}
     </div>`));
 
+    /* Yang dipindai adalah kartu anggota, bukan kode kajian — karena itu
+       di sini tak ada gambar QR, hanya pintu ke Mode Presensi. */
     const qrPanel = el(`<div class="kj-qr">
-      <div class="kj-qr-gambar"><img src="${Store.db.kunjungan ? QR.svgDataUri('AIJZ-' + kHari.id) : ''}" alt="QR kajian"></div>
-      <div><h4>Scan QR Code untuk Absen</h4>
+      <div><h4>Pindai Kartu Anggota</h4>
         <p>Buka Mode Presensi, lalu arahkan kamera ponsel ke QR pada kartu tiap anggota.</p>
-        <button class="btn btn-lime btn-kecil" data-scan>${I.qr} Mulai Scan</button></div>
+        <button class="btn btn-lime btn-kecil" data-scan>${I.qr} Mode Presensi</button></div>
     </div>`);
     qrPanel.querySelector('[data-scan]').onclick = () => dialogScan(kHari);
     pres.isi.appendChild(qrPanel);
@@ -5992,19 +6055,10 @@ function dasborKoordinator() {
   /* --- empat panel bawah --- */
   const baris2 = el('<div class="kj-baris kj-4"></div>');
 
-  const angg = panelMW('Anggota & QR Code', I.qr, 'Lihat Semua', () => bukaModul('anggota-kajian'));
-  const contoh = anggota[0];
-  if (contoh) {
-    const kartuQr = el(`<div class="kj-kartu-qr">
-      <div class="nm">${esc(contoh.nama)}</div>
-      <div class="mt">${esc(contoh.angkatan)}<br>${esc(contoh.level)}</div>
-      <img src="${QR.svgDataUri(Store.kodeQr(contoh.id))}" alt="QR ${esc(contoh.nama)}">
-      <button class="btn btn-garis btn-kecil" data-unduh>${I.unduh} Unduh QR</button>
-    </div>`);
-    kartuQr.querySelector('[data-unduh]').onclick = () => unduhQr(contoh);
-    angg.isi.appendChild(el('<div class="kj-anggota"></div>')).appendChild(kartuQr);
+  const angg = panelMW('Anggota & Kelompok', I.grup, 'Lihat Semua', () => bukaModul('anggota-kajian'));
+  if (anggota.length) {
     const ringkas = el(`<div class="kj-ringkas">
-      ${[['Total Anggota', anggota.length], ['Anggota Aktif', anggota.length],
+      ${[['Total Anggota', Store.db.users.filter((u) => u.angkatan === angkatanAktif()).length], ['Anggota Aktif', anggota.length],
          ['Tidak Aktif', Store.db.users.filter((u) => u.angkatan === angkatanAktif() && u.status !== 'aktif').length],
          ['Total Kelompok', new Set(anggota.map((u) => u.kelompok).filter(Boolean)).size]]
         .map(([l, n]) => `<div class="br"><span>${l}</span><b>${n}</b></div>`).join('')}
@@ -6012,12 +6066,12 @@ function dasborKoordinator() {
     const kelola = el(`<button class="btn btn-garis btn-kecil" style="width:100%">${I.grup} Kelola Anggota</button>`);
     kelola.onclick = () => bukaModul('anggota-kajian');
     ringkas.appendChild(kelola);
-    angg.isi.querySelector('.kj-anggota').appendChild(ringkas);
+    angg.isi.appendChild(ringkas);
   }
   baris2.appendChild(angg.el);
 
   const kDekat = mendatang[0];
-  const tug = panelMW('Pembagian Tugas', I.orang, 'Lihat Semua', () => bukaModul('tugas-kajian'));
+  const tug = panelMW('Pembagian Tugas', I.orang, 'Lihat Semua', () => bukaModul('jadwal-kajian'));
   if (!kDekat) tug.isi.appendChild(el(`<div class="kosong-erp" style="padding:26px">${I.kotak}<p>Tidak ada kajian mendatang</p></div>`));
   else {
     tug.isi.appendChild(el(`<div class="kj-sub">Kajian: <b>${esc(kDekat.judul)}</b><span>${tgl(kDekat.tanggal)}</span></div>`));
@@ -6077,16 +6131,16 @@ function dasborKoordinator() {
 
   /* --- aksi cepat --- */
   const cepat = el(`<div class="mw-pusat" style="margin-top:18px">
-    <div class="mw-pusat-kepala">${I.petir}<h3>Quick Actions</h3></div>
+    <div class="mw-pusat-kepala">${I.petir}<h3>Aksi Cepat</h3></div>
     <div class="mw-pusat-kisi"></div></div>`);
   [
     { ik: I.kalender,  l: 'Buat Jadwal Kajian', fn: () => formKajian(null) },
-    { ik: I.grup,      l: 'Tambah Anggota',     fn: () => bukaModul('anggota-kajian') },
+    { ik: I.qr,        l: 'Mode Presensi',      fn: () => (kHari ? dialogScan(kHari) : bukaModul('presensi')) },
     { ik: I.daftarCek, l: 'Presensi Manual',    fn: () => (kHari ? dialogAbsensi(kHari) : bukaModul('presensi')) },
-    { ik: I.qr,        l: 'Generate QR Code',   fn: () => bukaModul('kartu-qr') },
-    { ik: I.papan,     l: 'Upload PPT',         fn: () => bukaModul('materi') },
-    { ik: I.dok,       l: 'Laporan Presensi',   fn: () => bukaModul('presensi') },
-    { ik: I.unduh,     l: 'Export Rekap',       fn: () => bukaModul('rekap-kajian') },
+    { ik: I.grup,      l: 'Anggota & Kelompok', fn: () => bukaModul('anggota-kajian') },
+    { ik: I.kartu || I.qr, l: 'Kartu Anggota',  fn: () => bukaModul('kartu-qr') },
+    { ik: I.papan,     l: 'Materi & Makalah',   fn: () => bukaModul('materi') },
+    { ik: I.unduh,     l: 'Rekap & Statistik',  fn: () => bukaModul('rekap-kajian') },
   ].forEach((x) => {
     const n = el(`<button class="mw-pusat-btn">${x.ik}<span>${esc(x.l)}</span></button>`);
     n.onclick = x.fn;
@@ -6343,9 +6397,10 @@ HAL['jadwal-kajian'] = () => {
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Pemakalah</th>
       <th>Moderator</th><th>Notulen</th><th class="kol-tengah">PPT</th><th class="kol-tengah">Revisi</th>
-      <th>Tempat</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+      <th>Tempat</th><th style="min-width:120px">Kesiapan</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   semua.forEach((k, i) => {
+    const siap = kesiapan(k);
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td>
       <td class="utuh">${tgl(k.tanggal)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.jam)}</span></td>
@@ -6356,9 +6411,12 @@ HAL['jadwal-kajian'] = () => {
       <td class="kol-tengah">${tandaLengkap(k.ppt)}</td>
       <td class="kol-tengah">${tandaLengkap(k.revisi)}</td>
       <td class="utuh">${esc(k.tempat || '—')}</td>
+      <td><div style="display:flex;align-items:center;gap:9px">
+        <div class="bar-maju" style="flex:1"><span style="width:${siap}%"></span></div>
+        <b style="font-size:12.2px">${siap}%</b></div></td>
       <td>${lencanaKajian(k)}</td>
       <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
+        <button class="ikon-aksi sunting" title="Sunting jadwal & tugas">${I.sunting}</button>
         <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button></div></td></tr>`);
     tr.querySelector('.sunting').onclick = () => formKajian(k);
     tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus jadwal kajian',
@@ -6370,7 +6428,7 @@ HAL['jadwal-kajian'] = () => {
   kartu.appendChild(t);
   return kartu;
 };
-HAL['jadwal-kajian'].judul = () => ['Jadwal Kajian', 'Jadwal, pemakalah, dan kelengkapan tiap pertemuan.'];
+HAL['jadwal-kajian'].judul = () => ['Jadwal & Tugas', 'Jadwal, pembagian pemakalah–moderator–notulen, dan kesiapan tiap pertemuan.'];
 
 HAL['anggota-kajian'] = () => {
   const anggota = Store.db.users.filter((u) => u.angkatan === angkatanAktif());
@@ -6796,39 +6854,6 @@ HAL.presensi = () => {
 };
 HAL.presensi.judul = () => ['Presensi Kajian', 'Kehadiran tiap pertemuan beserta rekapnya.'];
 
-HAL['tugas-kajian'] = () => {
-  const semua = kajianAktif().filter((k) => k.tanggal >= nowTanggal());
-  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Pembagian Tugas</h3><span class="hitung">(${semua.length} kajian mendatang)</span></div></div>`);
-  if (!semua.length) {
-    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada kajian mendatang</p></div>`));
-    return kartu;
-  }
-  const t = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Pemakalah</th>
-      <th>Moderator</th><th>Notulen</th><th>Tempat</th><th style="min-width:140px">Kesiapan</th>
-      <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
-  const tb = t.querySelector('tbody');
-  semua.forEach((k, i) => {
-    const p = kesiapan(k);
-    const tr = el(`<tr>
-      <td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td>
-      <td><b>${esc(k.judul)}</b></td>
-      <td>${esc(namaPendek(k.pemakalahId))}</td><td>${esc(namaPendek(k.moderatorId))}</td>
-      <td>${esc(namaPendek(k.notulenId))}</td><td class="utuh">${esc(k.tempat || '—')}</td>
-      <td><div style="display:flex;align-items:center;gap:9px">
-        <div class="bar-maju" style="flex:1"><span style="width:${p}%"></span></div>
-        <b style="font-size:12.2px">${p}%</b></div></td>
-      <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting" title="Atur tugas">${I.sunting}</button></div></td></tr>`);
-    tr.querySelector('.sunting').onclick = () => formKajian(k);
-    tb.appendChild(tr);
-  });
-  kartu.appendChild(t);
-  return kartu;
-};
-HAL['tugas-kajian'].judul = () => ['Pembagian Tugas', 'Pemakalah, moderator, dan notulen tiap kajian mendatang.'];
-
 HAL.materi = () => {
   const semua = kajianAktif();
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
@@ -6894,6 +6919,7 @@ HAL['rekap-kajian'] = () => {
   const semua = kajianAktif();
   const selesai = semua.filter((k) => statusKajian(k) === 'selesai');
   const box = el('<div></div>');
+  ringkasKehadiran(box);
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
     <h3>Rekap Kajian</h3><span class="hitung">(${selesai.length} pertemuan selesai)</span>
     <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Export Rekap</button></div>
@@ -6921,14 +6947,13 @@ HAL['rekap-kajian'] = () => {
   box.appendChild(kartu);
   return box;
 };
-HAL['rekap-kajian'].judul = () => ['Rekap Kajian', 'Ringkasan pertemuan yang sudah terlaksana.'];
+HAL['rekap-kajian'].judul = () => ['Rekap & Statistik', 'Kehadiran per pertemuan dan ringkasan kajian yang sudah terlaksana.'];
 
-HAL.statistik = () => {
+/** Angka ringkas dan grafik kehadiran per pertemuan — kepala halaman Rekap. */
+function ringkasKehadiran(box) {
   const semua = kajianAktif();
   const selesai = semua.filter((k) => (k.presensi || []).length);
   const anggota = anggotaAngkatan();
-  const box = el('<div></div>');
-
   const rata = selesai.length ? Math.round(selesai.reduce((a, k) => a + rekapPresensi(k).persen, 0) / selesai.length) : 0;
   box.appendChild(el(`<div class="grid-stat">
     ${[{ ik: I.kalender, n: semua.length, l: 'Total pertemuan', w:'rgba(140,198,63,.16)', wc:'#4A7A1E' },
@@ -6946,6 +6971,13 @@ HAL.statistik = () => {
   kp.querySelector('[data-g]').appendChild(
     grafikGaris(selesai.map((k) => ({ tgl: k.tanggal, n: rekapPresensi(k).persen })), 200));
   box.appendChild(kp);
+}
+
+HAL.statistik = () => {
+  const semua = kajianAktif();
+  const selesai = semua.filter((k) => (k.presensi || []).length);
+  const anggota = anggotaAngkatan();
+  const box = el('<div></div>');
 
   /* peringkat kehadiran anggota */
   const peringkat = anggota.map((u) => {
@@ -6979,29 +7011,7 @@ HAL.statistik = () => {
   box.appendChild(kr);
   return box;
 };
-HAL.statistik.judul = () => ['Statistik', 'Kehadiran per pertemuan dan peringkat keaktifan anggota.'];
-
-HAL.notifikasi = () => {
-  const daftar = notifikasiKajian();
-  const box = el('<div></div>');
-  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Notifikasi</h3><span class="hitung">(${daftar.length} perlu perhatian · ${daftar.filter((n) => n.penting).length} mendesak)</span></div>
-    <div class="mw-panel-isi" data-isi></div></div>`);
-  const isi = kartu.querySelector('[data-isi]');
-  if (!daftar.length) isi.appendChild(el(`<div class="kosong-erp">${I.cekBulat}<p>Semuanya rapi</p>
-    <small>Tidak ada kajian yang datanya kurang atau presensinya tertinggal.</small></div>`));
-  daftar.forEach((n) => {
-    const b = el(`<button class="kj-notif ${n.penting ? 'penting' : ''}">
-      <span class="ik">${n.ikon}</span>
-      <span class="isi"><span class="jd">${esc(n.judul)}</span><span class="kt">${esc(n.ket)}</span></span>
-      ${I.panahKanan}</button>`);
-    b.onclick = () => bukaModul(n.rute);
-    isi.appendChild(b);
-  });
-  box.appendChild(kartu);
-  return box;
-};
-HAL.notifikasi.judul = () => ['Notifikasi', 'Kajian yang datanya belum lengkap atau presensinya tertinggal.'];
+HAL.statistik.judul = () => ['Kehadiran Anggota', 'Peringkat kehadiran dan keterlambatan tiap anggota angkatan aktif.'];
 
 HAL['atur-kajian'] = () => {
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
@@ -7020,8 +7030,7 @@ HAL['atur-kajian'] = () => {
       <button class="btn btn-lime" id="terap">${I.cek} Terapkan</button>
     </div></div>`);
   kartu.querySelector('#terap').onclick = () => {
-    angkatanPilihan = kartu.querySelector('#ak').value;
-    levelPilihan = kartu.querySelector('#lv').value;
+    aturLingkup(kartu.querySelector('#ak').value, kartu.querySelector('#lv').value);
     toast(`Lingkup diubah ke ${angkatanPilihan} · ${levelPilihan}.`);
     gambar();
   };
@@ -7045,7 +7054,7 @@ HAL['atur-kajian'] = () => {
       })).join('')}</tbody></table></div></div>`));
   return box;
 };
-HAL['atur-kajian'].judul = () => ['Pengaturan', 'Lingkup angkatan dan level ruang kerja ini.'];
+HAL['atur-kajian'].judul = () => ['Lingkup Kajian', 'Angkatan dan level yang sedang dibuka di ruang kerja ini.'];
 
 /* ============================================================
    RUANG KERJA BENDAHARA

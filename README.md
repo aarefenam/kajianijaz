@@ -400,11 +400,25 @@ Seluruh halamannya terikat pada **Angkatan & Level** yang dipilih di kanan atas 
 jadwal, anggota, presensi, materi, hingga statistik. Pilihan itu juga terpampang
 di sidebar supaya lingkup yang sedang dilihat tidak pernah samar.
 
+Sidebarnya disusun mengikuti perjalanan satu kajian, tiap kelompok dapat
+dilipat: **Kajian** (Jadwal & Tugas, Presensi, Materi & Makalah, Notulen),
+**Peserta** (Anggota & Kelompok, Kehadiran Anggota), **Laporan** (Rekap &
+Statistik), dan **Pengaturan** (Lingkup Kajian). Pembagian Tugas melebur ke
+Jadwal — formulirnya memang satu — dan alamat lamanya tetap berlaku sebagai
+alias. Lingkup angkatan & level diingat per peramban.
+
+Dasbor dibuka dengan antrean **Perlu Ditindak** (`antreanKajian()`), yang
+menggantikan halaman Notifikasi: kajian sepekan ke depan yang datanya kurang,
+kajian lampau tanpa presensi, presensi yang belum ditutup, notulen yang belum
+ditulis, anggota tanpa kelompok, dan anggota berkehadiran di bawah 75%.
+Semuanya dihitung `perluKajian()` dalam lingkup yang sedang dibuka — dulu
+notifikasi menghitung seluruh angkatan, sehingga angkanya tak cocok dengan
+halaman yang dibukanya.
+
 **Status kesiapan tidak disimpan, melainkan dihitung** dari kelengkapan tujuh
 butir: pemakalah, moderator, notulen, judul, tempat, PPT, dan revisi. Karena itu
-mustahil sebuah kajian tertulis "Siap" padahal notulennya belum ada. Begitu pula
-**Notifikasi**, yang diturunkan dari kajian yang datanya kurang, presensinya
-tertinggal, atau notulennya belum ditulis — bukan koleksi tersendiri yang bisa
+mustahil sebuah kajian tertulis "Siap" padahal notulennya belum ada. Antrean
+dasbor diturunkan dengan cara yang sama — bukan koleksi tersendiri yang bisa
 basi.
 
 **Presensi punya tiga keadaan** — hadir, terlambat, tidak hadir — beserta jam
