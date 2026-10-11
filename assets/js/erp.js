@@ -384,6 +384,7 @@ const MENU = [
   { id: 'pantau-kas',    label: 'Kas & Saldo',  ikon: I.uang,     izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-surat',  label: 'Arsip Surat',  ikon: I.arsip,    izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-artikel',label: 'Penulisan',    ikon: I.pena,     izin: ['organisasi.manage'], tersembunyi: true },
+  { id: 'pantau-buku',   label: 'Buku',         ikon: I.buku,     izin: ['organisasi.manage'], tersembunyi: true },
   /* Tabel kajian yang sama, sebagai halaman kerja Sekretaris. */
   { id: 'notulen-presensi', label: 'Notulen & Presensi', ikon: I.kalender, izin: ['kajian.notulensi', 'kajian.attendance'],
     /* PJ Kajian memegang izin yang sama, tetapi punya halaman Presensi dan
@@ -575,7 +576,7 @@ const MENU_KETUA = [
 
 /** Halaman bertab milik Ketua beserta modul yang menjadi tabnya. */
 const TAB_KETUA = {
-  'pantau-divisi': ['pantau-kajian', 'pantau-artikel', 'pantau-kas', 'pantau-surat'],
+  'pantau-divisi': ['pantau-kajian', 'pantau-artikel', 'pantau-buku', 'pantau-kas', 'pantau-surat'],
   pengaturan: ['cms', 'tema', 'versi', 'kategori-artikel', 'log'],
 };
 const tabAktif = { 'pantau-divisi': 'pantau-kajian', pengaturan: 'pengajuan' };
@@ -5412,6 +5413,7 @@ HAL['buku-perencanaan'] = () => {
       <td><span class="lencana ${st.c}">${st.l}</span></td>
       <td class="kol-aksi"><div class="sel-aksi">
         ${dibuka ? '' : `<button class="ikon-aksi" data-buka title="Buka proyek ini">${I.mata}</button>`}
+        <button class="ikon-aksi" data-cetak title="Cetak laporan proyek">${I.dok}</button>
         <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button>
         ${b.status === 'rencana' ? `<button class="ikon-aksi" data-st="berjalan" title="Mulai kerjakan">${I.nyala}</button>` : ''}
         ${b.status === 'berjalan' ? `<button class="ikon-aksi" data-st="terbit" title="Nyatakan terbit">${I.cek}</button>` : ''}
@@ -5420,6 +5422,7 @@ HAL['buku-perencanaan'] = () => {
         ${Store.bukuBerisi(b) ? '' : `<button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>`}
       </div></td></tr>`);
     tr.querySelector('[data-buka]')?.addEventListener('click', () => { bukaProyek(b.id); gambar(); });
+    tr.querySelector('[data-cetak]').onclick = () => cetakLaporanBuku(b);
     tr.querySelectorAll('[data-st]').forEach((x) => { x.onclick = () => dialogStatusBuku(b, x.dataset.st); });
     tr.querySelector('.sunting').onclick = () => formBuku(b);
     tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus proyek buku',
@@ -6051,6 +6054,101 @@ HAL['buku-keuangan'].judul = () => ['Keuangan Buku', 'Rencana biaya penerbitan d
         <small>Mulai dari halaman Perencanaan.</small></div></div>`));
   HAL[nama].judul = () => [MODUL[nama].judul, MODUL[nama].sub];
 });
+
+/* ============================================================
+   LAPORAN PROYEK BUKU — siap cetak, dan ringkasannya untuk Ketua
+   ============================================================ */
+/** Angka pokok sebuah proyek: naskah, stok, dan uangnya. */
+function ringkasBuku(b) {
+  const n = b.naskah || [];
+  return { n: n.length, tulis: n.filter((x) => x.progressTulis === 'siap').length, sunting: n.filter((x) => x.progressEdit === 'siap').length,
+    layout: n.filter((x) => x.buktiLayout).length, stok: Store.stokBuku(b), uang: Store.uangBuku(b), kas: realisasiBuku(b),
+    telat: Store.bukuJalan(b) && !!b.targetTerbit && b.targetTerbit < nowTanggal() };
+}
+
+function lembarLaporanBuku(b) {
+  const s = Store.cms.situs;
+  const r = ringkasBuku(b);
+  const kosong = (k, teks) => `<tr><td colspan="${k}" class="lk-kosong">${teks}</td></tr>`;
+  const jejak = (b.riwayatStatus || []).slice(-1)[0];
+  return el(`<div class="lk">
+    <div class="lk-kop">${lambang(40)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div></div>
+    <h2>Laporan Proyek Buku</h2>
+    <p class="lk-periode">${esc(b.judul)}</p>
+
+    <h3>1. Ringkasan</h3>
+    <table><tbody>${[['Status', `${STATUS_BK[b.status].l}${jejak?.alasan ? ` — ${jejak.alasan}` : ''}`], ['Tahap', TAHAP_BUKU[Store.tahapBuku(b)]],
+      ['Kumpul perdana', b.kumpulPerdana ? tglSurat(b.kumpulPerdana) : '—'],
+      [b.status === 'terbit' ? 'Terbit' : 'Target terbit', b.status === 'terbit' ? tglSurat(b.terbitPada) : `${b.targetTerbit ? tglSurat(b.targetTerbit) : '—'}${r.telat ? ' (terlewat)' : ''}`],
+      ['PJ Utama', Store.namaUser(b.pjUtamaId)], ['Tim editor', namaBanyak(b.editorIds)], ['Layouter / desainer', `${namaBanyak(b.layouterIds)} / ${namaBanyak(b.desainerIds)}`],
+      ['PJ Produksi & Distribusi', Store.namaUser(b.pjProduksiId)],
+      ['Naskah', `${r.n} sub judul · ${r.tulis} diterima · ${r.sunting} selesai disunting · ${r.layout} berbukti layout`],
+      ['Stok', `${r.stok.dicetak} dicetak · ${r.stok.dititipkan} dititipkan · ${r.stok.terjual} terjual/dibagikan · ${r.stok.sisa} sisa`]]
+      .map(([l, v]) => `<tr><td style="width:58mm">${l}</td><td><b>${esc(String(v))}</b></td></tr>`).join('')}</tbody></table>
+
+    <h3>2. Naskah</h3>
+    <table><thead><tr><th>No.</th><th>Sub Judul</th><th>Penulis</th><th>Tenggat</th><th>Naskah</th><th>Suntingan</th><th>Layout</th></tr></thead>
+      <tbody>${(b.naskah || []).map((n, i) => `<tr><td>${i + 1}</td><td>${esc(n.subJudul)}</td><td>${esc(Store.namaUser(n.userId))}</td>
+        <td style="white-space:nowrap">${n.deadline ? tgl(n.deadline) : '—'}</td><td>${NASKAH_ST[Store.keadaanNaskah(n, 'tulis').kunci].l}</td>
+        <td>${n.progressTulis === 'siap' ? NASKAH_ST[Store.keadaanNaskah(n, 'sunting').kunci].l : '—'}</td><td>${n.buktiLayout ? 'Ada' : '—'}</td></tr>`).join('') || kosong(7, 'Belum ada sub judul.')}</tbody></table>
+
+    <h3>3. Timeline & Produksi</h3>
+    <table><thead><tr><th>No.</th><th>Tahapan / Kegiatan</th><th>Tanggal</th><th class="lk-angka">Eksemplar</th><th>Keterangan</th></tr></thead>
+      <tbody>${[...(b.timeline || []).map((t) => [t.tahapan, t.tanggal, '', t.selesai]), ...(b.produksi || []).map((p) => [p.kegiatan, p.tanggal, p.eksemplar || '', p.selesai])]
+        .map(([nama, tg, eks, selesai], i) => `<tr><td>${i + 1}</td><td>${esc(nama)}</td><td style="white-space:nowrap">${tg ? tgl(tg) : '—'}</td>
+          <td class="lk-angka">${eks || '—'}</td><td>${selesai ? 'Selesai' : tg && tg < nowTanggal() ? 'Terlewat' : 'Belum'}</td></tr>`).join('') || kosong(5, 'Belum ada tahapan.')}</tbody></table>
+
+    <h3>4. Distribusi & Penjualan</h3>
+    <table><thead><tr><th>No.</th><th>Wilayah</th><th>Penanggung Jawab</th><th class="lk-angka">Dititipkan</th><th class="lk-angka">Terjual</th><th class="lk-angka">Sisa</th></tr></thead>
+      <tbody>${r.stok.wilayah.map((w, i) => `<tr><td>${i + 1}</td><td>${esc(w.d.wilayah)}</td><td>${esc(Store.namaUser(w.d.pjId))}</td>
+        <td class="lk-angka">${w.dititipkan}</td><td class="lk-angka">${w.terjual}</td><td class="lk-angka">${w.sisa}</td></tr>`).join('') || kosong(6, 'Belum ada wilayah distribusi.')}</tbody>
+      <tfoot><tr><td colspan="3">Jumlah · ${r.stok.gudang} eksemplar belum dititipkan</td><td class="lk-angka">${r.stok.dititipkan}</td><td class="lk-angka">${r.stok.terjual}</td><td class="lk-angka">${r.stok.dititipkan - r.stok.wilayah.reduce((j, w) => j + w.terjual, 0)}</td></tr></tfoot></table>
+
+    <h3>5. Keuangan</h3>
+    <table><thead><tr><th>Uraian</th><th class="lk-angka">Rupiah</th><th class="lk-angka">Pound</th></tr></thead>
+      <tbody>${[['Kasaran modal (rencana)', r.kas.rencanaRp, r.kas.rencanaEgp], ['Pengeluaran di Buku Kas', r.kas.keluarRp, r.kas.keluarEgp],
+        ['Penjualan tercatat', r.uang.jualRp, r.uang.jualEgp], ['Diterima Bendahara', r.uang.disetorRp, r.uang.disetorEgp],
+        ['Diajukan, menunggu Bendahara', r.uang.diajukanRp, r.uang.diajukanEgp], ['Belum disetor', r.uang.belumRp, r.uang.belumEgp]]
+        .map(([l, a, e]) => `<tr><td>${l}</td><td class="lk-angka">${rupiah(a)}</td><td class="lk-angka">${pound(e)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Selisih kas proyek (masuk − keluar)</td><td class="lk-angka">${r.kas.masukRp - r.kas.keluarRp < 0 ? '−' : ''}${rupiah(Math.abs(r.kas.masukRp - r.kas.keluarRp))}</td>
+        <td class="lk-angka">${r.kas.masukEgp - r.kas.keluarEgp < 0 ? '−' : ''}${pound(Math.abs(r.kas.masukEgp - r.kas.keluarEgp))}</td></tr></tfoot></table>
+    <p class="lk-catatan">Uang masuk dan keluar dibaca dari Buku Kas Bendahara; kasaran modal adalah rencana. Dicetak ${esc(tglSurat(nowTanggal()))}.</p>
+    <div class="lk-ttd">
+      <div>PJ Buku,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'pj_buku' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+      <div>Mengetahui, Ketua Umum,<div class="lk-ruang"></div><b>${esc(Store.db.users.find((u) => RBAC.kunciRole(u.role) === 'ketua' && u.status === 'aktif')?.nama || '………………………')}</b></div>
+    </div>
+  </div>`);
+}
+const cetakLaporanBuku = (b) => cetakKhusus(lembarLaporanBuku(b), '@page { size: A4; margin: 14mm; }', `Laporan Buku ${b.judul}`);
+
+/** Proyek buku dari kursi Ketua: hanya-baca, dengan laporan siap cetak. */
+HAL['pantau-buku'] = () => {
+  const semua = Store.db.buku;
+  const box = el('<div></div>');
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Proyek Buku</h3><span class="hitung">(${semua.length} proyek · ${semua.filter((b) => b.status === 'berjalan').length} berjalan · ${semua.filter((b) => b.status === 'terbit').length} terbit)</span></div></div>`);
+  if (!semua.length) { kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada proyek buku</p></div>`)); box.appendChild(kartu); return box; }
+  const t = el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Judul Buku</th><th>Status</th><th>Target / Terbit</th><th>Naskah</th><th>Stok</th><th>Uang Penjualan</th>
+      <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+  semua.forEach((b, i) => {
+    const r = ringkasBuku(b);
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+      <td><b>${esc(b.judul)}</b><br><span class="sub-sel">${esc(TAHAP_BUKU[Store.tahapBuku(b)])} · PJ ${esc(namaPendek(b.pjUtamaId))}</span></td>
+      <td><span class="lencana ${STATUS_BK[b.status].c}">${STATUS_BK[b.status].l}</span></td>
+      <td class="utuh">${b.status === 'terbit' ? tgl(b.terbitPada) : b.targetTerbit ? tgl(b.targetTerbit) : '—'}${r.telat ? '<br><span class="lencana l-merah">terlewat</span>' : ''}</td>
+      <td class="utuh">${r.sunting}/${r.n} disunting<br><span class="sub-sel">${r.tulis} diterima · ${r.layout} layout</span></td>
+      <td class="utuh">${r.stok.dicetak ? `${r.stok.terjual}/${r.stok.dicetak} keluar<br><span class="sub-sel">sisa ${r.stok.sisa}</span>` : '—'}</td>
+      <td class="utuh">${esc(uangDua(r.uang.jualRp, r.uang.jualEgp))}${r.uang.belumRp || r.uang.belumEgp ? `<br><span class="sub-sel" style="color:#B23E37">belum disetor ${esc(uangDua(r.uang.belumRp, r.uang.belumEgp))}</span>` : ''}</td>
+      <td class="kol-aksi"><div class="sel-aksi"><button class="ikon-aksi" title="Cetak laporan proyek">${I.dok}</button></div></td></tr>`);
+    tr.querySelector('button').onclick = () => cetakLaporanBuku(b);
+    t.querySelector('tbody').appendChild(tr);
+  });
+  kartu.appendChild(t);
+  box.appendChild(kartu);
+  return box;
+};
+HAL['pantau-buku'].judul = () => ['Buku', 'Proyek penerbitan: naskah, stok, dan uang penjualannya.'];
 
 /* ============================================================
    BUKU SAYA — tugas seorang anggota pada proyek buku

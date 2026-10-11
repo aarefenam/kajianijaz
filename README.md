@@ -349,6 +349,10 @@ benar-benar tercatat di Buku Kas, harga jual per eksemplar, uang penjualan
 (tercatat, diterima, diajukan, belum disetor), dan titik impas — tiap mata uang
 dihitung sendiri-sendiri, tanpa kurs yang dikira-kira.
 
+**Laporan Proyek Buku** (`lembarLaporanBuku()`) siap cetak sebagai lembar A4
+berkop: ringkasan, naskah, timeline dan produksi, distribusi dan penjualan,
+serta keuangan. Ketua membacanya dari tab *Buku* di Pantau Divisi.
+
 ### Ruang kerja PJ Media & Website
 
 Dua peran lama — PJ Website dan PJ Media — kini satu. Kunci peran lamanya tetap
