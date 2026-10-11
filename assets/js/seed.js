@@ -1231,6 +1231,13 @@ SEED.users.forEach((u, i) => {
    berarti belum ditetapkan, dan pembayaran berapa pun dianggap lunas. */
 SEED.aturKas = { iuranRp: 0, iuranEgp: 0 };
 
+/* Data diri anggota — nomor paspor, alamat, kontak, kelahiran — dan
+   antrean pendaftaran dari halaman publik. Keduanya sengaja terpisah
+   dari `users`: daftar anggota tampil di website, sedangkan ini tidak
+   boleh keluar kepada siapa pun selain pengelola keanggotaan. */
+SEED.dataDiri = [];
+SEED.pendaftaran = [];
+
 SEED.akunKas = [
   { id:'ak1', nama:'Kas Tunai Sekretariat', jenis:'tunai', saldoAwalRp:  500000, saldoAwalEgp: 400, ket:'Uang tunai yang dipegang di sekretariat.' },
   { id:'ak2', nama:'Rekening Bank BSI',     jenis:'bank',  saldoAwalRp: 1500000, saldoAwalEgp:   0, ket:'Rekening atas nama kepengurusan.' },

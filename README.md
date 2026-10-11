@@ -285,6 +285,29 @@ anggota ditambahkan dan tidak berubah, jadi kartu yang sudah dicetak tetap sah.
 Sekretaris mencetaknya dari **Kartu Anggota**: QR-nya memuat nomor induk saja,
 bukan nama atau surel. Kode lama `AIJZ-…` tetap terbaca.
 
+Kartunya seukuran kartu pelajar (85,6 × 54 mm): pita organisasi, pas foto,
+nama, nomor induk, angkatan, jenjang, status, dan QR. *Cetak Kartu* menyusun
+delapan kartu per lembar A4 dengan garis potong.
+
+**Pendaftaran dan data diri.** Anggota baru masuk lewat dua pintu:
+
+- **`daftar.html`** — formulir publik. Ia hanya *mengajukan*: permohonan masuk
+  ke antrean `pendaftaran`, ditinjau Sekretaris di halaman **Pendaftaran**, dan
+  baru menjadi anggota — bernomor induk, berakun, berkata sandi pertama — saat
+  diterima. Yang ditolak langsung kehilangan data pribadinya.
+- **Data Anggota → Tambah Anggota** — langsung oleh Sekretaris, seperti semula.
+
+Data diri — nomor paspor, alamat, telepon, tempat dan tanggal lahir, pas foto —
+disimpan di koleksi `dataDiri`, terpisah dari `users` yang tampil di website.
+`api/muat.php` hanya mengirimkan `dataDiri` dan `pendaftaran` kepada pemegang
+`anggota.manage`; peran lain menerima baris miliknya sendiri saja, atau tidak
+sama sekali. Tak satu pun data ini tercetak di kartu anggota.
+
+`api/daftar.php` terbuka tanpa masuk, jadi ia dibatasi: tiga permohonan per jam
+per perangkat, kolom jebakan untuk robot, pas foto diperiksa sebagai gambar
+sungguhan (SVG ditolak), dan jawabannya tidak membedakan surel yang sudah
+terdaftar dari yang belum.
+
 **Mode Presensi** adalah layar penuh untuk petugas di pintu kajian. Kamera
 ponsel membaca QR kartu, lalu nama dan statusnya tampil besar:
 

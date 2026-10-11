@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pendaftaran Anggota — Kajian Al-I'jaz</title>
+<meta name="description" content="Formulir pendaftaran anggota Kajian Al-I'jaz.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Playfair+Display:wght@500;600;700&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/site.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230E2E1C'/><text x='16' y='23' font-size='19' text-anchor='middle' fill='%238CC63F' font-family='serif'>ا</text></svg>">
+</head>
+<body>
+<div id="app"></div>
+
+<script src="assets/js/rbac.js"></script>
+<script src="assets/js/font.js"></script>
+<script src="assets/js/seed.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+/* Pendaftaran anggota. Formulir ini hanya MENGAJUKAN: akun, nomor
+   induk, dan kartu anggota baru terbit setelah Sekretaris menerimanya. */
+Situs.mulaiKhusus('daftar.html', 'Pendaftaran Anggota', () => {
+  const { el, esc, toast } = Situs;
+  const sec = el(`<section class="sec pola-terang"><div class="wrap">
+    <div class="kepala-sec" style="text-align:center;margin-bottom:34px">
+      <h2 class="daftar-judul">Pendaftaran Anggota</h2>
+      <p style="margin:0 auto;max-width:620px;color:#55645A;font-size:15px">
+        Isi data diri Anda. Permohonan ditinjau Sekretaris; setelah diterima, Anda mendapat
+        nomor anggota, kartu anggota, dan akun untuk masuk.</p>
+    </div>
+    <form class="kartu-form form-daftar" id="formDaftar" novalidate>
+      <div class="dua-kolom">
+        <div class="grup"><label>Nama Lengkap <i>*</i></label><input name="nama" required maxlength="80" autocomplete="name" placeholder="Sesuai paspor"></div>
+        <div class="grup"><label>Alamat Surel <i>*</i></label><input type="email" name="email" required maxlength="120" autocomplete="email" placeholder="email@contoh.com"></div>
+      </div>
+      <div class="dua-kolom">
+        <div class="grup"><label>Nomor Paspor <i>*</i></label><input name="paspor" required maxlength="20" autocomplete="off" autocapitalize="characters" placeholder="C1234567"></div>
+        <div class="grup"><label>Nomor Telepon / WhatsApp</label><input type="tel" name="telepon" maxlength="30" autocomplete="tel" placeholder="+20 100 000 0000"></div>
+      </div>
+      <div class="dua-kolom">
+        <div class="grup"><label>Tempat Lahir</label><input name="tempatLahir" maxlength="60" placeholder="Kota kelahiran"></div>
+        <div class="grup"><label>Tanggal Lahir</label><input type="date" name="tglLahir"></div>
+      </div>
+      <div class="grup"><label>Alamat di Mesir <i>*</i></label><textarea name="alamat" required maxlength="300" style="min-height:84px" placeholder="Nama gedung, jalan, distrik, kota"></textarea></div>
+      <div class="dua-kolom">
+        <div class="grup"><label>Angkatan</label><input name="angkatan" maxlength="40" placeholder="Bila sudah tahu — mis. Angkatan XII"></div>
+        <div class="grup"><label>Pendidikan</label><input name="pendidikan" maxlength="160" placeholder="Fakultas dan universitas"></div>
+      </div>
+      <div class="grup"><label>Pas Foto</label>
+        <div class="pilih-foto"><img data-pratinjau alt="" hidden>
+          <label class="tombol tombol-garis" style="cursor:pointer;margin:0">Pilih Foto<input type="file" name="foto" accept="image/jpeg,image/png,image/webp" hidden></label>
+          <span data-ket>Opsional. Wajah menghadap depan; dipakai pada kartu anggota.</span></div></div>
+      <div class="grup"><label>Catatan untuk Sekretaris</label><textarea name="catatan" maxlength="500" style="min-height:70px" placeholder="Opsional"></textarea></div>
+      <div class="jebak" aria-hidden="true"><label>Situs web</label><input name="situs" tabindex="-1" autocomplete="off"></div>
+      <label class="setuju"><input type="checkbox" name="setuju" required>
+        <span>Saya menyatakan data di atas benar, dan menyetujui data ini disimpan pengurus
+          ${esc(Store.cms.situs.nama)} untuk keperluan keanggotaan. Nomor paspor, alamat, dan pas foto
+          hanya dapat dilihat Sekretaris dan Ketua Umum, serta tidak ditampilkan di website.</span></label>
+      <button class="tombol" type="submit">Kirim Pendaftaran</button>
+    </form>
+    <div class="kartu-form daftar-selesai" id="selesai" hidden>
+      <h3>Permohonan terkirim</h3>
+      <p>Terima kasih. Sekretaris akan meninjau data Anda. Setelah diterima, Anda dihubungi melalui
+        surel atau WhatsApp untuk menerima nomor anggota dan kata sandi pertama.</p>
+      <a class="tombol" href="index.html">Kembali ke Beranda</a>
+    </div>
+  </div></section>`);
+
+  const form = sec.querySelector('#formDaftar');
+  const foto = form.querySelector('[name=foto]');
+  const pratinjau = form.querySelector('[data-pratinjau]');
+  foto.onchange = () => {
+    const b = foto.files[0];
+    if (!b) return;
+    pratinjau.src = URL.createObjectURL(b); pratinjau.hidden = false;
+    form.querySelector('[data-ket]').textContent = b.name;
+  };
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const wajib = [['nama', 'Nama lengkap'], ['email', 'Alamat surel'], ['paspor', 'Nomor paspor'], ['alamat', 'Alamat']];
+    const kurang = wajib.find(([k]) => !String(f.get(k) || '').trim());
+    if (kurang) return toast(`${kurang[1]} wajib diisi.`);
+    if (!f.get('setuju')) return toast('Centang pernyataan persetujuan lebih dulu.');
+    const tbl = form.querySelector('button[type=submit]');
+    tbl.disabled = true; tbl.textContent = 'Mengirim…';
+    try {
+      const data = {};
+      ['nama', 'email', 'paspor', 'telepon', 'tempatLahir', 'tglLahir', 'alamat', 'angkatan', 'pendidikan', 'catatan', 'situs']
+        .forEach((k) => { data[k] = String(f.get(k) || ''); });
+      await Store.kirimPendaftaran(data, foto.files[0] || null);
+      form.hidden = true;
+      sec.querySelector('#selesai').hidden = false;
+      sec.scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      /* Yang sudah diketik tidak dikosongkan bila gagal. */
+      toast(err.message || 'Pendaftaran gagal terkirim. Coba lagi sebentar lagi.');
+      tbl.disabled = false; tbl.textContent = 'Kirim Pendaftaran';
+    }
+  };
+  return sec;
+});
+</script>
+</body>
+</html>

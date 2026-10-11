@@ -92,6 +92,22 @@ if (!$u) {
   }
 }
 
+/* Sesudah masuk pun, data diri anggota bukan untuk semua pengurus.
+   Nomor paspor dan alamat hanya untuk yang mengelola keanggotaan; yang
+   lain menerima baris miliknya sendiri saja. Antrean pendaftaran — yang
+   memuat data yang sama dari orang yang bahkan belum menjadi anggota —
+   tidak dikirim sama sekali.
+
+   Disaring di sini, bukan di peramban: yang di peramban hanya
+   menyembunyikan, sedangkan datanya tetap terkirim. */
+if ($u && !bolehSalahSatu($u, ['anggota.manage', 'user.manage'])) {
+  unset($semua['isi']['pendaftaran'], $semua['versi']['pendaftaran']);
+  if (isset($semua['isi']['dataDiri']) && is_array($semua['isi']['dataDiri'])) {
+    $semua['isi']['dataDiri'] = array_values(array_filter(
+      $semua['isi']['dataDiri'], fn($x) => ($x['userId'] ?? null) === $u['id']));
+  }
+}
+
 jawab([
   'isi'      => $semua['isi'],
   'versi'    => $semua['versi'],

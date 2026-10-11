@@ -397,6 +397,8 @@ const MENU = [
   { id: 'anggota-angkatan', label: 'Data Anggota Perangkatan', ikon: I.grup,   izin: ['sekretariat.manage'] },
   { id: 'alumni',           label: 'Data Alumni',              ikon: I.wisuda, izin: ['sekretariat.manage'] },
   { id: 'kartu-anggota',    label: 'Kartu Anggota',            ikon: I.qr,     izin: ['anggota.manage'] },
+  { id: 'pendaftaran',      label: 'Pendaftaran',              ikon: I.dokCek, izin: ['anggota.manage'],
+    lonceng: () => (Store.db.pendaftaran || []).filter((p) => p.status === 'menunggu').length },
 
   { grup: 'Arsip Penulisan', izin: ['arsip.view'] },
   { id: 'arsip', label: 'Link Arsip Kepenulisan', ikon: I.tautan, izin: ['arsip.view'] },
@@ -535,6 +537,7 @@ const MENU_KETUA = [
   { id: 'pantau-divisi' },
   { id: 'laporan' },
   { grup: 'Struktur' },
+  { id: 'pendaftaran' },
   { id: 'anggota' },
   { id: 'kartu-anggota' },
   { id: 'pengurus' },
@@ -582,6 +585,7 @@ const MENU_SEKRETARIS = [
   { id: 'ttd' },
   { id: 'arsip', label: 'Arsip Kepenulisan' },
   { grup: 'Keanggotaan' },
+  { id: 'pendaftaran' },
   { id: 'anggota-angkatan', label: 'Data Anggota' },
   { id: 'alumni' },
   { id: 'kartu-anggota' },
@@ -656,6 +660,7 @@ function layarLogin() {
       </form>
       <p style="font-size:12.4px;color:var(--e-abu);margin-top:20px;text-align:center">
         Lupa kata sandi? Sekretaris atau Ketua Umum dapat menyetel ulang dari menu Anggota.<br>
+        Belum menjadi anggota? <a href="daftar.html" style="font-weight:700">Isi formulir pendaftaran</a>.<br>
         <a href="index.html" style="color:var(--e-hijau);font-weight:700">← Kembali ke website</a>
       </p>
     </div></div>
@@ -2151,6 +2156,8 @@ function setelSandiAnggota(u) {
 
 function formAnggota(u) {
   const bisaRole = RBAC.can(U, 'user.manage');
+  const bisaDiri = RBAC.canAny(U, ['anggota.manage', 'user.manage']);
+  const diri = u ? Store.dataDiri(u.id) : {};
   const isi = el(`<div>
     <div class="grid-form">
       <div class="grup"><label>Nama Lengkap</label><input id="n" value="${esc(u?.nama || '')}"></div>
@@ -2166,7 +2173,7 @@ function formAnggota(u) {
         <select id="r" ${bisaRole ? '' : 'disabled'}>${Object.entries(RBAC.ROLES).map(([k, v]) => `<option value="${k}" ${(u?.role || 'anggota') === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
         <div class="bantu">${bisaRole ? 'Menentukan menu dan wewenang orang ini di ERP.' : 'Hanya Ketua Umum yang dapat mengubah role.'}</div></div>
       <div class="grup"><label>Label di Website</label>
-        <select id="kt">${['pendiri', 'anggota', 'alumni'].map((x) => `<option ${u?.kategori === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+        <select id="kt">${['pendiri', 'anggota', 'alumni'].map((x) => `<option ${(u?.kategori || 'anggota') === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
         <div class="bantu">Pil yang tampil di kartu: Pendiri, Anggota Aktif, atau Alumni.</div></div>
     </div>
     <div class="grup"><label>Jabatan di Kajian</label>
@@ -2174,7 +2181,30 @@ function formAnggota(u) {
       <div class="bantu">Jabatan organisasi yang tampil di halaman Tentang. Berbeda dari role ERP di
         atas — role menentukan wewenang, ini menentukan sebutan. Dikosongkan berarti mengikuti role.</div></div>
     <div class="grup"><label>Riwayat Pendidikan</label><input id="p" value="${esc(u?.pendidikan || '')}" placeholder="S1 Tafsir & Ilmu al-Quran, Universitas Al-Azhar Kairo"></div>
+    ${bisaDiri ? `<div class="fa-diri">
+      <div class="fa-diri-kepala">${I.perisai}<div><b>Data Diri</b>
+        <span>Hanya terlihat Sekretaris dan Ketua Umum. Tidak tampil di website maupun di kartu anggota.</span></div></div>
+      <div class="fa-foto"><img data-foto src="${esc(diri.foto || u?.foto || window.__avatar('Anggota', '#5B7C5F'))}" alt="">
+        <div><label class="btn btn-garis btn-kecil" style="cursor:pointer;margin:0">${I.gambar} Ganti Pas Foto<input type="file" accept="image/jpeg,image/png,image/webp" hidden data-berkas></label>
+          <div class="bantu">Dipakai pada kartu anggota saja. Tidak tampil di website.</div></div></div>
+      <div class="grid-form">
+        <div class="grup"><label>Nomor Paspor</label><input id="dp" value="${esc(diri.paspor || '')}" autocomplete="off" placeholder="C1234567"></div>
+        <div class="grup"><label>Telepon / WhatsApp</label><input id="dt" value="${esc(diri.telepon || '')}" placeholder="+20 100 000 0000"></div>
+      </div>
+      <div class="grid-form">
+        <div class="grup"><label>Tempat Lahir</label><input id="dl" value="${esc(diri.tempatLahir || '')}"></div>
+        <div class="grup"><label>Tanggal Lahir</label><input type="date" id="dg" value="${esc(diri.tglLahir || '')}"></div>
+      </div>
+      <div class="grup" style="margin-bottom:0"><label>Alamat</label><textarea id="da" style="min-height:66px">${esc(diri.alamat || '')}</textarea></div>
+    </div>` : ''}
   </div>`);
+  let fotoBaru = '';
+  isi.querySelector('[data-berkas]')?.addEventListener('change', async (e) => {
+    const berkas = e.target.files[0]; if (!berkas) return;
+    try { fotoBaru = await Store.unggahGambar(berkas, 480); isi.querySelector('[data-foto]').src = fotoBaru; }
+    catch (galat) { toast(galat.message, true); }
+    e.target.value = '';
+  });
   const bisaSetel = u && RBAC.canAny(U, ['anggota.manage', 'user.manage']);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     ${bisaSetel ? `<button class="btn btn-garis" data-sandi style="margin-right:auto">${I.gembok} Setel Ulang Sandi</button>` : ''}
@@ -2186,10 +2216,13 @@ function formAnggota(u) {
     const g = (id) => isi.querySelector('#' + id).value;
     if (!g('n').trim() || !g('e').trim()) return toast('Nama dan email wajib diisi.', true);
     aman(() => {
-      Store.simpanAnggota(U, {
+      const tersimpan = Store.simpanAnggota(U, {
         id: u?.id, nama: g('n').trim(), email: g('e').trim(), angkatan: g('a'), level: g('l'),
         status: g('s'), role: g('r'), kategori: g('kt'), pendidikan: g('p'), jabatan: g('jb').trim(),
       });
+      if (bisaDiri) Store.simpanDataDiri(U, tersimpan.id, {
+        paspor: g('dp'), telepon: g('dt'), tempatLahir: g('dl'), tglLahir: g('dg'), alamat: g('da'),
+        ...(fotoBaru ? { foto: fotoBaru } : {}) });
       tutupModal(); toast('Data anggota tersimpan.'); gambar();
     });
   };
@@ -3122,7 +3155,11 @@ function antreanSekretaris() {
   const tanpaNotulen = d.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi)
     .sort((a, b) => b.tanggal.localeCompare(a.tanggal));
   const sandiAwal = d.users.filter((u) => Number(u.sandiAwal) === 1 && u.status === 'aktif');
+  const daftar = (d.pendaftaran || []).filter((p) => p.status === 'menunggu');
   return kartuAntrean('Perlu Ditindaklanjuti', [
+    { rute: 'pendaftaran', ikon: I.dokCek, judul: 'Pendaftaran Baru', n: daftar.length,
+      satuan: 'permohonan menunggu tinjauan', kosong: 'Tidak ada pendaftaran menunggu',
+      rinci: daftar[0] && daftar[0].nama },
     { rute: 'pesan', ikon: I.surat, judul: 'Kotak Masuk', n: pesan.length,
       satuan: 'pesan belum dibaca', kosong: 'Semua pesan sudah dibaca',
       rinci: pesan[0] && `${pesan[0].subjek} — ${pesan[0].nama}` },
@@ -6380,7 +6417,7 @@ HAL['kartu-anggota'] = () => {
     membocorkan apa pun. Petugas presensi memindainya di pintu kajian; Bendahara memindainya saat menerima iuran.
     Nomor induk tidak berubah, jadi kartu yang sudah dicetak tetap berlaku.
   </div></div></div>`);
-  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+  const kartu = el(`<div class="kartu ka-lembar"><div class="kartu-kepala">
     <h3>Kartu Anggota</h3><span class="hitung">(${data.length} kartu${tanpa ? ` · ${tanpa} belum bernomor` : ''})</span>
     <div class="kanan">
       <select class="pilih-saring" data-angkatan><option value="">Semua Angkatan</option>
@@ -6392,22 +6429,179 @@ HAL['kartu-anggota'] = () => {
     </div></div><div class="panel-isi"><div class="ka-kisi"></div></div></div>`);
   kartu.querySelector('[data-angkatan]').onchange = (e) => { saringKartu.angkatan = e.target.value; gambar(); };
   kartu.querySelector('[data-status]').onchange = (e) => { saringKartu.status = e.target.value; gambar(); };
-  kartu.querySelector('[data-cetak]').onclick = () => window.print();
+  /* Lembar cetaknya hanya kartu: delapan per A4, tanpa judul halaman.
+     Aturan kertasnya dipasang hanya selama mencetak, seperti pada surat. */
+  kartu.querySelector('[data-cetak]').onclick = () => {
+    document.body.classList.add('cetak-kartu');
+    const kertas = document.head.appendChild(Object.assign(document.createElement('style'),
+      { textContent: '@page { size: A4; margin: 10mm; }' }));
+    const usai = () => {
+      document.body.classList.remove('cetak-kartu');
+      kertas.remove();
+      window.removeEventListener('afterprint', usai);
+    };
+    window.addEventListener('afterprint', usai);
+    window.print();
+  };
   const kisi = kartu.querySelector('.ka-kisi');
   if (!data.length) kisi.replaceWith(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada anggota pada saringan ini</p></div>`));
-  data.forEach((u) => {
-    kisi.appendChild(el(`<div class="ka-kartu">
-      <div class="ka-atas">${lambang(22)}<span>${esc(Store.cms.situs.nama)}<small>Kartu Anggota</small></span></div>
-      <img class="ka-qr" src="${QR.svgDataUri(Store.kodeQr(u.id))}" alt="QR ${esc(u.nama)}">
-      <div class="ka-nia">${esc(Store.kodeQr(u.id))}</div>
-      <div class="ka-nama">${esc(u.nama)}</div>
-      <div class="ka-ket">${esc(u.angkatan || '—')}</div>
-    </div>`));
-  });
+  data.forEach((u) => kisi.appendChild(kartuAnggota(u)));
   box.appendChild(kartu);
   return box;
 };
+
+/* Satu kartu anggota, seukuran kartu pelajar (85,6 × 54 mm). Yang
+   dicetak hanya yang perlu dilihat petugas: foto, nama, nomor induk,
+   angkatan, jenjang, dan QR. Paspor dan alamat TIDAK pernah di sini —
+   kartu ini dibawa-bawa dan bisa tercecer. */
+function kartuAnggota(u) {
+  const s = Store.cms.situs;
+  const kode = Store.kodeQr(u.id);
+  return el(`<div class="ka-kartu">
+    <div class="ka-pita">
+      <span class="ka-logo">${lambang(30)}</span>
+      <div class="ka-org"><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.tagline || '')}</span></div>
+      <span class="ka-jenis">KARTU<br>ANGGOTA</span>
+    </div>
+    <div class="ka-badan">
+      <img class="ka-foto" src="${esc(Store.dataDiri(u.id).foto || u.foto || window.__avatar(u.nama || 'Anggota', '#5B7C5F'))}" alt="">
+      <div class="ka-data">
+        <div class="ka-nama">${esc(u.nama)}</div>
+        <div class="ka-nia">${esc(kode)}</div>
+        <dl>
+          <div><dt>Angkatan</dt><dd>${esc(String(u.angkatan || '—').replace(/^Angkatan\s+/i, ''))}</dd></div>
+          <div><dt>Jenjang</dt><dd>${esc(u.level && u.level !== '-' ? u.level : '—')}</dd></div>
+          <div><dt>Status</dt><dd>${esc(u.status === 'aktif' ? 'Aktif' : u.status === 'alumni' ? 'Alumni' : 'Nonaktif')}</dd></div>
+        </dl>
+      </div>
+      <img class="ka-qr" src="${QR.svgDataUri(kode, { tepi: 2 })}" alt="QR ${esc(kode)}">
+    </div>
+    <div class="ka-kaki"><span>${esc(s.naungan || '')}</span><span>${esc(Store.db.seo?.domain || '')}</span></div>
+  </div>`);
+}
 HAL['kartu-anggota'].judul = () => ['Kartu Anggota', 'Nomor induk dan QR tiap anggota, siap dicetak.'];
+
+/* ------------------------------------------------------------
+   PENDAFTARAN — antrean permohonan dari halaman publik
+   ------------------------------------------------------------
+   daftar.html hanya mengajukan. Di sinilah permohonan ditinjau:
+   diterima berarti menjadi anggota — bernomor induk, berakun, dan data
+   dirinya dipindahkan ke Data Diri — sedangkan yang ditolak langsung
+   kehilangan data pribadinya dan tersisa sebagai catatan saja.
+   ------------------------------------------------------------ */
+const STATUS_DAFTAR = {
+  menunggu: { l: 'Menunggu', c: 'l-kuning' }, diterima: { l: 'Diterima', c: 'l-hijau' }, ditolak: { l: 'Ditolak', c: 'l-merah' },
+};
+let saringDaftar = 'menunggu';
+
+function tinjauPendaftaran(p) {
+  const kembar = Store.db.users.find((u) => String(u.email || '').toLowerCase() === String(p.email).toLowerCase());
+  const angkatan = [...new Set(Store.db.users.map((u) => u.angkatan).filter((a) => a && a !== 'Pendiri'))]
+    .sort((a, b) => urutAngkatan(a) - urutAngkatan(b));
+  const baris = (l, v) => `<div><dt>${l}</dt><dd>${v ? esc(v).replace(/\n/g, '<br>') : '—'}</dd></div>`;
+  const isi = el(`<div class="tp">
+    ${kembar ? `<div class="notis notis-merah" style="margin-bottom:14px">${I.peringatan}<div><b>Surel ini sudah dipakai</b>
+      ${esc(kembar.nama)} (${esc(kembar.nia || '—')}) sudah terdaftar dengan surel yang sama. Permohonan ini tidak dapat diterima sebelum itu diselesaikan.</div></div>` : ''}
+    <div class="tp-atas">${p.foto ? `<img src="${esc(p.foto)}" alt="">` : `<div class="tp-tanpa-foto">${I.orang}<span>tanpa foto</span></div>`}
+      <dl class="tp-data">
+        ${baris('Nama', p.nama)}${baris('Surel', p.email)}${baris('Telepon', p.telepon)}${baris('Nomor Paspor', p.paspor)}
+        ${baris('Tempat, Tanggal Lahir', [p.tempatLahir, p.tglLahir ? tgl(p.tglLahir) : ''].filter(Boolean).join(', '))}
+        ${baris('Pendidikan', p.pendidikan)}${baris('Alamat', p.alamat)}${baris('Catatan', p.catatan)}
+        ${baris('Dikirim', tglJam(p.ts))}
+      </dl></div>
+    <div class="grid-form" style="margin-top:14px">
+      <div class="grup"><label>Angkatan</label><input data-angkatan list="tp-angkatan" value="${esc(p.angkatan || angkatan[angkatan.length - 1] || '')}" placeholder="Angkatan XII">
+        <datalist id="tp-angkatan">${angkatan.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>
+        <div class="bantu">Menentukan nomor induknya. ${p.angkatan ? `Pemohon menulis: "${esc(p.angkatan)}".` : 'Pemohon tidak mengisinya.'}</div></div>
+      <div class="grup"><label>Jenjang</label><select data-level>
+        ${['Tatsqif', 'Level 1', 'Level 2', 'Level 3'].map((x) => `<option>${x}</option>`).join('')}</select></div>
+    </div></div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-merah" data-tolak style="margin-right:auto">Tolak</button>
+    <button class="btn btn-garis" data-b>Tutup</button>
+    <button class="btn btn-lime" data-terima ${kembar ? 'disabled' : ''}>${I.cek} Terima sebagai Anggota</button></div>`);
+  modal({ judul: 'Tinjau Pendaftaran', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-terima]').onclick = () => {
+    const baru = aman(() => Store.terimaPendaftaran(U, p.id, {
+      angkatan: isi.querySelector('[data-angkatan]').value, level: isi.querySelector('[data-level]').value }));
+    /* Kata sandi pertamanya dibuat server dan ditampilkan sekali,
+       lewat jendela yang sama dengan penambahan anggota biasa. */
+    if (baru) { tutupModal(); toast('Pendaftaran diterima. Kata sandi pertamanya segera ditampilkan.'); gambar(); }
+  };
+  kaki.querySelector('[data-tolak]').onclick = () => {
+    const f = el(`<div class="grup" style="margin:0"><label>Alasan penolakan</label>
+      <textarea data-alasan style="min-height:76px" placeholder="Opsional — untuk catatan pengurus"></textarea>
+      <div class="bantu">Data pribadi pemohon — paspor, alamat, foto — dihapus saat ditolak. Yang tersisa hanya nama, surel, dan alasan ini.</div></div>`);
+    const k2 = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+      <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-y>Tolak Pendaftaran</button></div>`);
+    modal({ judul: `Tolak pendaftaran ${p.nama}`, isi: f, kaki: k2 });
+    k2.querySelector('[data-b]').onclick = () => tinjauPendaftaran(p);
+    k2.querySelector('[data-y]').onclick = () => {
+      if (aman(() => Store.tolakPendaftaran(U, p.id, f.querySelector('[data-alasan]').value))) {
+        tutupModal(); toast('Pendaftaran ditolak.'); gambar();
+      }
+    };
+  };
+}
+
+HAL.pendaftaran = () => {
+  const semua = [...(Store.db.pendaftaran || [])].sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  const jml = (st) => semua.filter((p) => p.status === st).length;
+  const data = semua.filter((p) => !saringDaftar || p.status === saringDaftar);
+  const alamat = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}daftar.html`;
+
+  const box = el(`<div><div class="notis notis-info">${I.info}<div>
+    <b>Pendaftaran masuk dari halaman publik</b>
+    Calon anggota mengisi formulir di <a href="daftar.html" target="_blank">${esc(alamat)}</a>. Menerima permohonan
+    menjadikannya anggota: ia mendapat nomor induk, kartu anggota, dan kata sandi pertama. Anggota juga tetap
+    dapat ditambahkan langsung dari Data Anggota.
+    <button class="btn btn-garis btn-kecil" data-salin style="margin-left:6px">Salin Tautan</button>
+  </div></div></div>`);
+  box.querySelector('[data-salin]').onclick = () => navigator.clipboard.writeText(alamat).then(
+    () => toast('Tautan pendaftaran disalin.'), () => toast('Peramban menolak menyalin. Salin manual dari teksnya.', true));
+
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Pendaftaran</h3><span class="hitung">(${data.length} dari ${semua.length} permohonan)</span>
+    <div class="kanan"><select class="pilih-saring" data-status>
+      ${[['menunggu', `Menunggu (${jml('menunggu')})`], ['diterima', `Diterima (${jml('diterima')})`], ['ditolak', `Ditolak (${jml('ditolak')})`], ['', `Semua (${semua.length})`]]
+        .map(([v, l]) => `<option value="${v}" ${v === saringDaftar ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+  </div></div>`);
+  kartu.querySelector('[data-status]').onchange = (e) => { saringDaftar = e.target.value; gambar(); };
+
+  if (!data.length) {
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>${saringDaftar === 'menunggu' ? 'Tidak ada pendaftaran yang menunggu' : 'Tidak ada permohonan pada saringan ini'}</p>
+      <small>Bagikan tautan pendaftaran kepada calon anggota.</small></div>`));
+  } else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Pemohon</th><th>Kontak</th><th>Angkatan</th><th>Dikirim</th><th>Status</th>
+        <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    const tb = t.querySelector('tbody');
+    data.forEach((p, i) => {
+      const anggota = p.userId && Store.getUser(p.userId);
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+        <td><b>${esc(p.nama)}</b><br><span class="sub-sel">${esc(p.email)}</span></td>
+        <td class="utuh">${esc(p.telepon || '—')}</td>
+        <td class="utuh">${esc(anggota ? `${anggota.angkatan} · ${anggota.nia || ''}` : p.angkatan || '—')}</td>
+        <td class="utuh">${tglJam(p.ts)}</td>
+        <td><span class="lencana ${STATUS_DAFTAR[p.status]?.c || 'l-abu'}">${esc(STATUS_DAFTAR[p.status]?.l || p.status)}</span>${
+          p.alasan ? `<br><span class="sub-sel">${esc(p.alasan)}</span>` : ''}</td>
+        <td class="kol-aksi"><div class="sel-aksi">
+          ${p.status === 'menunggu' ? `<button class="ikon-aksi sunting" data-tinjau title="Tinjau">${I.dokCek}</button>` : ''}
+          <button class="ikon-aksi hapus" title="Hapus catatan">${I.hapus}</button></div></td></tr>`);
+      tr.querySelector('[data-tinjau]')?.addEventListener('click', () => tinjauPendaftaran(p));
+      tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus catatan pendaftaran',
+        `Catatan pendaftaran ${p.nama} akan dihapus.${p.status === 'menunggu' ? ' Permohonan ini belum ditinjau.' : ''}`,
+        () => aman(() => { Store.hapusPendaftaran(U, p.id); toast('Catatan dihapus.'); gambar(); }));
+      tb.appendChild(tr);
+    });
+    pasangPilih(t, data, { satuan: 'catatan pendaftaran', hapus: (p) => Store.hapusPendaftaran(U, p.id) });
+    kartu.appendChild(t);
+  }
+  box.appendChild(kartu);
+  return box;
+};
+HAL.pendaftaran.judul = () => ['Pendaftaran', 'Permohonan anggota baru dari halaman publik.'];
 
 HAL.presensi = () => {
   const semua = kajianAktif();

@@ -1369,4 +1369,26 @@ Store.berlangganan(() => {
   }
 });
 
-window.Situs = { mulai, render, toast, IK, el, esc, tglID, terapkanTema };
+/* Halaman di luar CMS — pendaftaran anggota. Kepala dan kaki situsnya
+   sama dengan halaman lain; isinya dibangun pemanggil. Ia sengaja bukan
+   section CMS: formulir yang menerima nomor paspor tidak boleh dapat
+   dimatikan, dipindah, atau diubah isinya dari editor halaman. */
+async function mulaiKhusus(file, judul, bangun) {
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="layar-tunggu"><div class="putar"></div><p>Memuat…</p></div>`;
+  await Store.siap;
+  if (!Store.cms) {
+    app.innerHTML = `<div class="layar-tunggu"><p><b>Halaman belum dapat ditampilkan.</b></p>
+      <p>Sambungan ke server sedang bermasalah. Coba muat ulang sebentar lagi.</p></div>`;
+    return;
+  }
+  terapkanTema();
+  document.title = `${judul} — ${Store.cms.situs.nama} | ${Store.cms.situs.tagline}`;
+  app.innerHTML = '';
+  app.appendChild(renderHeader(file));
+  app.appendChild(bangun());
+  app.appendChild(renderFooter());
+  app.appendChild(renderNavBawah(file));
+}
+
+window.Situs = { mulai, mulaiKhusus, render, toast, IK, el, esc, tglID, terapkanTema };

@@ -58,6 +58,8 @@ function dbAwal() {
     akunKas         : clone(s.akunKas),
     kategoriKeuangan: clone(s.kategoriKeuangan),
     aturKas         : clone(s.aturKas),
+    dataDiri        : clone(s.dataDiri),
+    pendaftaran     : clone(s.pendaftaran),
     /* Media & Website — ruang kerja PJ Media & Website */
     event      : clone(s.event),
     sosmed     : clone(s.sosmed),
@@ -1315,9 +1317,11 @@ function simpanAnggota(user, data) {
      Sekretaris tak pernah bisa menambah anggota sama sekali. */
   const roleLama = data.id ? db.users.find((u) => u.id === data.id)?.role : 'anggota';
   if (data.role && data.role !== roleLama) RBAC.assertCan(user, 'user.manage');
+  let hasil;
   if (data.id) {
     const u = db.users.find((x) => x.id === data.id);
     Object.assign(u, data);
+    hasil = u;
     catat(user, 'anggota.ubah', u.id, `Memperbarui data ${u.nama}`);
   } else {
     /* Tanpa kata sandi: server membuatkannya sendiri, sekali, dan
@@ -1340,9 +1344,11 @@ function simpanAnggota(user, data) {
     };
     baru.nia = niaBerikut(db.users, baru.angkatan);
     db.users.push(baru);
+    hasil = baru;
     catat(user, 'anggota.tambah', baru.id, `Menambah anggota ${baru.nama} (${baru.nia})`);
   }
   simpan();
+  return hasil;
 }
 
 /** Hapus anggota beserta akun masuknya. Dua penjagaan, keduanya
@@ -1359,8 +1365,82 @@ function hapusAnggota(user, ids) {
   if (!RBAC.can(user, 'user.manage') && sasaran.some((u) => RBAC.can(u, 'user.manage')))
     throw new Error('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.');
   db.users = db.users.filter((u) => !buang.has(u.id));
+  /* Data dirinya ikut dibuang: paspor dan alamat orang yang sudah bukan
+     anggota tak punya alasan untuk tetap disimpan. */
+  db.dataDiri = (db.dataDiri || []).filter((x) => !buang.has(x.userId));
   sasaran.forEach((u) => catat(user, 'anggota.hapus', u.id, `Menghapus anggota ${u.nama}`));
   simpan();
+}
+
+/* --- data diri & pendaftaran ---
+   Data diri disimpan terpisah dari `users`, satu baris per anggota.
+   Server hanya mengirimkannya kepada pengelola keanggotaan; bagi yang
+   lain koleksi ini berisi barisnya sendiri saja, atau kosong. */
+/* Pas foto termasuk data diri: ia dipakai pada kartu anggota, bukan di
+   website. Foto yang tampil di halaman Tentang tetap `users.foto`. */
+const KOLOM_DIRI = ['paspor', 'alamat', 'telepon', 'tempatLahir', 'tglLahir', 'foto'];
+const dataDiri = (userId) => (db.dataDiri || []).find((x) => x.userId === userId) || {};
+
+function simpanDataDiri(user, userId, data) {
+  if (!RBAC.canAny(user, ['anggota.manage', 'user.manage'])) RBAC.assertCan(user, 'anggota.manage');
+  if (!getUser(userId)) throw new Error('Anggota tidak ditemukan.');
+  db.dataDiri = db.dataDiri || [];
+  let baris = db.dataDiri.find((x) => x.userId === userId);
+  if (!baris) { baris = { userId }; db.dataDiri.push(baris); }
+  KOLOM_DIRI.forEach((k) => {
+    if (data[k] === undefined) return;
+    baris[k] = k === 'paspor' ? String(data[k]).toUpperCase().replace(/[^A-Z0-9]/g, '') : String(data[k]).trim();
+  });
+  simpan();
+}
+
+/** Terima sebuah permohonan: jadikan anggota, pindahkan data dirinya,
+    dan sisakan di antrean hanya catatan bahwa ia pernah mendaftar.
+    Nomor paspor dan alamat tak boleh hidup di dua tempat. */
+function terimaPendaftaran(user, id, { angkatan, level }) {
+  RBAC.assertCan(user, 'anggota.manage');
+  const p = (db.pendaftaran || []).find((x) => x.id === id);
+  if (!p) throw new Error('Permohonan tidak ditemukan.');
+  if (p.status !== 'menunggu') throw new Error('Permohonan ini sudah diproses.');
+  if (!String(angkatan || '').trim()) throw new Error('Tentukan angkatannya lebih dulu.');
+  if (db.users.some((u) => String(u.email || '').toLowerCase() === String(p.email).toLowerCase()))
+    throw new Error(`Surel ${p.email} sudah dipakai anggota lain. Periksa apakah orangnya sudah terdaftar.`);
+
+  const baru = simpanAnggota(user, {
+    nama: p.nama, email: p.email, angkatan: String(angkatan).trim(), level: level || 'Tatsqif',
+    pendidikan: p.pendidikan || '',
+  });
+  simpanDataDiri(user, baru.id, p);
+  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan']).forEach((k) => { delete p[k]; });
+  Object.assign(p, { status: 'diterima', userId: baru.id, diproses: nowISO(), oleh: user.id });
+  catat(user, 'pendaftaran.terima', p.id, `Menerima pendaftaran ${p.nama} sebagai ${baru.nia}`);
+  simpan();
+  return baru;
+}
+
+function tolakPendaftaran(user, id, alasan) {
+  RBAC.assertCan(user, 'anggota.manage');
+  const p = (db.pendaftaran || []).find((x) => x.id === id);
+  if (!p) throw new Error('Permohonan tidak ditemukan.');
+  if (p.status !== 'menunggu') throw new Error('Permohonan ini sudah diproses.');
+  /* Yang ditolak tak menjadi anggota, jadi data pribadinya dibuang saat itu juga. */
+  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan', 'foto']).forEach((k) => { delete p[k]; });
+  Object.assign(p, { status: 'ditolak', alasan: String(alasan || '').trim(), diproses: nowISO(), oleh: user.id });
+  catat(user, 'pendaftaran.tolak', p.id, `Menolak pendaftaran ${p.nama}`);
+  simpan();
+}
+
+function hapusPendaftaran(user, id) {
+  RBAC.assertCan(user, 'anggota.manage');
+  db.pendaftaran = (db.pendaftaran || []).filter((x) => x.id !== id);
+  catat(user, 'pendaftaran.hapus', id, 'Menghapus catatan pendaftaran');
+  simpan();
+}
+
+/** Kirim permohonan dari halaman publik. Pas foto dikecilkan di sini. */
+async function kirimPendaftaran(data, berkasFoto) {
+  const foto = berkasFoto ? await kecilkanGambar(berkasFoto, 480, 0.82) : '';
+  await panggil('daftar.php', { method: 'POST', body: JSON.stringify({ ...data, foto }) });
 }
 
 /** Pengguna menyunting akunnya sendiri. Sengaja terpisah dari
@@ -1884,7 +1964,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
-  simpanAnggota, hapusAnggota, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
