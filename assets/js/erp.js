@@ -661,7 +661,7 @@ const MENU_KAJIAN = [
   { grup: 'Kajian' },
   { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => { const p = perluKajian(); return p.berhalangan.length + p.belumLengkap.filter((x) => x.sisa <= 3).length; } },
   { id: 'presensi', lonceng: () => { const p = perluKajian(); return p.izin.length + p.tanpaPresensi.length + p.belumTutup.length; } },
-  { id: 'materi', label: 'Materi & Makalah' },
+  { id: 'materi', label: 'Materi & Makalah', lonceng: () => { const p = perluKajian(); return p.makalahPeriksa.length + p.makalahTelat.length; } },
   { id: 'notulen', label: 'Notulen', lonceng: () => perluKajian().tanpaNotulen.length },
   { grup: 'Peserta' },
   { id: 'anggota-kajian', label: 'Anggota & Kelompok' },
@@ -2015,13 +2015,9 @@ function formKajian(k) {
       <div class="grup"><label>Batas Terlambat (menit)</label>
         <input type="number" id="tl" min="0" max="180" step="1" value="${Store.toleransiKajian(k)}">
         <div class="bantu">Sesudah jam mulai. Lewat batas ini, yang memindai tetap masuk tetapi tercatat terlambat. Isi 0 bila tak ada kelonggaran.</div></div>
-      <div class="grup"><label>Kelengkapan Berkas</label>
-        <div style="display:flex;gap:18px;padding-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin:0">
-            <input type="checkbox" id="pp" ${k?.ppt ? 'checked' : ''} style="width:auto;accent-color:var(--e-hijau)"> PPT sudah ada</label>
-          <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin:0">
-            <input type="checkbox" id="rv" ${k?.revisi ? 'checked' : ''} style="width:auto;accent-color:var(--e-hijau)"> Revisi sudah dicek</label>
-        </div></div>
+      <div class="grup"><label>Tenggat Makalah</label>
+        <input type="date" id="tm" value="${esc(k?.tenggatMakalah || '')}">
+        <div class="bantu">Kosong = tiga hari sebelum kajian. Tautan makalah, PPT, dan status revisinya diurus di halaman Materi & Makalah.</div></div>
     </div>
     <div class="grup"><label>Materi / Rujukan</label><textarea id="mt" style="min-height:80px">${esc(k?.materi || '')}</textarea></div>
   </div>`);
@@ -2067,8 +2063,7 @@ function formKajian(k) {
       id: k?.id, judul: g('j').trim(), jenis: g('jn'), level: g('lv'), tanggal: g('tg'),
       jam: g('jm'), tempat: g('tp').trim(), pemakalahId: g('pm'), moderatorId: g('md'), materi: g('mt'),
       notulenId: g('nt'), angkatan: g('ak'),
-      toleransi: Math.max(0, Math.round(Number(g('tl')) || 0)),
-      ppt: isi.querySelector('#pp').checked, revisi: isi.querySelector('#rv').checked,
+      toleransi: Math.max(0, Math.round(Number(g('tl')) || 0)), tenggatMakalah: g('tm'),
     }))) { tutupModal(); toast('Jadwal kajian tersimpan.'); gambar(); }
   };
 }
@@ -6079,6 +6074,8 @@ function perluKajian() {
       .map((k) => ({ k, sisa: selisihHari(k.tanggal), kurang: CEKLIS.filter((c) => !lengkapKah(k, c.k)).map((c) => c.l) }))
       .filter((x) => x.kurang.length),
     izin: Store.izinMenunggu(semua),
+    makalahTelat: semua.filter(makalahTelat),
+    makalahPeriksa: semua.filter((k) => Store.statusRevisi(k) === 'diperiksa'),
     berhalangan: semua.filter((k) => k.tanggal >= nowTanggal())
       .flatMap((k) => Store.petugasBerhalangan(k).map((x) => ({ k, ...x }))),
     tanpaPresensi: lampau.filter((k) => !(k.presensi || []).length),
@@ -6104,6 +6101,12 @@ function antreanKajian() {
     { rute: 'jadwal-kajian', ikon: I.peringatan, judul: 'Kajian Belum Lengkap', n: p.belumLengkap.length,
       satuan: 'kajian dalam 7 hari masih kurang data', kosong: 'Kajian sepekan ke depan sudah lengkap',
       rinci: dekat && `${dekat.k.judul} (${dekat.sisa === 0 ? 'hari ini' : dekat.sisa + ' hari lagi'}) — kurang ${dekat.kurang.join(', ')}` },
+    { rute: 'materi', ikon: I.dokCek, judul: 'Makalah Menunggu Diperiksa', n: p.makalahPeriksa.length,
+      satuan: 'makalah diserahkan, belum diperiksa', kosong: 'Tidak ada makalah yang menunggu',
+      rinci: p.makalahPeriksa[0] && `${p.makalahPeriksa[0].judul} — ${Store.namaUser(p.makalahPeriksa[0].pemakalahId)}` },
+    { rute: 'materi', ikon: I.jam, judul: 'Makalah Lewat Tenggat', n: p.makalahTelat.length,
+      satuan: 'makalah belum diserahkan', kosong: 'Tidak ada makalah yang terlambat',
+      rinci: p.makalahTelat[0] && `${p.makalahTelat[0].judul} — tenggat ${tgl(Store.tenggatMakalah(p.makalahTelat[0]))}` },
     { rute: 'presensi', ikon: I.daftarCek, judul: 'Presensi Belum Diisi', n: p.tanpaPresensi.length,
       satuan: 'kajian lampau tanpa presensi', kosong: 'Semua kajian lampau berpresensi',
       rinci: p.tanpaPresensi[0] && `${p.tanpaPresensi[0].judul} · ${tgl(p.tanpaPresensi[0].tanggal)}` },
@@ -6991,6 +6994,27 @@ function dialogAjukanIzin(k) {
   };
 }
 
+function dialogKirimMakalah(k) {
+  const st = Store.statusRevisi(k);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)} · tenggat makalah <b>${tgl(Store.tenggatMakalah(k))}</b></p>
+    ${st === 'perlu-revisi' && k.revisiCatatan ? `<div class="notis notis-kuning" style="margin-bottom:14px">${I.info}<div><b>Catatan revisi dari koordinator</b>${esc(k.revisiCatatan)}</div></div>` : ''}
+    <div class="grup"><label>Tautan Makalah</label><input data-makalah type="url" value="${esc(k.tautanMakalah || '')}" placeholder="https://drive.google.com/…"></div>
+    <div class="grup" style="margin:0"><label>Tautan PPT</label><input data-ppt type="url" value="${esc(k.tautanPpt || '')}" placeholder="https://…">
+      <div class="bantu">Unggah berkasnya ke Google Drive atau sejenisnya, atur agar dapat dibuka koordinator, lalu tempel tautannya di sini.
+        Menyerahkan tautan makalah baru mengirimnya kembali untuk diperiksa.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Serahkan</button></div>`);
+  modal({ judul: 'Serahkan makalah & PPT', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = async (e) => {
+    if (await amanTunggu(e.currentTarget, async () => {
+      await Store.kirimMakalah(k.id, { tautanMakalah: isi.querySelector('[data-makalah]').value.trim(), tautanPpt: isi.querySelector('[data-ppt]').value.trim() }); return true;
+    })) { tutupModal(); toast('Makalah diserahkan.'); gambar(); }
+  };
+}
+
 HAL['kajian-saya'] = () => {
   const semua = kajianAngkatanku();
   const datang = semua.filter((k) => k.tanggal >= nowTanggal());
@@ -7028,12 +7052,16 @@ HAL['kajian-saya'] = () => {
         <td class="utuh">${tgl(k.tanggal)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.jam || '')} · terlambat sesudah ${Store.toleransiKajian(k)} menit</span></td>
         <td><b>${esc(k.judul)}</b></td><td class="utuh">${esc(k.tempat || '—')}</td>
         <td>${esc(namaPendek(k.pemakalahId))}</td>
-        <td>${tugas.length ? tugas.map((x) => `<span class="lencana l-kuning">${x}</span>`).join(' ') : '—'}</td>
+        <td>${tugas.length ? tugas.map((x) => `<span class="lencana l-kuning">${x}</span>`).join(' ') : '—'}
+          ${k.pemakalahId === U.id ? `<div style="margin-top:6px;font-size:11.8px">${lencanaRevisi(k)}
+            <span style="color:${makalahTelat(k) ? '#B23E37' : 'var(--e-abu)'}">tenggat ${tgl(Store.tenggatMakalah(k))}</span></div>` : ''}</td>
         <td>${ket}</td>
         <td class="kol-aksi"><div class="sel-aksi">
+          ${k.pemakalahId === U.id && Store.statusRevisi(k) !== 'final' ? `<button class="btn btn-lime btn-kecil" data-makalah>${k.tautanMakalah ? 'Perbarui Makalah' : 'Serahkan Makalah'}</button>` : ''}
           ${z?.status === 'menunggu' ? `<button class="btn btn-garis btn-kecil" data-tarik>Tarik</button>`
             : p || k.presensiTutup ? '' : `<button class="btn btn-garis btn-kecil" data-izin ${jatah.sisa ? '' : 'disabled title="Jatah izin/sakit Anda habis"'}>Ajukan Izin</button>`}</div></td></tr>`);
       tr.querySelector('[data-izin]')?.addEventListener('click', () => dialogAjukanIzin(k));
+      tr.querySelector('[data-makalah]')?.addEventListener('click', () => dialogKirimMakalah(k));
       tr.querySelector('[data-tarik]')?.addEventListener('click', async (e) => {
         if (await amanTunggu(e.currentTarget, async () => { await Store.tarikIzin(k.id, z.id); return true; })) { toast('Pengajuan ditarik.'); gambar(); }
       });
@@ -7346,38 +7374,84 @@ function kartuPengajuanIzin(daftar) {
 
 HAL.presensi.judul = () => ['Presensi Kajian', 'Kehadiran tiap pertemuan beserta rekapnya.'];
 
+const REVISI = {
+  belum         : { l: 'Belum Diserahkan', c: 'l-abu'    },
+  diperiksa     : { l: 'Menunggu Diperiksa', c: 'l-kuning' },
+  'perlu-revisi': { l: 'Perlu Revisi',     c: 'l-merah'  },
+  final         : { l: 'Final',            c: 'l-hijau'  },
+};
+const lencanaRevisi = (k) => { const r = REVISI[Store.statusRevisi(k)]; return `<span class="lencana ${r.c}">${r.l}</span>`; };
+const tautLuar = (url, label) => (url
+  ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="taut-luar">${I.panahLuar} ${esc(label)}</a>` : '');
+/** Makalah kajian mendatang yang lewat tenggat tanpa diserahkan. */
+const makalahTelat = (k) => Store.kajianJalan(k) && k.tanggal >= nowTanggal() && !k.tautanMakalah
+  && Store.statusRevisi(k) !== 'final' && Store.tenggatMakalah(k) < nowTanggal();
+
 HAL.materi = () => {
   const semua = kajianAktif();
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Materi & PPT</h3>
-    <span class="hitung">(${semua.filter((k) => k.ppt).length} dari ${semua.length} kajian sudah berkas)</span></div></div>`);
+    <h3>Materi & Makalah</h3>
+    <span class="hitung">(${semua.filter((k) => Store.statusRevisi(k) === 'final').length} dari ${semua.length} makalah final · ${semua.filter((k) => k.ppt).length} ber-PPT)</span></div></div>`);
+  if (!semua.length) { kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kajian</p></div>`)); return kartu; }
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Materi / Rujukan</th>
-      <th class="kol-tengah">PPT</th><th class="kol-tengah">Revisi</th><th class="kol-aksi">Aksi</th></tr></thead>
+    <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Pemakalah</th><th>Tenggat</th>
+      <th>Makalah</th><th>PPT</th><th>Revisi</th><th class="kol-aksi">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   semua.forEach((k, i) => {
+    const telat = makalahTelat(k);
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td>
-      <td><b>${esc(k.judul)}</b></td>
-      <td>${esc(k.materi || '—')}</td>
-      <td class="kol-tengah"><button class="cek-kotak ${k.ppt ? 'on' : ''}" data-ppt title="Tandai PPT">${I.cek}</button></td>
-      <td class="kol-tengah"><button class="cek-kotak ${k.revisi ? 'on' : ''}" data-rev title="Tandai revisi">${I.cek}</button></td>
+      <td><b>${esc(k.judul)}</b>${k.materi ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.materi.slice(0, 90))}${k.materi.length > 90 ? '…' : ''}</span>` : ''}</td>
+      <td>${esc(namaPendek(k.pemakalahId))}</td>
+      <td class="utuh">${tgl(Store.tenggatMakalah(k))}${telat ? '<br><span class="lencana l-merah">lewat</span>' : ''}</td>
+      <td>${tautLuar(k.tautanMakalah, 'Buka') || '<span style="color:var(--e-abu)">belum ada</span>'}</td>
+      <td>${tautLuar(k.tautanPpt, 'Buka') || tandaLengkap(k.ppt)}</td>
+      <td>${lencanaRevisi(k)}${k.revisiCatatan && Store.statusRevisi(k) === 'perlu-revisi' ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.revisiCatatan.slice(0, 70))}</span>` : ''}</td>
       <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting" title="Ubah materi">${I.sunting}</button></div></td></tr>`);
-    tr.querySelector('[data-ppt]').onclick = () => aman(() => {
-      Store.simpanKajian(U, { id: k.id, ppt: !k.ppt }); toast(k.ppt ? 'PPT ditandai belum ada.' : 'PPT ditandai sudah ada.'); gambar();
-    });
-    tr.querySelector('[data-rev]').onclick = () => aman(() => {
-      Store.simpanKajian(U, { id: k.id, revisi: !k.revisi }); gambar();
-    });
-    tr.querySelector('.sunting').onclick = () => formKajian(k);
+        <button class="ikon-aksi sunting" title="Materi, tautan, dan revisi">${I.sunting}</button></div></td></tr>`);
+    tr.querySelector('.sunting').onclick = () => dialogMateri(k);
     tb.appendChild(tr);
   });
   kartu.appendChild(t);
   return kartu;
 };
-HAL.materi.judul = () => ['Materi & PPT', 'Rujukan bahan dan kelengkapan berkas tiap kajian.'];
+
+function dialogMateri(k) {
+  const st = Store.statusRevisi(k);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.4px;color:var(--e-abu)"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)} · pemakalah ${esc(namaPendek(k.pemakalahId))}
+      ${k.makalahDikirim ? ` · diserahkan ${tgl(k.makalahDikirim.slice(0, 10))}` : ''}</p>
+    <div class="grup"><label>Materi / Rujukan</label><textarea data-materi style="min-height:70px">${esc(k.materi || '')}</textarea></div>
+    <div class="grid-form">
+      <div class="grup"><label>Tautan Makalah</label><input data-makalah type="url" value="${esc(k.tautanMakalah || '')}" placeholder="https://drive.google.com/…"></div>
+      <div class="grup"><label>Tautan PPT</label><input data-ppt type="url" value="${esc(k.tautanPpt || '')}" placeholder="https://…"></div>
+    </div>
+    <div class="grid-form">
+      <div class="grup"><label>Tenggat Makalah</label><input type="date" data-tenggat value="${esc(k.tenggatMakalah || '')}" max="${esc(k.tanggal)}">
+        <div class="bantu">Kosong = ${tgl(Store.tenggatMakalah({ ...k, tenggatMakalah: '' }))} (tiga hari sebelum kajian).</div></div>
+      <div class="grup"><label>Status Revisi</label><select data-status>
+        ${Store.STATUS_REVISI.map((x) => `<option value="${x}" ${x === st ? 'selected' : ''}>${REVISI[x].l}</option>`).join('')}</select>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;margin:10px 0 0">
+          <input type="checkbox" data-ada-ppt ${k.ppt ? 'checked' : ''} style="width:auto;accent-color:var(--e-hijau)"> PPT sudah ada (tanpa tautan)</label></div>
+    </div>
+    <div class="grup" style="margin:0"><label>Catatan Revisi untuk Pemakalah</label>
+      <textarea data-catatan style="min-height:70px" placeholder="Wajib bila statusnya Perlu Revisi — pemakalah membacanya di Kajian Saya">${esc(k.revisiCatatan || '')}</textarea></div>
+    <div class="bantu">Berkas tidak diunggah ke sini; yang disimpan tautannya. Pemakalah juga dapat menyerahkan tautannya sendiri dari Kajian Saya.</div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
+  modal({ judul: 'Materi & makalah', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    const q = (x) => isi.querySelector(`[data-${x}]`);
+    if (aman(() => Store.simpanMateri(U, k.id, { materi: q('materi').value, tautanMakalah: q('makalah').value, tautanPpt: q('ppt').value,
+      tenggatMakalah: q('tenggat').value, revisiStatus: q('status').value, revisiCatatan: q('catatan').value, ppt: q('ada-ppt').checked }))) {
+      tutupModal(); toast('Materi tersimpan.'); gambar();
+    }
+  };
+}
+HAL.materi.judul = () => ['Materi & Makalah', 'Tautan makalah dan PPT, tenggat, serta status revisi tiap kajian.'];
 
 HAL.notulen = () => {
   const semua = [...kajianAktif()].reverse();

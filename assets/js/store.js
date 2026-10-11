@@ -1380,6 +1380,61 @@ function petugasBerhalangan(k) {
   }).filter(Boolean);
 }
 
+/* --- materi & makalah ---
+   Yang disimpan tautannya, bukan berkasnya. `ppt` dan `revisi` (boolean)
+   tetap dipelihara karena kesiapan kajian membacanya. */
+const STATUS_REVISI = ['belum', 'diperiksa', 'perlu-revisi', 'final'];
+const statusRevisi = (k) => (STATUS_REVISI.includes(k?.revisiStatus) ? k.revisiStatus : k?.revisi ? 'final' : 'belum');
+/** Tenggat makalah: yang ditetapkan, atau tiga hari sebelum kajiannya. */
+function tenggatMakalah(k) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(k?.tenggatMakalah || '')) return k.tenggatMakalah;
+  const t = new Date(`${k.tanggal}T00:00`); t.setDate(t.getDate() - 3);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+const tautanSah = (t) => !t || (t.length <= 500 && /^https?:\/\/[^\s<>"']+$/i.test(t));
+
+function simpanMateri(user, id, data) {
+  RBAC.assertCan(user, 'kajian.materi');
+  const k = ambilKajian(id);
+  const bersih = {};
+  ['tautanMakalah', 'tautanPpt'].forEach((kunci) => {
+    if (data[kunci] === undefined) return;
+    const t = String(data[kunci] || '').trim();
+    if (!tautanSah(t)) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+    bersih[kunci] = t;
+  });
+  if (data.tenggatMakalah !== undefined) {
+    if (data.tenggatMakalah && data.tenggatMakalah > k.tanggal) throw new Error('Tenggat makalah tidak boleh sesudah tanggal kajian.');
+    bersih.tenggatMakalah = data.tenggatMakalah || '';
+  }
+  if (data.revisiStatus !== undefined) {
+    if (!STATUS_REVISI.includes(data.revisiStatus)) throw new Error('Status revisi tidak dikenal.');
+    if (data.revisiStatus === 'perlu-revisi' && !String(data.revisiCatatan || '').trim())
+      throw new Error('Tuliskan apa yang perlu direvisi.');
+    if (data.revisiStatus !== statusRevisi(k) || (data.revisiCatatan ?? '') !== (k.revisiCatatan || '')) {
+      bersih.revisiStatus = data.revisiStatus;
+      bersih.revisiCatatan = String(data.revisiCatatan || '').trim();
+      bersih.revisiOleh = user.id;
+      bersih.revisiPada = new Date().toISOString();
+    }
+    bersih.revisi = data.revisiStatus === 'final';
+  }
+  if (data.materi !== undefined) bersih.materi = data.materi;
+  if (data.ppt !== undefined || bersih.tautanPpt !== undefined)
+    bersih.ppt = !!(data.ppt || (bersih.tautanPpt ?? k.tautanPpt));
+  Object.assign(k, bersih);
+  catat(user, 'kajian.materi', id, `Memperbarui materi "${k.judul}"${bersih.revisiStatus ? ` — revisi: ${bersih.revisiStatus}` : ''}`);
+  simpan();
+}
+
+/** Pemakalah menyerahkan tautan makalah dan PPT-nya sendiri. */
+async function kirimMakalah(idKajian, { tautanMakalah, tautanPpt }) {
+  [tautanMakalah, tautanPpt].forEach((t) => {
+    if (!tautanSah(String(t || '').trim())) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+  });
+  await aksiPetugas('materi', { idKajian, tautanMakalah, tautanPpt });
+}
+
 const ambilKajian = (id) => {
   const k = db.kajian.find((x) => x.id === id);
   if (!k) throw new Error('Kajian tidak ditemukan.');
@@ -1483,11 +1538,15 @@ function hariIni() {
    seluruh koleksi — sehingga beberapa ponsel dapat memindai bersamaan tanpa
    saling menolak. Server mengembalikan baris kajiannya yang terbaru (sudah
    memuat catatan pemindai lain); baris itu menggantikan yang di memori. */
-async function aksiPresensi(aksi, data) {
+const aksiPresensi = (aksi, data) => aksiKajian('presensi.php', aksi, data);
+/** Tulisan petugas (pemakalah, notulen) atas kajiannya sendiri. */
+const aksiPetugas = (aksi, data) => aksiKajian('petugas-kajian.php', aksi, data);
+
+async function aksiKajian(jalur, aksi, data) {
   /* Suntingan jadwal yang belum terkirim didahulukan, supaya baris yang
      kembali dari server tidak menimpanya. */
   if (koleksiKotor().kajian !== undefined) await kirimPerubahan();
-  const d = await panggil('presensi.php', { method: 'POST',
+  const d = await panggil(jalur, { method: 'POST',
     body: JSON.stringify({ aksi, versi: versiKoleksi.kajian ?? 0, ...data }) });
   /* Isi baris diganti DI TEMPAT: layar yang sedang memegang objek kajian
      ini langsung melihat keadaan terbarunya. */
@@ -2719,6 +2778,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  STATUS_REVISI, statusRevisi, tenggatMakalah, simpanMateri, kirimMakalah,
   bebanTugas, petugasBerhalangan, PERAN_KAJIAN,
   bukaPresensi, jatahIzin, izinMenunggu, ajukanIzin, tarikIzin, putuskanIzin, JATAH_IZIN,
   pesertaKajian, rekapKajian, kehadiranAnggota, simpanAnggotaMassal, berkajian,

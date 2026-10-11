@@ -487,6 +487,16 @@ jadwal menampilkan siapa yang belum pernah bertugas. Petugas kajian mendatang
 yang izin, sakit, nonaktif, atau pindah angkatan ditandai di tabel dan masuk
 antrean *Petugas Berhalangan* (`Store.petugasBerhalangan()`).
 
+**Materi & Makalah menyimpan tautan, bukan berkas** — ruang hosting terbatas.
+Tiap kajian punya tautan makalah, tautan PPT, tenggat makalah (bawaan tiga
+hari sebelum kajian), dan status revisi bertahap: belum diserahkan → menunggu
+diperiksa → perlu revisi (wajib bercatatan) → final. Pemakalah menyerahkan
+tautannya sendiri dari *Kajian Saya* lewat `api/petugas-kajian.php`, yang
+mencocokkan pemakalah kajian dengan sesi dan hanya menyentuh kolom makalahnya;
+makalah yang sudah final terkunci baginya. Makalah lewat tenggat dan makalah
+yang menunggu diperiksa masuk antrean dasbor. Kolom boolean `ppt` dan `revisi`
+tetap dipelihara, sebab kesiapan kajian membacanya.
+
 **Kajian Saya** tersedia bagi setiap anggota yang masih berkajian, apa pun
 perannya: kajian mendatang angkatannya, tugas yang ia pegang, sisa jatah izin,
 dan riwayat kehadirannya.
