@@ -242,6 +242,16 @@ function rombakHero(tersimpan) {
         sisi.situs.menu = sisi.situs.menu.filter((m) => m.href !== 'artikel.html');
       }
     }
+
+    /* Halaman pendaftaran anggota masuk menu — sekali saja, dengan alasan
+       yang sama: bila kelak sengaja dibuang dari editor, ia tidak muncul
+       lagi dengan sendirinya. */
+    if (sisi.situs && !sisi.situs.menuDaftarDitambah) {
+      sisi.situs.menuDaftarDitambah = 1;
+      if (Array.isArray(sisi.situs.menu) && !sisi.situs.menu.some((m) => /^(\.\/)?daftar(\.html)?$/.test(m.href || ''))) {
+        sisi.situs.menu.push({ label: 'Daftar Anggota', href: 'daftar' });
+      }
+    }
   });
 
   (tersimpan.artikel || []).forEach((a) => {

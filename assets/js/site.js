@@ -111,11 +111,38 @@ function terapkanFavicon(url) {
   document.head.appendChild(l);
 }
 
+/* --- alamat tanpa .html ---
+   Situs ini berjalan di atas server sungguhan, jadi alamatnya pun alamat
+   sungguhan: /tentang, bukan /tentang.html. Tautan yang tersimpan di CMS
+   dari masa sebelumnya — "tentang.html", "artikel.html?kategori=…" —
+   dirapikan saat ditampilkan, sehingga data lama tak perlu disentuh. */
+const taut = (href) => {
+  const h = String(href || '');
+  const m = h.match(/^(?:\.\/)?([\w-]+)\.html(?=$|[?#])/);
+  if (!m) return h;
+  const sisa = h.slice(m[0].length);
+  return m[1] === 'index' ? `./${sisa}` : m[1] + sisa;
+};
+/** Kunci halaman dari sebuah tautan: "tentang.html", "tentang", "./" → nama berkasnya. */
+const kunciHal = (href) => {
+  const h = String(href || '').replace(/[?#].*$/, '').replace(/^\.\//, '').replace(/\.html$/, '');
+  return h === '' || h === '/' ? 'index' : h;
+};
+/** Rapikan seluruh tautan dalam yang dirender dari isi CMS. */
+function rapikanTaut(akar) {
+  akar.querySelectorAll('a[href]').forEach((a) => {
+    const asli = a.getAttribute('href');
+    const rapi = taut(asli);
+    if (rapi !== asli) a.setAttribute('href', rapi);
+  });
+  return akar;
+}
+
 function renderHeader(aktif) {
   const s = Store.cms.situs;
-  const menu = s.menu.map((m) => `<a href="${esc(m.href)}" class="${m.href === aktif ? 'aktif' : ''}">${esc(m.label)}</a>`).join('');
+  const menu = s.menu.map((m) => `<a href="${esc(taut(m.href))}" class="${kunciHal(m.href) === kunciHal(aktif) ? 'aktif' : ''}">${esc(m.label)}</a>`).join('');
   const h = el(`<header class="header"><div class="wrap header-in">
-    <a class="merek" href="index.html">
+    <a class="merek" href="./">
       <span class="merek-lambang">${lambang()}</span>
       <span><span class="merek-nama">${esc(s.nama)}</span><br><span class="merek-tag">${esc(s.tagline)}</span></span>
     </a>
@@ -149,7 +176,7 @@ function renderFooter() {
         <div class="sosmed-baris">${sos}</div>
       </div>
       <div><h5>Navigasi</h5><ul class="footer-daftar">
-        ${s.menu.map((m) => `<li><a href="${esc(m.href)}">${esc(m.label)}</a></li>`).join('')}
+        ${s.menu.map((m) => `<li><a href="${esc(taut(m.href))}">${esc(m.label)}</a></li>`).join('')}
       </ul></div>
       <div><h5>Program</h5><ul class="footer-daftar">
         <li>Pembekalan Intensif (Tatsqif)</li>
@@ -166,15 +193,15 @@ function renderFooter() {
     </div>
     <div class="footer-bawah">
       <span>© ${new Date().getFullYear()} ${esc(s.nama)}. Seluruh hak cipta dilindungi.</span>
-      <span>Dikelola melalui <a href="erp.html" style="color:var(--hijau-muda)">ERP Kajian Al-I'jaz</a></span>
+      <span>Dikelola melalui <a href="erp" style="color:var(--hijau-muda)">ERP Kajian Al-I'jaz</a></span>
     </div>
   </div></footer>`);
 }
 
 function renderNavBawah(aktif) {
-  const ikon = { 'index.html': IK.rumah, 'tentang.html': IK.buku, 'artikel.html': IK.dokumen, 'kontak.html': IK.email };
+  const ikon = { index: IK.rumah, tentang: IK.buku, artikel: IK.dokumen, kontak: IK.email, daftar: IK.orang };
   return el(`<nav class="nav-bawah"><div class="nav-bawah-in">
-    ${Store.cms.situs.menu.map((m) => `<a href="${esc(m.href)}" class="${m.href === aktif ? 'aktif' : ''}">${ikon[m.href] || IK.rumah}<span>${esc(m.label)}</span></a>`).join('')}
+    ${Store.cms.situs.menu.map((m) => `<a href="${esc(taut(m.href))}" class="${kunciHal(m.href) === kunciHal(aktif) ? 'aktif' : ''}">${ikon[kunciHal(m.href)] || IK.rumah}<span>${esc(m.label)}</span></a>`).join('')}
   </div></nav>`);
 }
 
@@ -351,7 +378,7 @@ const SUMBER = {
           <span>${IK.orang} ${esc(Store.namaUser(x.penulisId))}</span>
           <span class="kk-kanan">${tglPendek(x.tanggal)}</span>
           <button class="kk-bagi" type="button" title="Bagikan artikel ini"
-                  data-bagi="artikel.html?buka=${encodeURIComponent(x.id)}"
+                  data-bagi="artikel?buka=${encodeURIComponent(x.id)}"
                   data-judul="${esc(x.judul)}">${OR.bagi}</button>
         </div>
       </div>
@@ -595,7 +622,7 @@ const RENDER = {
 
           ${kategori.length ? `<div class="hk-kanan">
             <ul class="hero-pil">
-              ${kategori.map((k, i) => `<li><a href="artikel.html?kategori=${encodeURIComponent(k)}"
+              ${kategori.map((k, i) => `<li><a href="artikel?kategori=${encodeURIComponent(k)}"
                 class="pil-kat ${i % 2 ? 'pil-isi' : ''}">${esc(k)}</a></li>`).join('')}
             </ul>
           </div>` : ''}
@@ -1332,10 +1359,7 @@ function render(namaHalaman, fileAktif) {
 
   app.appendChild(renderFooter());
   app.appendChild(renderNavBawah(fileAktif));
-
-  if (!document.querySelector('.pintas-erp')) {
-    document.body.appendChild(el(`<a class="pintas-erp" href="erp.html">${IK.gembok} Masuk ERP</a>`));
-  }
+  rapikanTaut(app);
 }
 
 /* ============================================================
@@ -1358,7 +1382,7 @@ async function mulai(nama, file) {
       <p>${Store.perluPasang()
         ? 'Data awal belum dipasang. Buka ERP untuk memasangnya sekali.'
         : 'Sambungan ke server sedang bermasalah. Coba muat ulang sebentar lagi.'}</p>
-      ${Store.perluPasang() ? '<p><a href="erp.html">Buka ERP →</a></p>' : ''}
+      ${Store.perluPasang() ? '<p><a href="erp">Buka ERP →</a></p>' : ''}
     </div>`;
     return;
   }
@@ -1402,6 +1426,7 @@ async function mulaiKhusus(file, judul, bangun) {
   app.appendChild(bangun());
   app.appendChild(renderFooter());
   app.appendChild(renderNavBawah(file));
+  rapikanTaut(app);
 }
 
 window.Situs = { mulai, mulaiKhusus, render, toast, IK, el, esc, tglID, terapkanTema };

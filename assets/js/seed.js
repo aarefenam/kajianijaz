@@ -153,9 +153,10 @@ const SEED = {
        pada hero, sebab pengunjung yang datang untuk membaca hampir selalu
        datang untuk satu topik tertentu, bukan untuk daftar seluruhnya. */
     menu: [
-      { label: 'Beranda',        href: 'index.html'   },
-      { label: 'Tentang Kajian', href: 'tentang.html' },
-      { label: 'Kontak',         href: 'kontak.html'  },
+      { label: 'Beranda',        href: './'      },
+      { label: 'Tentang Kajian', href: 'tentang' },
+      { label: 'Kontak',         href: 'kontak'  },
+      { label: 'Daftar Anggota', href: 'daftar'  },
     ],
   },
 
@@ -178,9 +179,9 @@ const SEED = {
                         + 'terbuka bagi siapa pun yang ingin menekuni tafsir secara bersungguh-sungguh.',
             cariPetunjuk: 'Cari kajian, artikel, atau buku…',
             tombolTeks  : 'Kenali Lebih Dekat',
-            tombolLink  : 'tentang.html',
+            tombolLink  : 'tentang',
             tombol2Teks : 'Baca Artikel',
-            tombol2Link : 'artikel.html',
+            tombol2Link : 'artikel',
             lencana     : "Kajian Al-I'jaz",
             masjid      : masjidBawaan(),
           },
@@ -256,7 +257,7 @@ const SEED = {
             teks      : 'Tulisan ilmiah seputar tafsir dan ilmu-ilmu al-Quran, disusun anggota dan ditinjau redaksi sebelum tayang.',
             jumlah    : 6,
             tombolTeks: 'Baca Artikel Lainnya',
-            tombolLink: 'artikel.html',
+            tombolLink: 'artikel',
           },
         },
         {

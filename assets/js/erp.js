@@ -788,44 +788,62 @@ const menuTerlipat = () => MENU.filter((m) =>
    LAYAR LOGIN
    ============================================================ */
 function layarLogin() {
+  const st = Store.cms.situs;
   const n = el(`<div class="layar-login">
     <div class="login-kiri">
-      <div class="login-merek">
-        <span class="lambang">${lambang(32)}</span>
-        <span><span class="nama">Al-I'jaz</span><br><span class="tag">ERP — Sistem Informasi Organisasi</span></span>
+      <a class="login-merek" href="./" title="Kembali ke website">
+        <span class="lambang">${lambang(54)}</span>
+        <span><span class="nama">${esc(st.nama)}</span><br><span class="tag">${esc(st.tagline || '')}</span></span>
+      </a>
+      <div class="login-pesan">
+        <span class="login-label">Sistem Informasi Organisasi</span>
+        <h1>Satu tempat untuk seluruh kerja kepengurusan.</h1>
+        <p>Kajian, karya tulis, penerbitan buku, persuratan, keanggotaan, dan keuangan dikelola bersama —
+          setiap pengurus dengan wewenangnya masing-masing.</p>
+        <ul class="login-butir">
+          <li>${I.perisai}<span><b>Wewenang berjenjang</b>Tiap jabatan hanya membuka dan mengubah yang menjadi tugasnya.</span></li>
+          <li>${I.log}<span><b>Setiap tindakan tercatat</b>Perubahan data meninggalkan jejak untuk pertanggungjawaban.</span></li>
+          <li>${I.qr}<span><b>Kartu anggota ber-QR</b>Presensi kajian dan iuran cukup dengan memindai kartu.</span></li>
+        </ul>
       </div>
-      <h1>Satu sistem untuk website<br>dan operasional kajian.</h1>
-      <p>Kelola konten website, karya tulis ilmiah, jadwal kajian, keanggotaan, dan keuangan dalam satu tempat — dengan pembagian wewenang yang jelas.</p>
-      <div class="demo-akun">
-        <div class="demo-judul">Wewenang per jabatan</div>
-        ${Object.keys(RBAC.ROLES).map((r) => `<div class="demo-baris" style="cursor:default">
-          <span class="demo-titik" style="background:${RBAC.roleColor(r)}"></span>
-          <span><span class="demo-nama">${esc(RBAC.roleLabel(r))}</span></span>
-          <span class="demo-mail">${RBAC.ROLES[r].permissions.length} wewenang</span>
-        </div>`).join('')}
-      </div>
+      <div class="login-kaki">${esc(st.naungan || '')}</div>
     </div>
     <div class="login-kanan"><div class="kotak-login">
-      <h2>Masuk ke ERP</h2>
-      <p class="sub">Gunakan akun yang diberikan Sekretaris.</p>
-      <form id="formLogin">
-        <div class="grup"><label>Alamat Email</label><input name="email" type="email" required placeholder="nama@alijaz.id" autocomplete="username"></div>
-        <div class="grup"><label>Kata Sandi</label><input name="password" type="password" required autocomplete="current-password"></div>
-        <button class="btn btn-lime" style="width:100%;padding:13px" type="submit">Masuk</button>
+      <h2>Masuk</h2>
+      <p class="sub">Gunakan surel dan kata sandi akun pengurus atau anggota Anda.</p>
+      <form id="formLogin" novalidate>
+        <div class="grup"><label for="lgEmail">Alamat Surel</label>
+          <input id="lgEmail" name="email" type="email" required placeholder="nama@contoh.com" autocomplete="username" autofocus></div>
+        <div class="grup"><label for="lgSandi">Kata Sandi</label>
+          <div class="login-sandi">
+            <input id="lgSandi" name="password" type="password" required autocomplete="current-password" placeholder="Kata sandi Anda">
+            <button type="button" class="login-intip" data-intip aria-label="Tampilkan kata sandi" title="Tampilkan kata sandi">${I.mata}</button>
+          </div></div>
+        <button class="btn btn-lime login-tombol" type="submit">Masuk</button>
       </form>
-      <p style="font-size:12.4px;color:var(--e-abu);margin-top:20px;text-align:center">
-        Lupa kata sandi? Sekretaris atau Ketua Umum dapat menyetel ulang dari menu Anggota.<br>
-        Belum menjadi anggota? <a href="daftar.html" style="font-weight:700">Isi formulir pendaftaran</a>.<br>
-        <a href="index.html" style="color:var(--e-hijau);font-weight:700">← Kembali ke website</a>
-      </p>
+      <div class="login-bantu">
+        <p><b>Lupa kata sandi?</b> Hubungi Sekretaris atau Ketua Umum untuk menyetel ulang.</p>
+        <p><b>Belum menjadi anggota?</b> <a href="daftar">Isi formulir pendaftaran</a>.</p>
+      </div>
+      <a class="login-kembali" href="./">← Kembali ke website</a>
+      <div class="login-hak">© ${new Date().getFullYear()} ${esc(st.nama)}</div>
     </div></div>
   </div>`);
+
+  n.querySelector('[data-intip]').onclick = (e) => {
+    const inp = n.querySelector('#lgSandi');
+    const tampil = inp.type === 'password';
+    inp.type = tampil ? 'text' : 'password';
+    e.currentTarget.classList.toggle('aktif', tampil);
+    e.currentTarget.title = tampil ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi';
+  };
 
   n.querySelector('#formLogin').onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);
+    if (!String(f.get('email') || '').trim() || !f.get('password')) return toast('Isi surel dan kata sandi Anda.', true);
     const u = await amanTunggu(e.target.querySelector('button[type=submit]'),
-      () => Store.login(f.get('email'), f.get('password')));
+      () => Store.login(String(f.get('email')).trim(), f.get('password')));
     if (!u) return;
     U = u;
     rute = 'dasbor';
@@ -1064,13 +1082,13 @@ function kerangka() {
       : ruangMediaWeb()
         ? `<div class="topbar-aksi">
              <span class="k-tanggal">${I.kalender} ${esc(tglRingkas())}</span>
-             <a class="btn btn-garis btn-kecil" href="index.html" target="_blank">${I.mata} Lihat Website</a>
+             <a class="btn btn-garis btn-kecil" href="./" target="_blank">${I.mata} Lihat Website</a>
            </div>`
       : ruangRedaksi()
         ? `<div class="topbar-aksi"><span class="k-tanggal dua">${I.kalender}
              <span><b>${esc(tglRingkas())}</b><br><span class="hari">${esc(namaHari())}</span></span></span></div>`
       : `<div class="topbar-aksi">
-           <a class="btn btn-garis btn-kecil" href="index.html" target="_blank">${I.mata} Lihat Website</a>
+           <a class="btn btn-garis btn-kecil" href="./" target="_blank">${I.mata} Lihat Website</a>
          </div>`;
 
   const kelasRuang = (khusus ? ' ruang' : '') + (ketua ? ' ketua' : '') + (tugas() ? ' tugas' : '');
@@ -1080,7 +1098,7 @@ function kerangka() {
   const n = el(`<div class="tata${kelasRuang}">
     <aside class="sidebar${kelasRuang}" id="sidebar">
       <div class="sb-merek">
-        <span class="lambang">${lambang(26)}</span>
+        <span class="lambang">${lambang(40)}</span>
         <span><span class="nama">${esc(Store.cms.situs.nama)}</span><br>
         <span class="tag">${esc(tagMerek)}</span></span>
       </div>
@@ -6802,7 +6820,7 @@ HAL.pengunjung = () => {
     <b>Dihitung sendiri oleh website, bukan angka karangan</b>
     Tiap halaman publik yang dibuka mencatat kunjungannya. Karena prototipe ini berjalan tanpa
     server, catatannya tersimpan di peramban — jadi angka di sini mengukur pemakaian prototipe,
-    bukan pengunjung sedunia. Bukalah <b>index.html</b> beberapa kali, lalu perhatikan angkanya naik.
+    bukan pengunjung sedunia. Bukalah <b>halaman beranda</b> beberapa kali, lalu perhatikan angkanya naik.
   </div></div>`));
 
   box.appendChild(el(`<div class="grid-stat">
@@ -8259,11 +8277,11 @@ HAL.pendaftaran = () => {
   const semua = [...(Store.db.pendaftaran || [])].sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
   const jml = (st) => semua.filter((p) => p.status === st).length;
   const data = semua.filter((p) => !saringDaftar || p.status === saringDaftar);
-  const alamat = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}daftar.html`;
+  const alamat = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}daftar`;
 
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
     <b>Pendaftaran masuk dari halaman publik</b>
-    Calon anggota mengisi formulir di <a href="daftar.html" target="_blank">${esc(alamat)}</a>. Menerima permohonan
+    Calon anggota mengisi formulir di <a href="daftar" target="_blank">${esc(alamat)}</a>. Menerima permohonan
     menjadikannya anggota: ia mendapat nomor induk, kartu anggota, dan kata sandi pertama. Anggota juga tetap
     dapat ditambahkan langsung dari Data Anggota.
     <button class="btn btn-garis btn-kecil" data-salin style="margin-left:6px">Salin Tautan</button>
@@ -10728,7 +10746,7 @@ function halamanTab(kunci, notis) {
     return `<button data-tab="${t.id}" class="${t.id === aktif ? 'aktif' : ''}">
       ${nilai(t.ikon)}<span>${esc(nilai(t.label))}</span>${n ? `<span class="tab-lonceng">${n}</span>` : ''}</button>`;
   }).join('')}
-    <a class="btn btn-garis btn-kecil" style="margin-left:auto" href="index.html" target="_blank">${I.mata} Lihat Website</a>
+    <a class="btn btn-garis btn-kecil" style="margin-left:auto" href="./" target="_blank">${I.mata} Lihat Website</a>
   </div>`);
   bar.querySelectorAll('[data-tab]').forEach((b) => {
     b.onclick = () => { tabAktif[kunci] = b.dataset.tab; gambar(); };

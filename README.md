@@ -1,33 +1,42 @@
 # Kajian Al-I'jaz — Website CMS + ERP Organisasi
 
-Prototipe berjalan penuh: website publik multipage yang seluruh isinya dikendalikan
-dari ERP, plus panel operasional organisasi dengan pembagian wewenang antar jabatan.
-
-Berjalan tanpa server, tanpa `npm install`, dan tanpa koneksi internet.
-Cukup buka `index.html` di peramban.
+Website publik multipage yang seluruh isinya dikendalikan dari ERP, plus panel
+operasional organisasi dengan pembagian wewenang antar jabatan. Berjalan di atas
+PHP + basis data (MySQL di server, SQLite untuk mencoba setempat), tanpa
+`npm install` dan tanpa proses build.
 
 ## Cara mencoba
 
-Secara daring lewat GitHub Pages:
+Yang hidup: <https://alijazqurancenter.com>
 
-| Halaman | Tautan |
+| Halaman | Alamat |
 |---|---|
-| Beranda | https://aarefenam.github.io/kajianijaz/ |
-| Tentang Kajian | https://aarefenam.github.io/kajianijaz/tentang.html |
-| Artikel | https://aarefenam.github.io/kajianijaz/artikel.html |
-| Kontak | https://aarefenam.github.io/kajianijaz/kontak.html |
-| Panel ERP | https://aarefenam.github.io/kajianijaz/erp.html |
-| Cetak biru sistem | https://aarefenam.github.io/kajianijaz/docs/system-flow.html |
+| Beranda | `/` |
+| Tentang Kajian | `/tentang` |
+| Artikel | `/artikel` |
+| Kontak | `/kontak` |
+| Pendaftaran Anggota | `/daftar` |
+| Panel ERP | `/erp` |
 
-Atau langsung dari berkas lokal — buka saja di peramban, tanpa server:
+**Alamatnya tanpa `.html`.** Berkasnya tetap `tentang.html` dan seterusnya;
+`.htaccess` (bagian 7) melayani `/tentang` dari berkas itu dan mengalihkan
+alamat lama `/tentang.html` secara tetap (301) ke yang baru, sehingga tautan
+yang sudah dibagikan tidak mati. Tautan ber-`.html` yang masih tersimpan di CMS
+dirapikan saat ditampilkan (`taut()` di `site.js`).
+
+Di komputer sendiri — `php -S` tidak membaca `.htaccess`, jadi pakai perutenya:
 
 ```
-Website publik  →  index.html
-Panel ERP       →  erp.html
-Cetak biru      →  docs/system-flow.html
+php -S 127.0.0.1:8137 uji/router.php
 ```
 
-### Akun demo (kata sandi semua: `123456`)
+lalu buka `http://127.0.0.1:8137/` dan `http://127.0.0.1:8137/erp`. Rinciannya
+di `DEPLOY.md` bagian 6.
+
+### Akun bawaan
+
+Kata sandi awal tiap akun dibuat acak saat pemasangan, ditampilkan sekali, dan
+wajib diganti saat pertama masuk — tidak ada sandi bersama.
 
 | Peran                  | Email                  | Yang bisa dilakukan                                  |
 |------------------------|------------------------|------------------------------------------------------|

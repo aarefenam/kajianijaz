@@ -85,14 +85,11 @@ a { color: inherit; text-decoration: none; }
 .header-in { display: flex; align-items: center; gap: 24px; height: 78px; }
 
 .merek { display: flex; align-items: center; gap: 12px; margin-right: auto; }
-.merek-lambang {
-  width: 46px; height: 46px; flex: none; border-radius: 12px;
-  display: grid; place-items: center;
-  background: linear-gradient(140deg, rgba(140,198,63,.22), rgba(240,149,30,.16));
-  border: 1px solid rgba(255,255,255,.20);
-}
+/* Lambang tampil apa adanya — tanpa kotak, latar, atau bingkai di
+   belakangnya. Logo organisasi sudah punya bentuknya sendiri. */
+.merek-lambang { flex: none; display: grid; place-items: center; }
 .merek-lambang svg,
-.merek-lambang img { width: 28px; height: 28px; object-fit: contain; }
+.merek-lambang img { width: 46px; height: 46px; object-fit: contain; display: block; }
 .merek-nama {
   font-family: var(--font-merek); font-size: 30px; font-weight: 700;
   color: #fff; line-height: 1; letter-spacing: .4px;
@@ -901,14 +898,6 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
 .toast.galat { border-left-color: #E5534B; }
 @keyframes masuk { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
 
-/* Tombol pintas ke ERP */
-.pintas-erp {
-  position: fixed; right: 22px; bottom: 22px; z-index: 70;
-  display: inline-flex; align-items: center; gap: 9px; padding: 13px 20px; border-radius: 999px;
-  background: var(--hijau-tua); color: #fff; font-size: 13px; font-weight: 700;
-  box-shadow: 0 10px 30px rgba(14,46,28,.35); border: 1px solid rgba(140,198,63,.4); transition: .2s;
-}
-.pintas-erp:hover { transform: translateY(-3px); background: var(--hijau); }
 
 .kosong { text-align: center; padding: 60px 20px; color: var(--abu); }
 .kosong svg { margin: 0 auto 14px; opacity: .4; }
@@ -925,7 +914,6 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   .tombol-menu { display: grid; place-items: center; }
   .nav-bawah { display: block; }
   body { padding-bottom: 74px; }
-  .pintas-erp { bottom: 88px; }
   .grid-teks-gambar, .grid-teks-gambar.kanan, .grid-kontak, .pita-kutipan { grid-template-columns: 1fr; }
   .grid-teks-gambar.kanan .kotak-gambar { order: 0; }
   .kartu-artikel { grid-template-columns: 1fr; }

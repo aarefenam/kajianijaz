@@ -353,7 +353,7 @@ pertama.
 
 ### c. Pasang data awal — satu kali klik
 
-Buka `https://alijazqurancenter.com/erp.html`. Karena databasenya masih
+Buka `https://alijazqurancenter.com/erp`. Karena databasenya masih
 kosong, yang muncul bukan layar masuk melainkan **"Pasang data awal"**.
 
 Klik **Pasang sekarang**. Seluruh struktur website, daftar pengurus, dan
@@ -432,10 +432,13 @@ Tidak perlu MySQL. PHP membawa SQLite:
 
 ```bash
 cp api/config.contoh.php api/config.php   # lalu ubah driver menjadi 'sqlite'
-php -S 127.0.0.1:8000 -t .
+php -S 127.0.0.1:8000 uji/router.php
 ```
 
-Buka `http://127.0.0.1:8000/erp.html`, pasang data awal, dan pakailah
+`uji/router.php` menirukan aturan alamat tanpa `.html` dari `.htaccess`,
+yang tidak dibaca server bawaan PHP.
+
+Buka `http://127.0.0.1:8000/erp`, pasang data awal, dan pakailah
 seperti biasa. Berkas `api/config.php` dan `data/` sudah masuk
 `.gitignore`, jadi yang setempat tidak akan pernah ikut terkirim.
 

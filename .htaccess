@@ -94,11 +94,30 @@ AddDefaultCharset UTF-8
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
 
-# ---------- 7. Halaman masuk tanpa .html ----------
+# ---------- 7. Alamat halaman tanpa .html ----------
+# Situs ini berjalan di atas server sungguhan, jadi alamatnya pun alamat
+# sungguhan: /tentang, /artikel, /erp — bukan /tentang.html.
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
-  # /tentang  ->  /tentang.html
+  # (a) Alamat lama dialihkan TETAP (301) ke alamat barunya, supaya
+  #     tautan yang sudah telanjur dibagikan dan diindeks tetap hidup:
+  #       /index.html        ->  /
+  #       /tentang.html?x=1  ->  /tentang?x=1
+  #     Yang diperiksa adalah baris permintaan ASLI (THE_REQUEST), bukan
+  #     alamat sesudah ditulis ulang aturan (b) — kalau tidak, keduanya
+  #     akan saling mengalihkan tanpa henti. Hanya GET: formulir tidak
+  #     pernah dikirim ke alamat halaman.
+  RewriteCond %{REQUEST_METHOD} =GET
+  RewriteCond %{THE_REQUEST} \s/+index\.html[?\s] [NC]
+  RewriteRule ^ / [R=301,L]
+
+  RewriteCond %{REQUEST_METHOD} =GET
+  RewriteCond %{REQUEST_URI} !^/(api|berkas|uji)
+  RewriteCond %{THE_REQUEST} \s/+([^?\s]+)\.html[?\s] [NC]
+  RewriteRule ^ /%1 [R=301,L]
+
+  # (b) /tentang  ->  tentang.html (di dalam, tanpa mengubah alamat).
   # Jangan menyentuh /api/ dan /berkas/: yang di sana bukan halaman, dan
   # 404 yang jujur di situ jauh lebih mudah ditelusuri daripada HTML.
   RewriteCond %{REQUEST_URI} !^/(api|berkas)/
