@@ -1928,8 +1928,7 @@ HAL.kajian = () => {
 
   const kartuKajian = [];
   urut.forEach((k) => {
-    const hadir = (k.presensi || []).filter((x) => x.status !== 'tidak-hadir').length;
-    const total = Store.db.users.filter((u) => u.status === 'aktif').length;
+    const { datang: hadir, total } = Store.rekapKajian(k);
     const n = el(`<div class="panel">
       <div class="panel-kepala">
         <div style="width:52px;flex:none;text-align:center;background:var(--e-hijau-tua);color:#fff;border-radius:10px;padding:7px 4px">
@@ -1946,7 +1945,7 @@ HAL.kajian = () => {
       </div>
       <div class="panel-isi" style="padding-top:15px;padding-bottom:15px">
         <p style="margin:0 0 8px;font-size:13.2px"><b>Materi:</b> ${esc(k.materi)}</p>
-        <p style="margin:0;font-size:13.2px"><b>Kehadiran:</b> ${hadir} dari ${total} anggota aktif
+        <p style="margin:0;font-size:13.2px"><b>Kehadiran:</b> ${hadir} dari ${total} peserta
         ${k.notulensi ? `<br><b>Notulensi:</b> <span style="color:var(--e-abu)">${esc(k.notulensi.slice(0, 170))}${k.notulensi.length > 170 ? '…' : ''}</span>` : ''}</p>
       </div>
     </div>`);
@@ -2108,8 +2107,7 @@ function dialogBatalKajian(k) {
 }
 
 function dialogAbsensi(k) {
-  const peserta = Store.db.users.filter((u) => u.status === 'aktif'
-    && (!k.angkatan || u.angkatan === k.angkatan));
+  const peserta = Store.pesertaKajian(k);
   const cari = (id) => (k.presensi || []).find((p) => p.userId === id);
 
   const isi = el(`<div>
@@ -5944,8 +5942,7 @@ const kajianLingkup = () => Store.db.kajian
 /** Kajian yang berjalan — yang dihitung dalam presensi, rekap, dan antrean. */
 const kajianAktif = () => kajianLingkup().filter(Store.kajianJalan);
 
-const anggotaAngkatan = () => Store.db.users
-  .filter((u) => u.angkatan === angkatanAktif() && u.status === 'aktif');
+const anggotaAngkatan = () => Store.pesertaAngkatan(angkatanAktif());
 
 /* --- kelengkapan & kesiapan --- */
 const CEKLIS = [
@@ -5987,15 +5984,8 @@ const PRESENSI = {
   terlambat    : { l: 'Terlambat',   c: 'l-kuning' },
   'tidak-hadir': { l: 'Tidak Hadir', c: 'l-merah'  },
 };
-const rekapPresensi = (k) => {
-  const p = k.presensi || [];
-  const total = anggotaAngkatan().length;
-  const h = p.filter((x) => x.status === 'hadir').length;
-  const t = p.filter((x) => x.status === 'terlambat').length;
-  const x = p.filter((x) => x.status === 'tidak-hadir').length;
-  return { hadir: h, terlambat: t, tidakHadir: x, belum: Math.max(0, total - h - t - x), total,
-    persen: total ? Math.round(((h + t) / total) * 100) : 0 };
-};
+/* Satu rumus untuk seluruh halaman — lihat Store.rekapKajian(). */
+const rekapPresensi = (k) => Store.rekapKajian(k);
 
 const kajianHariIni = () => kajianAktif().find((k) => k.tanggal === nowTanggal())
   || kajianAktif().find((k) => k.tanggal >= nowTanggal())
@@ -6018,10 +6008,10 @@ function perluKajian() {
     belumTutup: tercatat.filter((k) => !k.presensiTutup && rekapPresensi(k).belum > 0),
     tanpaNotulen: lampau.filter((k) => !String(k.notulensi || '').trim()),
     tanpaKelompok: anggota.filter((u) => !u.kelompok),
-    jarangHadir: tercatat.length >= 3 ? anggota.filter((u) => {
-      const ikut = tercatat.filter((k) => k.presensi.some((p) => p.userId === u.id && p.status !== 'tidak-hadir')).length;
-      return ikut / tercatat.length < 0.75;
-    }) : [],
+    jarangHadir: anggota.filter((u) => {
+      const h = Store.kehadiranAnggota(u.id, tercatat);
+      return h.wajib >= 3 && h.persen < 75;
+    }),
   };
 }
 function antreanKajian() {
@@ -6435,12 +6425,9 @@ function modePresensi(k) {
     const riwayat = sisi.querySelector('[data-riwayat]');
 
     const segarHitung = () => {
-      const peserta = Store.db.users.filter((u) => u.status === 'aktif' && (!k.angkatan || u.angkatan === k.angkatan));
-      const p = k.presensi || [];
-      const jml = (st) => p.filter((x) => x.status === st).length;
-      const belum = Math.max(0, peserta.length - p.length);
-      hitung.innerHTML = [['Hadir', jml('hadir'), 'hijau'], ['Terlambat', jml('terlambat'), 'merah'],
-        ['Tidak Hadir', jml('tidak-hadir'), 'abu'], ['Belum Absen', belum, 'abu']]
+      const r = Store.rekapKajian(k);
+      hitung.innerHTML = [['Hadir', r.hadir, 'hijau'], ['Terlambat', r.terlambat, 'merah'],
+        ['Tidak Hadir', r.tidakHadir, 'abu'], ['Belum Absen', r.belum, 'abu']]
         .map(([l, n, c]) => `<div class="lp-sel ${c}"><b>${n}</b><span>${l}</span></div>`).join('');
     };
     const tampil = (kelas, kepala, nama, ket, foto) => {
@@ -6555,29 +6542,55 @@ HAL['jadwal-kajian'] = () => {
 };
 HAL['jadwal-kajian'].judul = () => ['Jadwal & Tugas', 'Jadwal, pembagian pemakalah–moderator–notulen, dan kesiapan tiap pertemuan.'];
 
+/** Kelompok yang sudah dipakai sebuah angkatan, urut alami (2 sebelum 10). */
+const kelompokAngkatan = (angkatan) => [...new Set(Store.db.users
+  .filter((u) => u.angkatan === angkatan).map((u) => u.kelompok).filter(Boolean))]
+  .sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
+let saringKelompok = '';
+
 HAL['anggota-kajian'] = () => {
-  const anggota = Store.db.users.filter((u) => u.angkatan === angkatanAktif());
+  const seAngkatan = Store.db.users.filter((u) => u.angkatan === angkatanAktif())
+    .sort((a, b) => a.nama.localeCompare(b.nama));
+  const kelompok = kelompokAngkatan(angkatanAktif());
+  if (saringKelompok && saringKelompok !== '-' && !kelompok.includes(saringKelompok)) saringKelompok = '';
+  const anggota = seAngkatan.filter((u) => !saringKelompok
+    || (saringKelompok === '-' ? !u.kelompok : u.kelompok === saringKelompok));
+  const peserta = seAngkatan.filter(Store.berkajian);
   const box = el(`<div><div class="notis notis-kuning">${I.perisai}<div>
     <b>Terbatas pada ${esc(angkatanAktif())}</b>
     Anda dapat mengubah jenjang, kelompok, dan keaktifan anggota angkatan ini.
     Menambah akun baru serta mengubah surel dan peran tetap wewenang Sekretaris dan Ketua.
   </div></div></div>`);
 
+  /* --- ringkasan kelompok: klik untuk menyaring --- */
+  const tanpa = peserta.filter((u) => !u.kelompok).length;
+  const ring = el(`<div class="kj-kelompok">
+    ${[['', 'Semua', seAngkatan.length], ...kelompok.map((k) => [k, k, peserta.filter((u) => u.kelompok === k).length]),
+       ...(tanpa ? [['-', 'Tanpa Kelompok', tanpa]] : [])]
+      .map(([id, l, n]) => `<button class="kj-kel${id === saringKelompok ? ' aktif' : ''}${id === '-' ? ' perlu' : ''}" data-kel="${esc(id)}">
+        <b>${n}</b><span>${esc(l)}</span></button>`).join('')}
+  </div>`);
+  ring.querySelectorAll('[data-kel]').forEach((b) => { b.onclick = () => { saringKelompok = b.dataset.kel; gambar(); }; });
+  box.appendChild(ring);
+
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Data Anggota</h3><span class="hitung">(${anggota.length} orang · ${new Set(anggota.map((u) => u.kelompok).filter(Boolean)).size} kelompok)</span>
-    <div class="kanan"><button class="btn btn-garis btn-kecil" data-qr>${I.qr} Kartu QR</button></div>
+    <h3>Anggota & Kelompok</h3><span class="hitung">(${anggota.length} orang · ${peserta.length} peserta kajian · ${kelompok.length} kelompok)</span>
+    <div class="kanan">
+      <button class="btn btn-garis btn-kecil" data-jenjang>${I.naik} Ubah Jenjang</button>
+      <button class="btn btn-garis btn-kecil" data-bagi>${I.grup} Bagi Kelompok</button>
+      <button class="btn btn-garis btn-kecil" data-qr>${I.qr} Kartu QR</button></div>
   </div></div>`);
   kartu.querySelector('[data-qr]').onclick = () => bukaModul('kartu-qr');
+  kartu.querySelector('[data-bagi]').onclick = () => dialogBagiKelompok();
+  kartu.querySelector('[data-jenjang]').onclick = () => dialogJenjangAngkatan();
 
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Nama</th><th>Jenjang</th><th>Kelompok</th>
       <th>Kehadiran</th><th>Status</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
-  const selesai = kajianAktif().filter((k) => (k.presensi || []).length);
+  const tercatat = kajianAktif().filter((k) => (k.presensi || []).length);
   anggota.forEach((u, i) => {
-    const ikut = selesai.filter((k) => k.presensi.some((p) => p.userId === u.id
-      && p.status !== 'tidak-hadir')).length;
-    const persen = selesai.length ? Math.round((ikut / selesai.length) * 100) : 0;
+    const h = Store.kehadiranAnggota(u.id, tercatat);
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td>
       <td><div style="display:flex;align-items:center;gap:10px">
@@ -6585,10 +6598,11 @@ HAL['anggota-kajian'] = () => {
         <div><b>${esc(u.nama)}</b><br><span style="color:var(--e-abu);font-size:11.6px">${esc(Store.kodeQr(u.id))}</span></div>
       </div></td>
       <td class="utuh">${esc(u.level)}</td>
-      <td class="utuh">${esc(u.kelompok || '—')}</td>
-      <td><div style="display:flex;align-items:center;gap:9px">
-        <div class="bar-maju" style="flex:1;min-width:70px"><span style="width:${persen}%"></span></div>
-        <b style="font-size:12.2px">${persen}%</b></div></td>
+      <td class="utuh">${u.kelompok ? esc(u.kelompok) : Store.berkajian(u) ? '<span class="lencana l-kuning">belum</span>' : '—'}</td>
+      <td>${h.wajib ? `<div style="display:flex;align-items:center;gap:9px">
+        <div class="bar-maju" style="flex:1;min-width:70px"><span style="width:${h.persen}%"></span></div>
+        <b style="font-size:12.2px">${h.persen}%</b><span style="color:var(--e-abu);font-size:11.6px">${h.datang}/${h.wajib}</span></div>`
+        : '<span style="color:var(--e-abu)">belum ada kajian</span>'}</td>
       <td><span class="lencana ${u.status === 'aktif' ? 'l-hijau' : 'l-abu'}">${esc(u.status)}</span></td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Sunting">${I.sunting}</button></div></td></tr>`);
@@ -6599,32 +6613,117 @@ HAL['anggota-kajian'] = () => {
   box.appendChild(kartu);
   return box;
 };
-HAL['anggota-kajian'].judul = () => ['Data Anggota', 'Jenjang, kelompok, dan kehadiran anggota angkatan aktif.'];
+HAL['anggota-kajian'].judul = () => ['Anggota & Kelompok', 'Jenjang, kelompok, dan kehadiran anggota angkatan aktif.'];
 
 function formAnggotaKajian(u) {
+  const kelompok = kelompokAngkatan(u.angkatan);
   const isi = el(`<div>
     <p style="margin:0 0 16px;font-size:13px;color:var(--e-abu)">
       <b>${esc(u.nama)}</b> · ${esc(u.email)} · ${esc(u.angkatan)}</p>
     <div class="grid-form-3">
       <div class="grup"><label>Jenjang</label><select id="lv">
         ${['Tatsqif', 'Level 1', 'Level 2', 'Level 3', 'Alumni', '-'].map((x) => `<option ${u.level === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
-      <div class="grup"><label>Kelompok</label><select id="kl">
-        <option value="">—</option>
-        ${['Kelompok 1', 'Kelompok 2', 'Kelompok 3', 'Kelompok 4'].map((x) => `<option ${u.kelompok === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="grup"><label>Kelompok</label><input id="kl" list="daftar-kel" value="${esc(u.kelompok || '')}" placeholder="Kosong = tanpa kelompok">
+        <datalist id="daftar-kel">${kelompok.map((x) => `<option value="${esc(x)}">`).join('')}</datalist></div>
       <div class="grup"><label>Status</label><select id="st">
         ${['aktif', 'nonaktif', 'alumni'].map((x) => `<option ${u.status === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
     </div>
-    <div class="bantu">Surel dan peran hanya dapat diubah Sekretaris dan Ketua.</div>
+    <div class="bantu">Kelompok dapat dipilih dari yang sudah ada atau diketik baru. Surel dan peran hanya dapat diubah Sekretaris dan Ketua.</div>
   </div>`);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
   modal({ judul: 'Ubah Data Anggota', isi, kaki });
   kaki.querySelector('[data-b]').onclick = tutupModal;
-  kaki.querySelector('[data-s]').onclick = () => aman(() => {
-    Store.simpanAnggotaKajian(U, { id: u.id, level: isi.querySelector('#lv').value,
-      kelompok: isi.querySelector('#kl').value, status: isi.querySelector('#st').value });
-    tutupModal(); toast('Data anggota tersimpan.'); gambar();
-  });
+  kaki.querySelector('[data-s]').onclick = () => {
+    if (aman(() => Store.simpanAnggotaKajian(U, { id: u.id, level: isi.querySelector('#lv').value,
+      kelompok: isi.querySelector('#kl').value.trim(), status: isi.querySelector('#st').value }))) {
+      tutupModal(); toast('Data anggota tersimpan.'); gambar();
+    }
+  };
+}
+
+/** Bagi peserta angkatan aktif ke N kelompok. Hasilnya ditampilkan dulu;
+    baru tersimpan sesudah disetujui. */
+function dialogBagiKelompok() {
+  const peserta = anggotaAngkatan().sort((a, b) => a.nama.localeCompare(b.nama));
+  if (!peserta.length) return toast(`${angkatanAktif()} belum punya peserta aktif.`, true);
+  const awal = Math.max(1, kelompokAngkatan(angkatanAktif()).length || Math.round(peserta.length / 5));
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.4px;color:var(--e-abu)">${peserta.length} peserta aktif ${esc(angkatanAktif())}.</p>
+    <div class="grid-form-3">
+      <div class="grup"><label>Jumlah Kelompok</label><input type="number" data-n min="1" max="${peserta.length}" value="${awal}"></div>
+      <div class="grup"><label>Cara Membagi</label><select data-cara>
+        <option value="isi">Hanya yang belum berkelompok</option>
+        <option value="acak">Acak ulang semuanya</option>
+        <option value="urut">Urut nama, semuanya</option></select></div>
+      <div class="grup"><label>&nbsp;</label><button class="btn btn-garis" data-ulang style="width:100%">${I.putar} Susun Ulang</button></div>
+    </div>
+    <div class="kj-bagi" data-hasil></div>
+    <div class="bantu">Kelompok dinamai "Kelompok 1", "Kelompok 2", dan seterusnya. Belum ada yang tersimpan sampai Anda menekan Terapkan.</div>
+  </div>`);
+  let rencana = [];
+  const susun = () => {
+    const n = Math.min(peserta.length, Math.max(1, Math.round(Number(isi.querySelector('[data-n]').value) || 1)));
+    const cara = isi.querySelector('[data-cara]').value;
+    const nama = (i) => `Kelompok ${i + 1}`;
+    const isiKel = Array.from({ length: n }, () => []);
+    let antre = [...peserta];
+    if (cara === 'isi') {
+      /* Yang sudah di Kelompok 1..N tetap di tempatnya; sisanya mengisi
+         kelompok yang paling sedikit lebih dulu. */
+      antre = [];
+      peserta.forEach((u) => { const i = Array.from({ length: n }, (_, j) => nama(j)).indexOf(u.kelompok); if (i >= 0) isiKel[i].push(u); else antre.push(u); });
+    }
+    if (cara === 'acak') antre.sort(() => Math.random() - 0.5);
+    antre.forEach((u) => { isiKel.reduce((a, b) => (b.length < a.length ? b : a)).push(u); });
+    rencana = isiKel.flatMap((g, i) => g.map((u) => ({ id: u.id, kelompok: nama(i) })));
+    const pindah = rencana.filter((r) => (Store.getUser(r.id).kelompok || '') !== r.kelompok).length;
+    isi.querySelector('[data-hasil]').innerHTML = isiKel.map((g, i) => `<div class="kj-bagi-kel">
+      <div class="jd">${nama(i)} <span>${g.length} orang</span></div>
+      ${g.map((u) => `<div class="br${(u.kelompok || '') !== nama(i) ? ' baru' : ''}">${esc(namaPendek(u.id))}</div>`).join('')}</div>`).join('')
+      + `<div class="kj-bagi-ket">${pindah ? `${pindah} orang berpindah atau baru mendapat kelompok (ditandai).` : 'Tidak ada yang berubah.'}</div>`;
+  };
+  isi.querySelector('[data-n]').oninput = susun;
+  isi.querySelector('[data-cara]').onchange = susun;
+  isi.querySelector('[data-ulang]').onclick = susun;
+  susun();
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Terapkan</button></div>`);
+  modal({ judul: 'Bagi kelompok', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    let n = 0;
+    if (aman(() => { n = Store.simpanAnggotaMassal(U, rencana, `Membagi kelompok ${angkatanAktif()}`); })) {
+      tutupModal(); toast(n ? `${n} anggota diperbarui kelompoknya.` : 'Tidak ada yang berubah.'); gambar();
+    }
+  };
+}
+
+/** Naikkan (atau ubah) jenjang seluruh peserta angkatan aktif sekaligus. */
+function dialogJenjangAngkatan() {
+  const peserta = anggotaAngkatan();
+  if (!peserta.length) return toast(`${angkatanAktif()} belum punya peserta aktif.`, true);
+  const jenjang = ['Tatsqif', 'Level 1', 'Level 2', 'Level 3'];
+  const kini = jenjangAngkatan(angkatanAktif());
+  const berikut = jenjang[Math.min(jenjang.length - 1, jenjang.indexOf(kini) + 1)];
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.4px;color:#44534A">${peserta.length} peserta aktif ${esc(angkatanAktif())},
+      sebagian besar di <b>${esc(kini)}</b>.</p>
+    <div class="grup" style="margin:0"><label>Jenjang Baru untuk Semuanya</label>
+      <select data-lv>${jenjang.map((x) => `<option ${x === berikut ? 'selected' : ''}>${x}</option>`).join('')}</select>
+      <div class="bantu">Hanya peserta aktif yang diubah. Kajian yang sudah terjadwal tetap pada jenjangnya semula; kajian berikutnya dijadwalkan pada jenjang baru.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Ubah Jenjang</button></div>`);
+  modal({ judul: 'Ubah jenjang angkatan', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    const lv = isi.querySelector('[data-lv]').value;
+    let n = 0;
+    if (aman(() => { n = Store.simpanAnggotaMassal(U, peserta.map((u) => ({ id: u.id, level: lv })), `Mengubah jenjang ${angkatanAktif()} menjadi ${lv}`); })) {
+      tutupModal(); toast(n ? `${n} anggota kini ${lv}.` : 'Semua sudah di jenjang itu.'); gambar();
+    }
+  };
 }
 
 HAL['kartu-qr'] = () => {
@@ -7106,29 +7205,28 @@ HAL.statistik = () => {
 
   /* peringkat kehadiran anggota */
   const peringkat = anggota.map((u) => {
-    const ikut = selesai.filter((k) => k.presensi.some((p) => p.userId === u.id && p.status !== 'tidak-hadir')).length;
-    const telat = selesai.filter((k) => k.presensi.some((p) => p.userId === u.id && p.status === 'terlambat')).length;
-    return { u, ikut, telat, persen: selesai.length ? Math.round((ikut / selesai.length) * 100) : 0 };
-  }).sort((a, b) => b.persen - a.persen || a.telat - b.telat);
+    const h = Store.kehadiranAnggota(u.id, selesai);
+    return { u, ikut: h.datang, telat: h.terlambat, absen: h.tidakHadir, wajib: h.wajib, persen: h.persen };
+  }).sort((a, b) => b.persen - a.persen || a.telat - b.telat || a.u.nama.localeCompare(b.u.nama));
 
   const kr = el(`<div class="kartu"><div class="kartu-kepala">
     <h3>Kehadiran Anggota</h3><span class="hitung">${selesai.length} pertemuan tercatat</span>
     <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Export Excel</button></div>
   </div></div>`);
   kr.querySelector('[data-export]').onclick = () => {
-    const baris = [['No.', 'Nama', 'Kelompok', 'Hadir', 'Terlambat', 'Dari', 'Persentase']];
-    peringkat.forEach((p, i) => baris.push([i + 1, p.u.nama, p.u.kelompok || '', p.ikut, p.telat, selesai.length, p.persen + '%']));
+    const baris = [['No.', 'Nama', 'Kelompok', 'Datang', 'Terlambat', 'Tidak Hadir', 'Dari', 'Persentase']];
+    peringkat.forEach((p, i) => baris.push([i + 1, p.u.nama, p.u.kelompok || '', p.ikut, p.telat, p.absen, p.wajib, p.persen + '%']));
     unduhCsv('kehadiran-anggota.csv', baris);
   };
   kr.appendChild(el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Nama</th><th>Kelompok</th><th>Hadir</th><th>Terlambat</th>
+    <thead><tr><th class="kol-no">No.</th><th>Nama</th><th>Kelompok</th><th>Datang</th><th>Terlambat</th><th>Tidak Hadir</th>
       <th style="min-width:160px">Kehadiran</th></tr></thead>
     <tbody>${peringkat.map((p, i) => `<tr><td class="kol-no">${i + 1}</td>
       <td><div style="display:flex;align-items:center;gap:10px">
         <img src="${p.u.foto}" alt="" style="width:28px;height:28px;border-radius:50%;flex:none">
         <b>${esc(p.u.nama)}</b></div></td>
       <td class="utuh">${esc(p.u.kelompok || '—')}</td>
-      <td class="utuh">${p.ikut}/${selesai.length}</td><td class="utuh">${p.telat}</td>
+      <td class="utuh">${p.ikut}/${p.wajib}</td><td class="utuh">${p.telat}</td><td class="utuh">${p.absen}</td>
       <td><div style="display:flex;align-items:center;gap:9px">
         <div class="bar-maju" style="flex:1"><span style="width:${p.persen}%"></span></div>
         <b style="font-size:12.2px;min-width:36px;text-align:right">${p.persen}%</b></div></td></tr>`).join('')}</tbody>
@@ -7164,16 +7262,13 @@ HAL['atur-kajian'] = () => {
   box.appendChild(el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala">
     <h3>Ringkasan Angkatan</h3></div>
     <div class="tabel-bungkus"><table class="t-org">
-      <thead><tr><th>Angkatan</th><th>Level</th><th>Kajian</th><th>Anggota</th><th>Rata-rata Kehadiran</th></tr></thead>
+      <thead><tr><th>Angkatan</th><th>Level</th><th>Kajian</th><th>Peserta</th><th>Rata-rata Kehadiran</th></tr></thead>
       <tbody>${angkatanTersedia().flatMap((a) => [...new Set(Store.db.kajian.filter((k) => k.angkatan === a).map((k) => k.level))].sort().map((l) => {
         const ks = Store.db.kajian.filter((k) => k.angkatan === a && k.level === l && Store.kajianJalan(k));
         if (!ks.length) return '';
-        const ang = Store.db.users.filter((u) => u.angkatan === a && u.status === 'aktif').length;
+        const ang = Store.pesertaAngkatan(a).length;
         const sel = ks.filter((k) => (k.presensi || []).length);
-        const rata = sel.length ? Math.round(sel.reduce((s, k) => {
-          const p = k.presensi.filter((x) => x.status !== 'tidak-hadir').length;
-          return s + (ang ? (p / ang) * 100 : 0);
-        }, 0) / sel.length) : 0;
+        const rata = sel.length ? Math.round(sel.reduce((s, k) => s + Store.rekapKajian(k).persen, 0) / sel.length) : 0;
         return `<tr><td><b>${esc(a)}</b></td><td class="utuh">${esc(l)}</td>
           <td class="utuh">${ks.length}</td><td class="utuh">${ang}</td><td class="utuh">${rata}%</td></tr>`;
       })).join('')}</tbody></table></div></div>`));
@@ -9161,9 +9256,8 @@ let saringPantau = { angkatan: '', perlu: '', surat: '', cariSurat: '' };
 
 /** Kehadiran satu kajian terhadap anggota aktif angkatannya sendiri. */
 function hadirKajian(k) {
-  const total = Store.db.users.filter((u) => u.status === 'aktif' && (!k.angkatan || u.angkatan === k.angkatan)).length;
-  const hadir = (k.presensi || []).filter((x) => x.status === 'hadir' || x.status === 'terlambat').length;
-  return { hadir, total, persen: total ? Math.round((hadir / total) * 100) : 0 };
+  const r = Store.rekapKajian(k);
+  return { hadir: r.datang, total: r.total, persen: r.persen };
 }
 
 HAL['pantau-kajian'] = () => {

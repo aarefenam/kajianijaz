@@ -440,6 +440,21 @@ ketiganya boleh dikosongkan dulu; satu angkatan tak boleh punya dua kajian pada
 tanggal yang sama; tanggal dan angkatan kajian yang sudah berpresensi terkunci.
 Yang diperiksa hanya yang berubah, sehingga kajian lama tetap dapat disunting.
 
+**Peserta sebuah kajian dibekukan** begitu presensi pertamanya dicatat
+(`k.peserta`). Sebelum itu ia mengikuti keanggotaan angkatan; sesudahnya
+tidak, sehingga anggota yang kelak nonaktif atau pindah angkatan tak mengubah
+angka kajian yang sudah lewat. Peserta adalah anggota aktif yang masih
+berjenjang — alumni dan pendiri tidak dituntut hadir. Seluruh halaman memakai
+**satu rumus**: `Store.rekapKajian()` untuk satu kajian dan
+`Store.kehadiranAnggota()` untuk satu orang; dulu ada tiga rumus dengan
+pembagi yang berbeda-beda.
+
+**Kelompok tidak lagi dipatok di kode.** Daftarnya adalah kelompok yang dipakai
+anggota angkatan itu, dan kelompok baru cukup diketik. *Bagi Kelompok* membagi
+peserta ke N kelompok (mengisi yang belum berkelompok, acak ulang, atau urut
+nama) dengan pratinjau sebelum disimpan; *Ubah Jenjang* menaikkan seluruh
+peserta angkatan sekaligus.
+
 **Presensi punya tiga keadaan** — hadir, terlambat, tidak hadir — beserta jam
 datangnya. Bentuk lama yang hanya berupa daftar nama dipetakan menjadi "hadir",
 bukan dibuang.

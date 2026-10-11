@@ -775,6 +775,8 @@ async function muat() {
        hanya oleh pencatatnya. Ketua kini boleh menulis `keuangan` untuk
        menyetujui pengeluaran, dan server menolak perubahan lain darinya. */
     if (RBAC.can(userAktif(), 'keuangan.manage')) { tautkanKategori(db); nomoriTransaksi(db); }
+    /* Peserta kajian lama dibekukan oleh penjadwalnya saja, dengan alasan yang sama. */
+    if (RBAC.can(userAktif(), 'kajian.manage')) bekukanPesertaLama(db);
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -1227,12 +1229,55 @@ const kajianJalan = (k) => keadaanKajian(k) === 'terjadwal';
 /** Sudah memuat catatan yang tak boleh hilang: presensi atau notulen. */
 const kajianBerisi = (k) => (k?.presensi || []).length > 0 || !!String(k?.notulensi || '').trim();
 
-/** Angkatan yang masih berkajian: punya anggota aktif yang belum alumni. */
-const angkatanPeserta = () => [...new Set(db.users
-  .filter((u) => u.status === 'aktif' && u.angkatan && !['Alumni', '-', ''].includes(u.level || ''))
-  .map((u) => u.angkatan))];
-/** Peserta sebuah angkatan: anggota aktifnya. */
-const pesertaAngkatan = (angkatan) => db.users.filter((u) => u.status === 'aktif' && u.angkatan === angkatan);
+/** Peserta kajian: anggota aktif yang masih berjenjang. Alumni dan
+    pendiri tetap anggota, tetapi tidak dituntut hadir. */
+const berkajian = (u) => u.status === 'aktif' && !!u.angkatan && !['Alumni', '-', ''].includes(u.level || '');
+/** Angkatan yang masih berkajian: punya setidaknya satu peserta. */
+const angkatanPeserta = () => [...new Set(db.users.filter(berkajian).map((u) => u.angkatan))];
+/** Peserta sebuah angkatan saat ini. */
+const pesertaAngkatan = (angkatan) => db.users.filter((u) => berkajian(u) && u.angkatan === angkatan);
+
+/* --- peserta & kehadiran: satu rumus untuk seluruh halaman ---
+   Peserta sebuah kajian DIBEKUKAN begitu presensi pertamanya dicatat.
+   Sebelum itu ia mengikuti keanggotaan angkatan yang berlaku; sesudahnya
+   tidak — supaya anggota yang kelak nonaktif atau pindah angkatan tak
+   mengubah angka kehadiran kajian yang sudah lewat. */
+const idPesertaKajian = (k) => (Array.isArray(k?.peserta) ? k.peserta
+  : [...new Set([...pesertaAngkatan(k?.angkatan).map((u) => u.id), ...(k?.presensi || []).map((p) => p.userId)])]);
+const pesertaKajian = (k) => idPesertaKajian(k).map((id) => getUser(id)).filter(Boolean);
+function bekukanPeserta(k) {
+  if (Array.isArray(k.peserta)) return false;
+  k.peserta = idPesertaKajian(k);
+  return true;
+}
+
+/** Rekap kehadiran satu kajian. Persen = (hadir + terlambat) / peserta. */
+function rekapKajian(k) {
+  const id = new Set(idPesertaKajian(k));
+  const p = (k.presensi || []).filter((x) => id.has(x.userId));
+  const jml = (st) => p.filter((x) => x.status === st).length;
+  const hadir = jml('hadir'), terlambat = jml('terlambat'), tidakHadir = jml('tidak-hadir');
+  const total = id.size;
+  return { hadir, terlambat, tidakHadir, total, datang: hadir + terlambat,
+    belum: Math.max(0, total - p.length),
+    persen: total ? Math.round(((hadir + terlambat) / total) * 100) : 0 };
+}
+
+/** Kehadiran seorang anggota pada sederet kajian. Yang dihitung hanya
+    kajian yang ia memang pesertanya dan presensinya sudah dicatat. */
+function kehadiranAnggota(userId, daftar) {
+  const wajib = daftar.filter((k) => (k.presensi || []).length && idPesertaKajian(k).includes(userId));
+  const st = (k) => k.presensi.find((p) => p.userId === userId)?.status;
+  const jml = (x) => wajib.filter((k) => st(k) === x).length;
+  const hadir = jml('hadir'), terlambat = jml('terlambat'), tidakHadir = jml('tidak-hadir');
+  return { wajib: wajib.length, hadir, terlambat, tidakHadir, datang: hadir + terlambat,
+    persen: wajib.length ? Math.round(((hadir + terlambat) / wajib.length) * 100) : 0 };
+}
+
+/** Migrasi: kajian lama yang sudah berpresensi dibekukan pesertanya. */
+function bekukanPesertaLama(tersimpan) {
+  (tersimpan.kajian || []).forEach((k) => { if ((k.presensi || []).length) bekukanPeserta(k); });
+}
 
 const PERAN_KAJIAN = { pemakalahId: 'Pemakalah', moderatorId: 'Moderator', notulenId: 'Notulen' };
 const tglKajian = (t) => new Date(`${t}T00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1405,6 +1450,10 @@ function setPresensi(user, idKajian, userId, status, jam) {
   if (!k) throw new Error('Kajian tidak ditemukan.');
   if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat diisi.`);
   k.presensi = k.presensi || [];
+  /* Presensi pertama membekukan daftar peserta. Yang datang belakangan dan
+     belum terdaftar — anggota yang baru masuk angkatan — ikut ditambahkan. */
+  bekukanPeserta(k);
+  if (!k.peserta.includes(userId)) k.peserta.push(userId);
   const ada = k.presensi.find((p) => p.userId === userId);
   const waktu = jam !== undefined ? jam
     : (status === 'tidak-hadir' ? '' : new Date().toTimeString().slice(0, 5));
@@ -1466,9 +1515,9 @@ function tutupPresensi(user, idKajian) {
   if (!k) throw new Error('Kajian tidak ditemukan.');
   if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat ditutup.`);
   k.presensi = k.presensi || [];
+  bekukanPeserta(k);
   const sudah = new Set(k.presensi.map((p) => p.userId));
-  const absen = db.users.filter((u) => u.status === 'aktif'
-    && (!k.angkatan || u.angkatan === k.angkatan) && !sudah.has(u.id));
+  const absen = pesertaKajian(k).filter((u) => !sudah.has(u.id));
   absen.forEach((u) => k.presensi.push({ userId: u.id, status: 'tidak-hadir', jam: '' }));
   k.presensiTutup = new Date().toISOString();
   catat(user, 'kajian.presensi', idKajian, `Menutup presensi "${k.judul}" — ${absen.length} orang dicatat tidak hadir`);
@@ -1487,6 +1536,24 @@ function simpanAnggotaKajian(user, data) {
   });
   catat(user, 'anggota.kelompok', u.id, `Memperbarui jenjang/kelompok ${u.nama}`);
   simpan();
+}
+
+/** Ubah jenjang atau kelompok banyak anggota sekaligus — satu simpan,
+    satu catatan. Dipakai pembagian kelompok dan kenaikan jenjang. */
+function simpanAnggotaMassal(user, daftar, keterangan) {
+  RBAC.assertCan(user, 'anggota.kelompok');
+  let n = 0;
+  daftar.forEach((x) => {
+    const u = db.users.find((y) => y.id === x.id);
+    if (!u) return;
+    ['level', 'kelompok'].forEach((k) => {
+      if (x[k] !== undefined && (u[k] || '') !== x[k]) { u[k] = x[k]; n += 1; }
+    });
+  });
+  if (!n) return 0;
+  catat(user, 'anggota.kelompok', 'massal', keterangan || `Memperbarui jenjang/kelompok ${daftar.length} anggota`);
+  simpan();
+  return n;
 }
 
 function setNotulensi(user, idKajian, teks) {
@@ -2573,6 +2640,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  pesertaKajian, rekapKajian, kehadiranAnggota, simpanAnggotaMassal, berkajian,
   tundaKajian, batalkanKajian, pulihkanKajian, keadaanKajian, kajianJalan, kajianBerisi, angkatanPeserta, pesertaAngkatan,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
   bulanTertutup, penutupan, tutupBuku, bukaBuku, akhirBulan: tanggalAkhirBulan,
