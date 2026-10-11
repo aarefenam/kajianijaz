@@ -874,19 +874,73 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 12.6px;
 }
 
-/* ============================ NAV BAWAH (mobile) ============================ */
-.nav-bawah {
-  display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
-  background: var(--hijau-tua); border-top: 1px solid rgba(255,255,255,.09);
-  padding: 9px 6px calc(9px + env(safe-area-inset-bottom));
+/* ============================ LACI MENU (ponsel) ============================
+   Menu layar sempit: laci yang bergeser dari sisi kanan, dibuka tombol
+   menu di header. Di layar lebar tombolnya tersembunyi, jadi laci ini
+   tak pernah terbuka di sana. */
+.laci { position: fixed; inset: 0; z-index: 120; visibility: hidden; pointer-events: none; }
+.laci.buka { visibility: visible; pointer-events: auto; }
+.laci-tirai {
+  position: absolute; inset: 0; background: rgba(6,20,12,.55);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity .28s ease;
 }
-.nav-bawah-in { display: flex; justify-content: space-around; }
-.nav-bawah a {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 6px 10px; border-radius: 11px; font-size: 10.5px; font-weight: 700;
-  color: rgba(255,255,255,.62);
+.laci.buka .laci-tirai { opacity: 1; }
+.laci-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(86vw, 340px);
+  display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--hijau-tua); color: #fff;
+  border-left: 1px solid rgba(255,255,255,.08); box-shadow: -18px 0 50px rgba(0,0,0,.35);
+  transform: translateX(100%); transition: transform .3s cubic-bezier(.22,.8,.3,1);
+  padding-bottom: env(safe-area-inset-bottom);
 }
-.nav-bawah a.aktif { color: var(--hijau-muda); background: rgba(140,198,63,.12); }
+.laci.buka .laci-panel { transform: none; }
+.laci-kepala {
+  display: flex; align-items: center; gap: 12px; padding: 18px 18px 18px 22px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.laci-kepala .merek { margin-right: auto; min-width: 0; }
+.laci-kepala .merek-nama { font-size: 24px; }
+.laci-kepala .merek-lambang img, .laci-kepala .merek-lambang svg { width: 40px; height: 40px; }
+.laci-tutup {
+  flex: none; width: 42px; height: 42px; display: grid; place-items: center; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.08); border-radius: 11px; color: #fff;
+}
+.laci-tutup:hover { background: rgba(255,255,255,.14); }
+.laci-tutup:focus { outline: none; }
+.laci-tutup:focus-visible, .laci-nav a:focus-visible { outline: 2px solid var(--hijau-muda); outline-offset: 2px; }
+.laci-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+  color: rgba(255,255,255,.42); margin: 0 0 8px; padding: 0 12px;
+}
+.laci-nav { padding: 22px 12px 10px; display: grid; gap: 4px; }
+.laci-nav a {
+  display: flex; align-items: center; gap: 14px; padding: 12px 12px; border-radius: 13px;
+  font-size: 15px; font-weight: 600; color: rgba(255,255,255,.82); text-decoration: none;
+}
+.laci-nav a > svg:last-child { margin-left: auto; width: 16px; height: 16px; opacity: .35; flex: none; }
+.laci-nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+.laci-ik {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px;
+  background: rgba(255,255,255,.07); color: rgba(255,255,255,.8);
+}
+.laci-ik svg { width: 19px; height: 19px; }
+.laci-nav a.aktif { background: rgba(140,198,63,.13); color: #fff; }
+.laci-nav a.aktif .laci-ik { background: var(--hijau-muda); color: var(--hijau-tua); }
+.laci-nav a.aktif > svg:last-child { opacity: .8; color: var(--hijau-muda); }
+.laci-kaki {
+  margin-top: auto; padding: 20px 12px 22px; border-top: 1px solid rgba(255,255,255,.08);
+  display: grid; gap: 10px; font-size: 13px; color: rgba(255,255,255,.72);
+}
+.laci-kaki > a, .laci-kaki > .br { display: flex; align-items: center; gap: 12px; padding: 0 12px; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.laci-kaki > a svg, .laci-kaki > .br svg { flex: none; width: 17px; height: 17px; color: var(--hijau-muda); }
+.laci-kaki .sosmed-baris { padding: 4px 12px 0; }
+.laci-kaki p { margin: 2px 0 0; padding: 0 12px; font-size: 11.8px; color: rgba(255,255,255,.45); }
+/* Selagi laci terbuka, halaman di belakangnya tidak bergulir. */
+html.laci-buka, html.laci-buka body { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .laci-panel, .laci-tirai { transition: none; }
+}
 
 /* ============================ TOAST ============================ */
 .toast-tempat { position: fixed; right: 22px; bottom: 22px; z-index: 300; display: flex; flex-direction: column; gap: 10px; }
@@ -912,8 +966,6 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
 @media (max-width: 860px) {
   .nav { display: none; }
   .tombol-menu { display: grid; place-items: center; }
-  .nav-bawah { display: block; }
-  body { padding-bottom: 74px; }
   .grid-teks-gambar, .grid-teks-gambar.kanan, .grid-kontak, .pita-kutipan { grid-template-columns: 1fr; }
   .grid-teks-gambar.kanan .kotak-gambar { order: 0; }
   .kartu-artikel { grid-template-columns: 1fr; }
@@ -921,7 +973,7 @@ textarea { min-height: 132px; resize: vertical; font-family: inherit; }
   .kepala { gap: 14px; }
   .nomor { width: 50px; height: 50px; font-size: 19px; }
   .baca-isi { padding: 24px 22px 34px; }
-  .toast-tempat { right: 14px; left: 14px; bottom: 88px; }
+  .toast-tempat { right: 14px; left: 14px; bottom: 18px; }
 }
 @media (max-width: 560px) {
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }

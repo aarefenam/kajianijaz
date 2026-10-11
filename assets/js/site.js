@@ -147,17 +147,9 @@ function renderHeader(aktif) {
       <span><span class="merek-nama">${esc(s.nama)}</span><br><span class="merek-tag">${esc(s.tagline)}</span></span>
     </a>
     <nav class="nav">${menu}</nav>
-    <button class="tombol-menu" aria-label="Menu">${IK.menu}</button>
+    <button class="tombol-menu" aria-label="Buka menu" aria-controls="laciMenu" aria-expanded="false">${IK.menu}</button>
   </div></header>`);
-  h.querySelector('.tombol-menu').onclick = () => {
-    const n = h.querySelector('.nav');
-    const buka = n.style.display === 'flex';
-    Object.assign(n.style, buka ? { display: '' } : {
-      display: 'flex', position: 'absolute', top: '78px', left: 0, right: 0,
-      flexDirection: 'column', background: 'var(--hijau-tua)', padding: '14px',
-      borderBottom: '1px solid rgba(255,255,255,.1)',
-    });
-  };
+  h.querySelector('.tombol-menu').onclick = () => bukaLaci(true);
   return h;
 }
 
@@ -198,11 +190,65 @@ function renderFooter() {
   </div></footer>`);
 }
 
-function renderNavBawah(aktif) {
+/* --- menu ponsel: laci samping ---
+   Di layar sempit menu tidak lagi berjajar di bawah layar. Tombol menu di
+   header membuka laci dari sisi kanan: lambang, daftar halaman berikon,
+   dan kontak. Menutup dengan tombol silang, ketukan di luar laci, tombol
+   Esc, atau memilih sebuah halaman. */
+function bukaLaci(buka) {
+  const laci = document.getElementById('laciMenu');
+  if (!laci) return;
+  laci.classList.toggle('buka', buka);
+  laci.setAttribute('aria-hidden', buka ? 'false' : 'true');
+  /* Halaman di belakang laci tidak ikut bergulir. */
+  document.documentElement.classList.toggle('laci-buka', buka);
+  const pemicu = document.querySelector('.tombol-menu');
+  pemicu?.setAttribute('aria-expanded', buka ? 'true' : 'false');
+  if (buka) laci.querySelector('.laci-tutup')?.focus();
+  else pemicu?.focus();
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('laciMenu')?.classList.contains('buka')) bukaLaci(false);
+  });
+}
+
+function renderLaci(aktif) {
+  const s = Store.cms.situs;
   const ikon = { index: IK.rumah, tentang: IK.buku, artikel: IK.dokumen, kontak: IK.email, daftar: IK.orang };
-  return el(`<nav class="nav-bawah"><div class="nav-bawah-in">
-    ${Store.cms.situs.menu.map((m) => `<a href="${esc(taut(m.href))}" class="${kunciHal(m.href) === kunciHal(aktif) ? 'aktif' : ''}">${ikon[kunciHal(m.href)] || IK.rumah}<span>${esc(m.label)}</span></a>`).join('')}
-  </div></nav>`);
+  const sos = Object.entries(s.sosmed || {}).filter(([, v]) => v)
+    .map(([k, v]) => `<a href="${esc(v)}" target="_blank" rel="noopener" aria-label="${k}">${IK[k] || IK.email}</a>`).join('');
+  const n = el(`<div class="laci" id="laciMenu" aria-hidden="true">
+    <div class="laci-tirai" data-tutup></div>
+    <aside class="laci-panel" role="dialog" aria-modal="true" aria-label="Menu">
+      <div class="laci-kepala">
+        <a class="merek" href="./">
+          <span class="merek-lambang">${lambang()}</span>
+          <span><span class="merek-nama">${esc(s.nama)}</span><br><span class="merek-tag">${esc(s.tagline)}</span></span>
+        </a>
+        <button class="laci-tutup" data-tutup aria-label="Tutup menu">${IK.tutup}</button>
+      </div>
+      <nav class="laci-nav">
+        <div class="laci-label">Menu</div>
+        ${s.menu.map((m) => { const k = kunciHal(m.href);
+          return `<a href="${esc(taut(m.href))}" class="${k === kunciHal(aktif) ? 'aktif' : ''}"${k === kunciHal(aktif) ? ' aria-current="page"' : ''}>
+            <span class="laci-ik">${ikon[k] || IK.dokumen}</span><span>${esc(m.label)}</span>${IK.panah}</a>`; }).join('')}
+      </nav>
+      <div class="laci-kaki">
+        <div class="laci-label">Kontak</div>
+        ${s.email ? `<a href="mailto:${esc(s.email)}">${IK.email}<span>${esc(s.email)}</span></a>` : ''}
+        ${s.telepon ? `<span class="br">${IK.telepon}<span>${esc(s.telepon)}</span></span>` : ''}
+        ${sos ? `<div class="sosmed-baris">${sos}</div>` : ''}
+        ${s.naungan ? `<p>${esc(s.naungan)}</p>` : ''}
+      </div>
+    </aside>
+  </div>`);
+  n.querySelectorAll('[data-tutup]').forEach((x) => { x.onclick = () => bukaLaci(false); });
+  /* Memilih halaman menutup laci — juga bila tujuannya halaman yang sama. */
+  n.querySelectorAll('.laci-nav a').forEach((a) => a.addEventListener('click', () => bukaLaci(false)));
+  /* Laci dirender ulang bersama halamannya: keadaan terkunci dilepas. */
+  document.documentElement.classList.remove('laci-buka');
+  return n;
 }
 
 /* ---------------- ornamen ----------------
@@ -1358,7 +1404,7 @@ function render(namaHalaman, fileAktif) {
   });
 
   app.appendChild(renderFooter());
-  app.appendChild(renderNavBawah(fileAktif));
+  app.appendChild(renderLaci(fileAktif));
   rapikanTaut(app);
 }
 
@@ -1425,7 +1471,7 @@ async function mulaiKhusus(file, judul, bangun) {
   app.appendChild(renderHeader(file));
   app.appendChild(bangun());
   app.appendChild(renderFooter());
-  app.appendChild(renderNavBawah(file));
+  app.appendChild(renderLaci(file));
   rapikanTaut(app);
 }
 
