@@ -476,6 +476,7 @@ const MENU = [
     lonceng: () => Store.db.keuangan.filter((t) => t.status === 'ditolak').length },
   { id: 'transfer-kas',    label: 'Transfer & Tukar',    ikon: I.timbang,    izin: ['bendahara.manage'] },
   { id: 'tutup-buku',      label: 'Tutup Buku',          ikon: I.gembok,     izin: ['bendahara.manage'] },
+  { id: 'anggaran',        label: 'Anggaran & Realisasi', ikon: I.sasaran,   izin: ['bendahara.manage'] },
   { id: 'saldo',           label: 'Saldo Keseluruhan',   ikon: I.timbang,    izin: ['bendahara.manage'] },
   { id: 'laporan-kas',     label: 'Laporan Keuangan',    ikon: I.dok,        izin: ['keuangan.report'], tersembunyiBila: () => !ruangBendahara() },
   { grup: 'Pengaturan', izin: ['bendahara.manage'] },
@@ -635,6 +636,7 @@ const MENU_BENDAHARA = [
   { id: 'tutup-buku' },
   { grup: 'Laporkan' },
   { id: 'laporan-kas' },
+  { id: 'anggaran' },
   { grup: 'Pengaturan' },
   { id: 'kategori-akun' },
 ];
@@ -2617,6 +2619,9 @@ const MODUL = {
       { l: 'Waktu',   kelas: 'utuh', isi: (x) => (x.tglMulai ? esc(waktuProgram(x))
         : `${esc(x.waktu || '—')}<br><span class="sub-sel perlu">tanggal belum diisi</span>`) },
       { l: 'Penanggung Jawab', penuh: true, isi: (x) => esc(x.pjId ? namaPendek(x.pjId) : '—') },
+      /* Biaya yang sudah keluar, dari buku kas Bendahara. */
+      { l: 'Biaya', penuh: true, kelas: 'utuh', isi: (x) => { const k = kasTaut('programId', x.id, 'keluar');
+        return k.length ? esc(uangDua(jumlahKas(k, 'rp'), jumlahKas(k, 'egp'))) : '—'; } },
       { l: 'Status',  isi: lencanaProgram },
       { l: 'Selesai', tengah: true, isi: () => '', pasang: selCentang },
     ],
@@ -4596,7 +4601,7 @@ Object.assign(MODUL, {
   'buku-keuangan': modulBuku('modal', {
     izin: 'buku.anggaran',
     judul: 'Kasaran Modal', satuan: 'Pos Modal',
-    sub: 'Rencana biaya penerbitan — terpisah dari Buku Kas Bendahara.',
+    sub: 'Rencana biaya penerbitan; realisasinya dicatat Bendahara.',
     cari: (x) => x.uraian, tajuk: (x) => x.uraian,
     kolom: [
       { l: 'Uraian', isi: (x) => `<b>${esc(x.uraian)}</b>` },
@@ -5040,10 +5045,9 @@ HAL['buku-keuangan'] = () => {
   const totEgp = b.modal.reduce((s, m) => s + Number(m.egp || 0), 0);
 
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
-    <b>Ini rencana biaya, bukan pembukuan kas</b>
-    Kasaran modal memperkirakan kebutuhan dana penerbitan. Uang yang benar-benar keluar
-    tetap dicatat Bendahara pada Buku Kas, sehingga rencana yang belum tentu terpakai
-    tidak mengotori pembukuan.
+    <b>Rencana di sini, uangnya di Bendahara</b>
+    Kasaran modal memperkirakan kebutuhan dana penerbitan. Uang yang benar-benar keluar dan masuk dicatat
+    Bendahara pada Buku Kas dan ditautkan ke proyek ini — pusat keuangan tetap satu. Realisasinya tampil di bawah.
   </div></div></div>`);
 
   box.appendChild(el(`<div class="saldo-kartu" style="margin-bottom:20px">
@@ -5056,9 +5060,23 @@ HAL['buku-keuangan'] = () => {
     </div></div>`));
 
   box.appendChild(halamanOrg('buku-keuangan'));
+
+  /* Realisasi: transaksi buku kas yang ditautkan Bendahara ke proyek ini. */
+  const r = realisasiBuku(b);
+  const tx = [...r.keluar, ...r.masuk].sort((x, y) => y.tanggal.localeCompare(x.tanggal));
+  box.appendChild(el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala"><h3>Realisasi dari Buku Kas</h3>
+    <span class="hitung">keluar ${esc(uangDua(r.keluarRp, r.keluarEgp))} · masuk ${esc(uangDua(r.masukRp, r.masukEgp))}</span></div>
+    ${tx.length ? `<div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>No. Bukti</th><th>Tanggal</th><th>Uraian</th>
+      <th>Masuk</th><th>Keluar</th></tr></thead><tbody>${tx.map((t, i) => `<tr><td class="kol-no">${i + 1}</td>
+        <td class="utuh"><span class="nia">${esc(t.nomor || '—')}</span></td><td class="utuh">${tgl(t.tanggal)}</td>
+        <td><b>${esc(t.sumber || t.kategori)}</b><br><span class="sub-sel">${esc(t.kategori || '')}</span></td>
+        <td class="utuh">${t.jenis === 'masuk' ? esc(Store.nominalGabung(t)) : '—'}</td>
+        <td class="utuh">${t.jenis === 'keluar' ? esc(Store.nominalGabung(t)) : '—'}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="kosong-erp" style="padding:24px">${I.kotak}<p>Belum ada transaksi untuk proyek ini</p>
+        <small>Bendahara menautkannya lewat "Proyek Buku Terkait" saat mencatat transaksi.</small></div>`}</div>`));
   return box;
 };
-HAL['buku-keuangan'].judul = () => ['Keuangan Buku', 'Kasaran modal penerbitan — terpisah dari Buku Kas Bendahara.'];
+HAL['buku-keuangan'].judul = () => ['Keuangan Buku', 'Rencana biaya penerbitan dan realisasinya dari Buku Kas Bendahara.'];
 
 ['buku-penulisan', 'buku-editing', 'buku-arsip'].forEach((nama) => {
   HAL[nama] = () => (bk() ? halamanOrg(nama)
@@ -7091,6 +7109,8 @@ function antreanBendahara() {
     { rute: 'pengeluaran', ikon: I.dokCek, judul: 'Menunggu Persetujuan', n: tunggu.length,
       satuan: 'pengeluaran belum diputuskan Ketua', kosong: 'Tidak ada pengeluaran yang menunggu',
       rinci: tunggu[0] && `${tunggu[0].sumber} — ${Store.nominalGabung(tunggu[0])}` },
+    ...(anggaranLampau().length ? [{ rute: 'anggaran', ikon: I.sasaran, judul: 'Melampaui Anggaran', n: anggaranLampau().length,
+      satuan: 'kategori melewati anggarannya', kosong: '', rinci: anggaranLampau()[0].k.nama }] : []),
     { rute: 'tutup-buku', ikon: I.gembok, judul: 'Tutup Buku', n: belumTutup.length,
       satuan: 'bulan lampau belum ditutup', kosong: 'Semua bulan lampau sudah ditutup',
       rinci: belumTutup[0] && namaBulan(belumTutup[0]) },
@@ -7272,6 +7292,19 @@ const kolomNominal = [
   { l: 'Tanggal', kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
   kolomFotoBukti,
 ];
+/* Sebuah transaksi boleh ditautkan ke program kerja atau proyek buku.
+   Dari tautan itulah biaya tiap program dan realisasi tiap buku dihitung
+   — tanpa pembukuan kedua di tempat lain. */
+const medanTaut = [
+  { k: 'programId', l: 'Program Kerja Terkait', jenis: 'pilih',
+    pilihan: () => [{ v: '', l: '— tidak terkait program tertentu —' },
+      ...[...Store.db.kaleidoskop].sort(urutProgram).map((k) => ({ v: k.id, l: `${k.kegiatan} (${waktuProgram(k)})` }))] },
+  { k: 'bukuId', l: 'Proyek Buku Terkait', jenis: 'pilih',
+    pilihan: () => [{ v: '', l: '— tidak terkait proyek buku —' }, ...Store.db.buku.map((b) => ({ v: b.id, l: b.judul }))] },
+];
+/** Jumlah transaksi sah yang ditautkan ke sesuatu, per jenis. */
+const kasTaut = (kunci, id, jenis) => Store.kasSah().filter((t) => t[kunci] === id && t.jenis === jenis);
+
 const medanNominal = [
   { k: 'rp', l: 'Nominal Rupiah (Rp)', jenis: 'angka', ph: '0' },
   { k: 'egp', l: 'Nominal Pound (EGP)', jenis: 'angka', ph: '0',
@@ -7310,7 +7343,7 @@ Object.assign(MODUL, {
     form: [
       { k: 'sumber', l: 'Nama Donatur / Sumber', wajib: true, ph: 'Bu Amel' },
       { k: 'kategori', l: 'Kategori', jenis: 'pilih', bawaan: 'Infaq/Donasi', pilihan: () => kategoriUntuk('masuk') },
-      ...medanNominal,
+      ...medanNominal, ...medanTaut,
     ],
   }),
   pengeluaran: modulKas('pengeluaran', {
@@ -7331,14 +7364,15 @@ Object.assign(MODUL, {
       if (rp >= 0 && egp >= 0) return '';
       return `Saldo "${a.nama}" akan menjadi ${rp < 0 ? rpFmt(rp) : egpFmt(egp)}. Periksa akun dan nominalnya — tekan Simpan sekali lagi bila memang benar.`;
     },
-    kolom: [kolomBukti, { l: 'Uraian', isi: (x) => `<b>${esc(x.sumber || x.kategori)}</b>${lencanaKas(x)}<br><span class="sub-sel">${esc(x.kategori || '')}</span>` }, ...kolomNominal],
+    kolom: [kolomBukti, { l: 'Uraian', isi: (x) => `<b>${esc(x.sumber || x.kategori)}</b>${lencanaKas(x)}<br><span class="sub-sel">${esc([x.kategori,
+      Store.db.kaleidoskop.find((k) => k.id === x.programId)?.kegiatan, Store.db.buku.find((b) => b.id === x.bukuId)?.judul].filter(Boolean).join(' · '))}</span>` }, ...kolomNominal],
     /* Pengeluaran yang perlu disetujui tidak langsung mengurangi saldo. */
     sesudahSimpan: (d) => { if (Store.perluSetuju({ ...d, jenis: 'keluar' })) toast('Tercatat dan menunggu persetujuan Ketua Umum. Saldo belum berkurang.'); },
     form: [
       { k: 'sumber', l: 'Uraian Pengeluaran', wajib: true, ph: 'Sewa sekretariat bulan Oktober',
         bantu: 'Untuk apa uang ini dikeluarkan. Golongannya dipilih pada Kategori.' },
       { k: 'kategori', l: 'Kategori', jenis: 'pilih', bawaan: 'Sewa Sekretariat', pilihan: () => kategoriUntuk('keluar') },
-      ...medanNominal,
+      ...medanNominal, ...medanTaut,
     ],
   }),
   'akun-kas': {
@@ -7973,6 +8007,115 @@ HAL['tutup-buku'] = () => {
   return box;
 };
 HAL['tutup-buku'].judul = () => ['Tutup Buku', 'Cocokkan uang yang ada dengan buku, lalu kunci bulannya.'];
+
+/* ------------------------------------------------------------
+   ANGGARAN & REALISASI
+   ------------------------------------------------------------ */
+/** Baris anggaran lawan realisasi sebuah kategori pengeluaran. */
+function barisAnggaran(k) {
+  const ag = Store.anggaranKategori(k.id) || { rp: 0, egp: 0 };
+  const pakai = Store.kasPeriode().filter((t) => t.jenis === 'keluar' && (t.kategoriId === k.id || (!t.kategoriId && t.kategori === k.nama)));
+  const rp = jumlahKas(pakai, 'rp'), egp = jumlahKas(pakai, 'egp');
+  /* Persen dihitung pada mata uang yang dianggarkan; bila keduanya, yang terbesar. */
+  const persen = Math.max(ag.rp ? rp / ag.rp : 0, ag.egp ? egp / ag.egp : 0);
+  const lampau = !!((ag.rp && rp > ag.rp) || (ag.egp && egp > ag.egp));
+  return { k, ag, rp, egp, n: pakai.length, persen, lampau, tanpa: !ag.rp && !ag.egp };
+}
+const anggaranLampau = () => Store.db.kategoriKeuangan.filter((k) => k.jenis === 'keluar').map(barisAnggaran).filter((b) => b.lampau);
+
+HAL.anggaran = () => {
+  const p = Store.periodeAktif();
+  const bisa = RBAC.can(U, 'keuangan.akun');
+  const data = Store.db.kategoriKeuangan.filter((k) => k.jenis === 'keluar' && (!k.nonaktif || Store.anggaranKategori(k.id))).map(barisAnggaran);
+  const tot = data.reduce((s, b) => ({ aRp: s.aRp + b.ag.rp, aEgp: s.aEgp + b.ag.egp, rRp: s.rRp + b.rp, rEgp: s.rEgp + b.egp }), { aRp: 0, aEgp: 0, rRp: 0, rEgp: 0 });
+
+  const box = el(`<div>${p.ditetapkan ? '' : `<div class="notis notis-kuning">${I.peringatan}<div><b>Periode kepengurusan belum ditetapkan</b>
+    Anggaran ini memakai tahun kalender ${esc(p.mulai.slice(0, 4))}. Tetapkan masa kepengurusan di Kategori & Akun agar anggaran mengikutinya.</div></div>`}
+    <div class="grid-stat">
+    ${[
+      { ik: I.sasaran, n: uangDua(tot.aRp, tot.aEgp), l: 'Total anggaran', w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+      { ik: I.keluarKas, n: uangDua(tot.rRp, tot.rEgp), l: 'Sudah terpakai', w: 'rgba(240,149,30,.14)', wc: '#B87310' },
+      { ik: I.peringatan, n: data.filter((b) => b.lampau).length, l: 'Kategori melampaui anggaran', w: 'rgba(229,83,75,.12)', wc: '#B23E37' },
+      { ik: I.info, n: data.filter((b) => b.tanpa && b.n).length, l: 'Terpakai tanpa anggaran', w: 'rgba(120,130,125,.14)', wc: '#5E6B64' },
+    ].map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
+      <div class="stat-nilai" style="${String(x.n).length > 9 ? 'font-size:17px' : ''}">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}
+  </div></div>`);
+
+  const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Anggaran per Kategori</h3><span class="hitung">periode ${tgl(p.mulai)} – ${tgl(p.selesai)}</span></div>
+    <div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Kategori</th><th>Anggaran</th><th>Terpakai</th>
+      <th>Sisa</th><th style="min-width:170px">Pemakaian</th>${bisa ? '<th class="kol-aksi">Aksi</th>' : ''}</tr></thead><tbody></tbody></table></div></div>`);
+  const tb = kartu.querySelector('tbody');
+  data.forEach((b, i) => {
+    const pct = Math.round(b.persen * 100);
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+      <td><b>${esc(b.k.nama)}</b>${lencanaNonaktif(b.k)}<br><span class="sub-sel">${b.n} transaksi</span></td>
+      <td class="utuh">${b.tanpa ? '<span class="sub-sel">belum dianggarkan</span>' : uangDua(b.ag.rp, b.ag.egp)}</td>
+      <td class="utuh">${uangDua(b.rp, b.egp)}</td>
+      <td class="utuh">${b.tanpa ? '—' : [b.ag.rp ? `<span class="${b.ag.rp - b.rp < 0 ? 'perlu' : ''}">${rpFmt(b.ag.rp - b.rp)}</span>` : '',
+        b.ag.egp ? `<span class="${b.ag.egp - b.egp < 0 ? 'perlu' : ''}">${egpFmt(b.ag.egp - b.egp)}</span>` : ''].filter(Boolean).join('<br>')}</td>
+      <td>${b.tanpa ? '<span class="sub-sel">—</span>' : `<div style="display:flex;align-items:center;gap:9px">
+        <div class="bar-maju${b.lampau ? ' lampau' : ''}" style="flex:1"><span style="width:${Math.min(100, pct)}%"></span></div>
+        <b style="font-size:12.2px" class="${b.lampau ? 'perlu' : ''}">${pct}%</b></div>`}</td>
+      ${bisa ? `<td class="kol-aksi"><button class="ikon-aksi sunting" title="Tetapkan anggaran">${I.sunting}</button></td>` : ''}</tr>`);
+    tr.querySelector('.sunting')?.addEventListener('click', () => {
+      const f = el(`<div><p style="margin:0 0 14px;font-size:13.4px;color:#44534A">Anggaran <b>${esc(b.k.nama)}</b> untuk periode ini.
+        Sudah terpakai ${esc(uangDua(b.rp, b.egp))}.</p>
+        <div class="grid-form">
+          <div class="grup"><label>Rupiah (Rp)</label><input type="number" min="0" step="any" data-rp value="${b.ag.rp || ''}" placeholder="0"></div>
+          <div class="grup"><label>Pound (EGP)</label><input type="number" min="0" step="any" data-egp value="${b.ag.egp || ''}" placeholder="0"></div>
+        </div><div class="bantu">Isi mata uang yang memang dipakai kategori ini. Mengosongkan keduanya berarti tidak dianggarkan.</div></div>`);
+      const k = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+        <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
+      modal({ judul: 'Tetapkan Anggaran', isi: f, kaki: k });
+      k.querySelector('[data-b]').onclick = tutupModal;
+      k.querySelector('[data-s]').onclick = () => {
+        if (aman(() => Store.simpanAnggaran(U, { kategoriId: b.k.id, rp: f.querySelector('[data-rp]').value, egp: f.querySelector('[data-egp]').value }))) {
+          tutupModal(); toast('Anggaran tersimpan.'); gambar();
+        }
+      };
+    });
+    tb.appendChild(tr);
+  });
+  box.appendChild(kartu);
+
+  /* Biaya per program kerja dan per proyek buku — dari transaksi yang ditautkan. */
+  const prog = [...Store.db.kaleidoskop].sort(urutProgram).map((k) => ({ k, keluar: kasTaut('programId', k.id, 'keluar'), masuk: kasTaut('programId', k.id, 'masuk') }))
+    .filter((x) => x.keluar.length || x.masuk.length);
+  box.appendChild(el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala"><h3>Biaya per Program Kerja</h3>
+    <span class="hitung">dari transaksi yang ditautkan ke programnya</span></div>
+    ${prog.length ? `<div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Program</th><th>Waktu</th><th>Pemasukan</th><th>Pengeluaran</th><th>Transaksi</th></tr></thead>
+      <tbody>${prog.map((x, i) => `<tr><td class="kol-no">${i + 1}</td><td><b>${esc(x.k.kegiatan)}</b></td><td class="utuh">${esc(waktuProgram(x.k))}</td>
+        <td class="utuh">${uangDua(jumlahKas(x.masuk, 'rp'), jumlahKas(x.masuk, 'egp'))}</td>
+        <td class="utuh">${uangDua(jumlahKas(x.keluar, 'rp'), jumlahKas(x.keluar, 'egp'))}</td>
+        <td class="utuh">${x.keluar.length + x.masuk.length}</td></tr>`).join('')}</tbody></table></div>`
+      : `<div class="kosong-erp">${I.kotak}<p>Belum ada transaksi yang ditautkan ke program kerja</p>
+        <small>Pilih "Program Kerja Terkait" saat mencatat pengeluaran atau pemasukan.</small></div>`}</div>`));
+
+  box.appendChild(el(`<div class="kartu"><div class="kartu-kepala"><h3>Proyek Buku</h3>
+    <span class="hitung">rencana biaya dari PJ Buku, realisasi dari buku kas</span></div>
+    ${Store.db.buku.length ? `<div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Judul Buku</th><th>Rencana Biaya</th>
+      <th>Sudah Keluar</th><th>Pemasukan</th><th>Sisa Rencana</th></tr></thead>
+      <tbody>${Store.db.buku.map((b, i) => { const r = realisasiBuku(b); return `<tr><td class="kol-no">${i + 1}</td>
+        <td><b>${esc(b.judul)}</b><br><span class="sub-sel">${esc(TAHAP_BUKU[b.tahap] || b.tahap || '')}</span></td>
+        <td class="utuh">${rpFmt(r.rencanaRp)}${r.rencanaEgp ? `<br><span class="sub-sel">setara ${egpFmt(r.rencanaEgp)}</span>` : ''}</td><td class="utuh">${uangDua(r.keluarRp, r.keluarEgp)}</td>
+        <td class="utuh">${uangDua(r.masukRp, r.masukEgp)}</td>
+        <td class="utuh">${r.rencanaRp ? `<span class="${r.rencanaRp - r.keluarRp < 0 ? 'perlu' : ''}">${rpFmt(r.rencanaRp - r.keluarRp)}</span>${
+          r.keluarEgp ? '<br><span class="sub-sel">belum termasuk yang dibayar pound</span>' : ''}` : '—'}</td></tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="kosong-erp">${I.kotak}<p>Belum ada proyek buku</p></div>`}</div>`));
+  return box;
+};
+HAL.anggaran.judul = () => ['Anggaran & Realisasi', 'Rencana lawan uang yang benar-benar keluar — per kategori, program, dan buku.'];
+
+/** Rencana biaya sebuah buku (dari PJ Buku) lawan realisasinya di buku kas. */
+function realisasiBuku(b) {
+  const keluar = kasTaut('bukuId', b.id, 'keluar'), masuk = kasTaut('bukuId', b.id, 'masuk');
+  return {
+    rencanaRp: (b.modal || []).reduce((s, m) => s + Number(m.rp || 0), 0), rencanaEgp: (b.modal || []).reduce((s, m) => s + Number(m.egp || 0), 0),
+    keluarRp: jumlahKas(keluar, 'rp'), keluarEgp: jumlahKas(keluar, 'egp'), masukRp: jumlahKas(masuk, 'rp'), masukEgp: jumlahKas(masuk, 'egp'),
+    keluar, masuk,
+  };
+}
 
 /* ------------------------------------------------------------
    TRANSFER & TUKAR — uang berpindah, bukan bertambah atau berkurang

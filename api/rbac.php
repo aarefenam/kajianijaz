@@ -110,6 +110,7 @@ const IZIN_KOLEKSI = [
   'aturKas'          => ['keuangan.akun', 'keuangan.approve'],
   /* Bendahara menutup buku; Ketua membukanya kembali — lihat jagaKas(). */
   'tutupBuku'        => ['keuangan.manage', 'keuangan.approve'],
+  'anggaran'         => ['keuangan.akun'],
   'pesan'            => ['pesan.read'],
   'surat'            => ['surat.manage'],
   'sertifikat'       => ['sertifikat.manage'],

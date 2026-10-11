@@ -59,6 +59,7 @@ function dbAwal() {
     kategoriKeuangan: clone(s.kategoriKeuangan),
     aturKas         : clone(s.aturKas),
     tutupBuku       : clone(s.tutupBuku),
+    anggaran        : clone(s.anggaran),
     dataDiri        : clone(s.dataDiri),
     pendaftaran     : clone(s.pendaftaran),
     /* Media & Website — ruang kerja PJ Media & Website */
@@ -1804,6 +1805,28 @@ function tunggakanIuran(userId) {
   return { bulan: belum, ...sisa };
 }
 
+/* --- anggaran ---
+   Anggaran ditetapkan per kategori pengeluaran untuk satu periode
+   kepengurusan. Realisasinya tidak disimpan: ia dihitung dari buku kas,
+   sehingga tak pernah berselisih dengannya. */
+const kasPeriode = () => { const p = periodeAktif(); return kasSah().filter((t) => t.tanggal >= p.mulai && t.tanggal <= p.selesai); };
+const kodePeriodeKini = () => kodePeriode(hariIni(), db.aturKas);
+const anggaranKategori = (kategoriId) => (db.anggaran || []).find((x) => x.kategoriId === kategoriId && x.kode === kodePeriodeKini()) || null;
+
+function simpanAnggaran(user, { kategoriId, rp, egp }) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  const k = db.kategoriKeuangan.find((x) => x.id === kategoriId);
+  if (!k || k.jenis !== 'keluar') throw new Error('Anggaran hanya untuk kategori pengeluaran.');
+  const bersih = (n) => Math.max(0, Math.round(Number(n) || 0));
+  db.anggaran = db.anggaran || [];
+  const kode = kodePeriodeKini();
+  let baris = db.anggaran.find((x) => x.kategoriId === kategoriId && x.kode === kode);
+  if (!baris) { baris = { id: uid('ag'), kategoriId, kode }; db.anggaran.push(baris); }
+  baris.rp = bersih(rp); baris.egp = bersih(egp);
+  catat(user, 'anggaran.atur', kategoriId, `Menetapkan anggaran "${k.nama}" periode ${kode}: Rp ${baris.rp.toLocaleString('id-ID')} / EGP ${baris.egp.toLocaleString('id-ID')}`);
+  simpan();
+}
+
 /** Catat penerimaan iuran. `jumlahBulan` lebih dari satu mencatat
     beberapa bulan berturut-turut — tiap bulan satu transaksi bernomor
     sendiri, supaya tiap bulan dapat dibatalkan atau dilacak terpisah. */
@@ -2408,7 +2431,8 @@ window.Store = {
   bulanTertutup, penutupan, tutupBuku, bukaBuku, akhirBulan: tanggalAkhirBulan,
   kasSah, kasSahkah, perluSetuju, simpanTransfer, batalkanTransaksi, putuskanKas, aturBatasSetuju, aturPeriode, dicatatHariIni, kodePeriode,
   simpanAkunKas, hapusAkunKas, simpanKategoriKas, hapusKategoriKas, transaksiKategori,
-  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, kasPeriode, kodePeriodeKini, anggaranKategori, simpanAnggaran,
+  aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,

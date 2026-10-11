@@ -1241,6 +1241,9 @@ SEED.pendaftaran = [];
 /* Bulan yang bukunya sudah ditutup. */
 SEED.tutupBuku = [];
 
+/* Anggaran pengeluaran per kategori, per periode kepengurusan. */
+SEED.anggaran = [];
+
 SEED.akunKas = [
   { id:'ak1', nama:'Kas Tunai Sekretariat', jenis:'tunai', saldoAwalRp:  500000, saldoAwalEgp: 400, ket:'Uang tunai yang dipegang di sekretariat.' },
   { id:'ak2', nama:'Rekening Bank BSI',     jenis:'bank',  saldoAwalRp: 1500000, saldoAwalEgp:   0, ket:'Rekening atas nama kepengurusan.' },

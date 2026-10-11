@@ -1598,6 +1598,8 @@ input[type="month"].pilih-saring { min-width: 150px; }
 .ks-iuran-bulan b { font-weight: 600; font-size: 12.6px; text-align: right; }
 b.perlu { color: var(--e-merah); }
 
+.bar-maju.lampau span { background: linear-gradient(90deg, #E5534B, #B23E37); }
+
 /* --------- layar pindai --------- */
 .layar-pindai {
   position: fixed; inset: 0; z-index: 120; background: #0B1F14; color: #fff;
