@@ -427,6 +427,16 @@ dibagikan, jadi yang tercecer tidak boleh membocorkan apa pun.
 urusannya — jenjang, kelompok, keaktifan. Menambah akun serta mengubah surel dan
 peran tetap milik Sekretaris dan Ketua.
 
+Batas itu **ditegakkan server**, bukan hanya layar. `jagaUbahPengguna()` di
+`api/inti.php` membandingkan tiap baris `users` yang dikirim dengan yang
+tersimpan: pemegang `anggota.kelompok` hanya boleh mengubah jenjang, kelompok,
+dan keaktifan orang lain serta profilnya sendiri; pemegang `anggota.manage`
+boleh menambah dan mengubah data anggota tetapi tidak peran — akun baru lahir
+sebagai `anggota`; peran, serta surel dan status akun Ketua Umum, hanya dapat
+diubah pemegang `user.manage`. Sebelum penjaga ini ada, izin diperiksa per
+koleksi saja, sehingga Koordinator maupun Sekretaris dapat menaikkan perannya
+sendiri menjadi Ketua Umum dengan satu kiriman ke `api/simpan.php`.
+
 ### Ruang kerja Bendahara
 
 Rupiah dan pound Mesir adalah **dua kantong terpisah**, bukan hasil konversi satu

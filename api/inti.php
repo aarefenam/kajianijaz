@@ -277,7 +277,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
     galat("Koleksi '$nama' tidak dapat ditulis lewat jalur ini.", 403);
   }
   if ($izin === ['*']) return;                 // cukup sudah masuk
-  if ($nama === 'users') jagaHapusPengguna($user, $isiBaru);
+  if ($nama === 'users') { jagaHapusPengguna($user, $isiBaru); jagaUbahPengguna($user, $isiBaru); }
   if ($nama === 'keuangan' || $nama === 'aturKas' || $nama === 'tutupBuku') jagaKas($user, $nama, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
@@ -433,6 +433,86 @@ function jagaHapusPengguna(array $user, $isiBaru): void {
     }
     if (bolehkah($u, 'user.manage') && !bolehkah($user, 'user.manage')) {
       galat('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.', 403);
+    }
+  }
+}
+
+/**
+ * Penjaga isi `users`. Izin koleksi saja tidak cukup: `users` boleh
+ * ditulis tiga macam orang dengan wewenang yang sangat berbeda, dan
+ * peramban selalu mengirim SELURUH koleksi. Tanpa pemeriksaan per baris,
+ * PJ Koordinator — yang hanya berhak mengatur jenjang dan kelompok —
+ * dapat menaikkan perannya sendiri menjadi Ketua Umum dengan satu
+ * kiriman, dan Sekretaris pun demikian.
+ *
+ *   user.manage      : bebas.
+ *   anggota.manage   : menambah dan mengubah data anggota, tetapi tidak
+ *                      peran; akun baru lahir sebagai 'anggota'.
+ *   anggota.kelompok : hanya jenjang, kelompok, dan keaktifan — tak
+ *                      menambah akun. Pada barisnya sendiri ia tetap
+ *                      boleh menyunting profilnya.
+ *
+ * Yang tak memegang satu pun izin itu tidak diperiksa di sini; jalurnya
+ * hanyaProfilSendiri().
+ */
+function jagaUbahPengguna(array $user, $isiBaru): void {
+  if (!is_array($isiBaru) || bolehkah($user, 'user.manage')) return;
+  $kelola   = bolehkah($user, 'anggota.manage');
+  $kelompok = bolehkah($user, 'anggota.kelompok');
+  if (!$kelola && !$kelompok) return;
+
+  $lama = [];
+  foreach (bacaKoleksi('users')['isi'] ?? [] as $u) {
+    if (($u['id'] ?? '') !== '') $lama[$u['id']] = $u;
+  }
+  /* Kosong, null, dan tak ada dianggap sama: peramban kerap melengkapi
+     kolom yang belum ada dengan nilai kosong. */
+  $beda = function ($a, $b): bool {
+    $a = ($a === null || $a === '') ? null : $a;
+    $b = ($b === null || $b === '') ? null : $b;
+    return $a != $b;
+  };
+
+  foreach ($isiBaru as $u) {
+    if (!is_array($u)) galat('Bentuk data anggota tidak sah.');
+    $id = $u['id'] ?? '';
+
+    if ($id === '' || !isset($lama[$id])) {
+      if (!$kelola) galat('Anda tidak berwenang menambah anggota.', 403);
+      if (kunciRole((string) ($u['role'] ?? 'anggota')) !== 'anggota') {
+        galat('Hanya Ketua Umum yang dapat menetapkan peran.', 403);
+      }
+      continue;
+    }
+
+    $a = $lama[$id];
+    $berubah = [];
+    foreach (array_unique(array_merge(array_keys($a), array_keys($u))) as $kunci) {
+      if ($kunci === 'password' || $kunci === 'sandiAwal') continue;   // diurus jagaRahasiaPengguna
+      /* Nama peran lama dan barunya setara — migrasi peramban boleh menggantinya. */
+      if ($kunci === 'role') {
+        if (kunciRole((string) ($a['role'] ?? '')) !== kunciRole((string) ($u['role'] ?? ''))) $berubah[] = 'role';
+        continue;
+      }
+      if ($beda($a[$kunci] ?? null, $u[$kunci] ?? null)) $berubah[] = $kunci;
+    }
+    if (!$berubah) continue;
+
+    if (in_array('role', $berubah, true)) {
+      galat('Hanya Ketua Umum yang dapat mengubah peran.', 403);
+    }
+    $sendiri = $id === ($user['id'] ?? null);
+    if (!$sendiri && bolehkah($a, 'user.manage') && array_intersect($berubah, ['email', 'status'])) {
+      galat('Surel dan status akun Ketua Umum hanya dapat diubah Ketua Umum.', 403);
+    }
+    if ($kelola) continue;
+
+    /* Tinggal pemegang anggota.kelompok saja. */
+    $terlarang = $sendiri
+      ? array_intersect($berubah, ['angkatan', 'nia'])
+      : array_diff($berubah, ['level', 'kelompok', 'status']);
+    if ($terlarang) {
+      galat('Koordinator hanya dapat mengubah jenjang, kelompok, dan keaktifan anggota.', 403);
     }
   }
 }
