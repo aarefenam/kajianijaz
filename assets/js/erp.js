@@ -421,8 +421,10 @@ const MENU = [
   { grup: 'Manajemen Artikel', izin: ['redaksi.manage'] },
   { id: 'daftar-artikel',  label: 'Daftar Artikel',      ikon: I.dok,    izin: ['redaksi.manage'] },
   { id: 'artikel-masuk',   label: 'Artikel Masuk',       ikon: I.dokCek, izin: ['redaksi.manage'],
-    lonceng: () => Store.db.artikel.filter((a) => a.status === 'review').length },
+    lonceng: () => Store.db.artikel.filter((a) => a.status === 'review' && a.penulisId !== U?.id).length },
   { id: 'artikel-terbit',  label: 'Artikel Dipublikasi', ikon: I.agenda, izin: ['redaksi.manage'] },
+  { id: 'artikel-revisi',  label: 'Menunggu Revisi',     ikon: I.putar,  izin: ['redaksi.manage'], tersembunyiBila: () => !tugas() },
+  { id: 'artikel-saya',    label: 'Tulisan Saya',        ikon: I.pena,   izin: ['redaksi.manage'], tersembunyiBila: () => !tugas() },
   { id: 'kategori-artikel',label: 'Kategori Artikel',    ikon: I.tag,    izin: ['cms.kategori.edit'] },
 
   { grup: 'Monitoring & Target', izin: ['redaksi.manage'] },
@@ -673,6 +675,35 @@ const MENU_KAJIAN = [
   { id: 'kartu-qr' },
 ];
 
+/* ============================================================
+   SIDEBAR PJ ARTIKEL — mengikuti perjalanan sebuah naskah
+   ------------------------------------------------------------
+     Tinjau     — naskah apa yang menunggu saya?
+     Naskah     — seluruh tulisan, yang terbit, dan tulisan saya sendiri.
+     Target     — siapa menulis apa, dan sudah sejauh mana?
+     Pengaturan — yang jarang disentuh.
+   ============================================================ */
+const MENU_ARTIKEL = [
+  { id: 'dasbor' },
+  { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
+  { grup: 'Tinjau' },
+  { id: 'artikel-masuk', label: 'Naskah Masuk' },
+  { id: 'artikel-revisi' },
+  { grup: 'Naskah' },
+  { id: 'daftar-artikel', label: 'Semua Naskah' },
+  { id: 'artikel-terbit', label: 'Terbit' },
+  { id: 'artikel-saya' },
+  { grup: 'Target' },
+  { id: 'target-artikel', label: 'Penugasan' },
+  { id: 'performa', label: 'Capaian Anggota' },
+  { id: 'rekap' },
+  { grup: 'Pengaturan' },
+  { id: 'kategori-artikel', label: 'Kategori' },
+  { id: 'panduan' },
+  { id: 'akun' },
+];
+
 /* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
    sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
@@ -680,10 +711,11 @@ const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
   sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
   bendahara : { menu: MENU_BENDAHARA,  tab: {},             alias: { keuangan: 'laporan-kas' } },
+  artikel   : { menu: MENU_ARTIKEL,    tab: {},             alias: { artikel: 'daftar-artikel' } },
   kajian    : { menu: MENU_KAJIAN,     tab: {},             alias: { 'tugas-kajian': 'jadwal-kajian', notifikasi: 'dasbor', kajian: 'jadwal-kajian' } },
 };
 const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris
-  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : null);
+  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : ruangRedaksi() ? RUANG_TUGAS.artikel : null);
 
 const idTugas = () => new Set([
   ...tugas().menu.map((m) => m.id).filter(Boolean),
@@ -1755,8 +1787,9 @@ const STATUS_ART = {
 /* Satu perender untuk tiga halaman PJ Artikel: Daftar Artikel (semua),
    Artikel Masuk (menunggu tinjauan), dan Artikel Dipublikasi. `kunci`
    mengunci saringan statusnya sehingga pemilih status ikut menghilang. */
-function halamanArtikel(kunci) {
-  const bisaTinjau = RBAC.can(U, 'artikel.review');
+function halamanArtikel(kunci, milik = false) {
+  /* `milik`: hanya tulisan sendiri — peninjau pun di sana berlaku sebagai penulis. */
+  const bisaTinjau = RBAC.can(U, 'artikel.review') && !milik;
   const box = el('<div></div>');
 
   box.appendChild(el(`<div class="notis notis-info">${I.info}<div>
@@ -1765,7 +1798,7 @@ function halamanArtikel(kunci) {
   </div></div>`));
 
   const kepala = el(`<div class="panel-kepala" style="background:#fff;border:1px solid var(--e-garis);border-radius:var(--e-radius);margin-bottom:18px">
-    <h3>${kunci ? JUDUL_ART[kunci] : bisaTinjau ? 'Seluruh Artikel' : 'Artikel Tulisan Anda'}</h3>
+    <h3>${kunci ? JUDUL_ART[kunci] : bisaTinjau ? 'Seluruh Naskah' : 'Tulisan Anda'}</h3>
     <div class="kanan">
       ${kunci ? `<span class="lencana ${STATUS_ART[kunci].c}">${STATUS_ART[kunci].l}</span>`
         : `<select id="fStatus" style="width:190px"><option value="">Semua Status</option>
@@ -1858,7 +1891,7 @@ function halamanArtikel(kunci) {
   return box;
 }
 
-const JUDUL_ART = { review: 'Artikel Masuk', terbit: 'Artikel Dipublikasi', draft: 'Draft Artikel', revisi: 'Perlu Revisi' };
+const JUDUL_ART = { review: 'Naskah Masuk', terbit: 'Artikel Terbit', draft: 'Draf', revisi: 'Menunggu Revisi' };
 
 HAL.artikel = () => halamanArtikel(null);
 HAL['daftar-artikel'] = () => halamanArtikel(null);
@@ -1866,6 +1899,10 @@ HAL['daftar-artikel'].judul = () => ['Daftar Artikel', 'Seluruh naskah anggota b
 HAL['artikel-masuk'] = () => halamanArtikel('review');
 HAL['artikel-masuk'].judul = () => ['Artikel Masuk', 'Naskah yang menunggu tinjauan Anda.'];
 HAL['artikel-terbit'] = () => halamanArtikel('terbit');
+HAL['artikel-revisi'] = () => halamanArtikel('revisi');
+HAL['artikel-revisi'].judul = () => ['Menunggu Revisi', 'Naskah yang dikembalikan dan belum dikirim ulang penulisnya.'];
+HAL['artikel-saya'] = () => halamanArtikel(null, true);
+HAL['artikel-saya'].judul = () => ['Tulisan Saya', 'Naskah Anda sendiri. Tulisan PJ Artikel diterbitkan Ketua Umum.'];
 HAL['artikel-terbit'].judul = () => ['Artikel Dipublikasi', 'Naskah yang sudah tayang di halaman Artikel publik.'];
 HAL.artikel.judul = () => ['Karya Tulis Ilmiah', RBAC.can(U, 'artikel.review') ? 'Koordinasi penulis, tinjauan, dan publikasi artikel.' : 'Tulis dan kirim karya Anda untuk ditinjau.'];
 
@@ -4044,8 +4081,38 @@ const hiasCatatan = () => `<svg class="hias" viewBox="0 0 220 150" fill="none" a
   <path d="M174 98h24" stroke="#CBD3C4" stroke-width="2.2" stroke-linecap="round"/>
 </svg>`;
 
+/** Yang menuntut tindakan PJ Artikel — diturunkan dari naskah dan penugasan. */
+function perluArtikel() {
+  const art = Store.db.artikel;
+  const kini = nowTanggal();
+  return {
+    masuk: art.filter((a) => a.status === 'review' && a.penulisId !== U?.id),
+    revisi: art.filter((a) => a.status === 'revisi'),
+    /* Tulisan sendiri tak dapat diterbitkan sendiri: ia menunggu Ketua. */
+    milikTunggu: art.filter((a) => a.status === 'review' && a.penulisId === U?.id),
+    telat: Store.db.penugasan.filter((p) => p.progress !== 'siap' && p.deadline && p.deadline < kini),
+  };
+}
+function antreanArtikel() {
+  const p = perluArtikel();
+  return kartuAntrean('Perlu Ditindak', [
+    { rute: 'artikel-masuk', ikon: I.dokCek, judul: 'Naskah Masuk', n: p.masuk.length,
+      satuan: 'naskah menunggu ditinjau', kosong: 'Tidak ada naskah yang menunggu',
+      rinci: p.masuk[0] && `${p.masuk[0].judul} — ${Store.namaUser(p.masuk[0].penulisId)}` },
+    { rute: 'artikel-revisi', ikon: I.putar, judul: 'Menunggu Revisi', n: p.revisi.length,
+      satuan: 'naskah dikembalikan, belum dikirim ulang', kosong: 'Tidak ada naskah yang dikembalikan',
+      rinci: p.revisi[0] && `${p.revisi[0].judul} — ${Store.namaUser(p.revisi[0].penulisId)}` },
+    { rute: 'target-artikel', ikon: I.jam, judul: 'Penugasan Lewat Tenggat', n: p.telat.length,
+      satuan: 'penugasan belum dikirim naskahnya', kosong: 'Tidak ada penugasan yang terlambat',
+      rinci: p.telat[0] && `${Store.namaUser(p.telat[0].userId)} — ${p.telat[0].judul}` },
+    ...(p.milikTunggu.length ? [{ rute: 'artikel-saya', ikon: I.pena, judul: 'Tulisan Saya Menunggu Ketua', n: p.milikTunggu.length,
+      satuan: 'tulisan Anda menunggu diterbitkan Ketua Umum', kosong: '', rinci: p.milikTunggu[0].judul }] : []),
+  ]);
+}
+
 function dasborRedaksi() {
   const box = el('<div></div>');
+  box.appendChild(antreanArtikel());
   const b = bulanAktif();
   const c = capaianTarget(b);
   const rataTampil = Number.isInteger(c.rata) ? c.rata : c.rata.toFixed(1);
