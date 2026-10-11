@@ -99,7 +99,9 @@ const IZIN_KOLEKSI = [
      anggota. muat.php pun tidak mengirimkannya kepada yang lain. */
   'dataDiri'         => ['anggota.manage', 'user.manage'],
   'pendaftaran'      => ['anggota.manage', 'user.manage'],
-  'artikel'          => ['artikel.write', 'artikel.review', 'artikel.publish'],
+  /* `artikel.assign`: penugas boleh membuatkan DRAF atas nama penulisnya —
+     makalah kajian yang sudah final. Selebihnya dijaga susunArtikel(). */
+  'artikel'          => ['artikel.write', 'artikel.review', 'artikel.publish', 'artikel.assign'],
   'kajian'           => ['kajian.manage', 'kajian.attendance', 'kajian.notulensi', 'kajian.materi'],
   /* Ketua ikut menulis `keuangan` dan `aturKas`, tetapi hanya untuk
      menyetujui pengeluaran dan menetapkan batasnya — dipersempit lagi

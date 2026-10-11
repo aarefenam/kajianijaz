@@ -1833,7 +1833,9 @@ function halamanArtikel(kunci, milik = false) {
           <img src="${a.cover}" style="width:56px;height:42px;border-radius:8px;object-fit:cover">
           <div style="min-width:0;flex:1">
             <h3 style="margin-bottom:2px">${esc(a.judul)}</h3>
-            <span class="ket">${esc(Store.namaUser(a.penulisId))} · ${esc(a.kategori)} · ${tgl(a.tanggal)}${a.status === 'terbit' ? ` · ${a.dilihat}x dibaca` : ''}</span>
+            <span class="ket">${esc(Store.namaUser(a.penulisId))} · ${esc(a.kategori || 'belum berkategori')} · ${tgl(a.tanggal)}${a.status === 'terbit' ? ` · ${a.dilihat}x dibaca` : ''}${
+              a.kajianId ? ` · dari makalah kajian${a.tautanMakalah ? ` · <a href="${esc(a.tautanMakalah)}" target="_blank" rel="noopener noreferrer" style="font-weight:700">buka makalah</a>` : ''}` : ''}${
+              a.penugasanId ? ' · penugasan' : ''}</span>
           </div>
           <span class="lencana ${st.c}">${st.l}</span>
           <div class="kanan" data-aksi></div>
@@ -1922,8 +1924,10 @@ function kartuTugasSaya() {
   const kartu = el(`<div class="kartu" style="margin-bottom:18px"><div class="kartu-kepala">
     <h3>Penugasan Saya</h3>
     <span class="hitung">${wajib ? `${esc(namaBulan(bulan))}: ${kirim} dari ${target} naskah dikirim${kirim >= target ? ' — target terpenuhi' : ''}` : 'Anda tidak ditagih target bulanan'}</span>
-    <div class="kanan"><button class="btn btn-garis btn-kecil" data-usul>${I.tag} Usulkan Judul</button></div></div></div>`);
+    <div class="kanan"><button class="btn btn-garis btn-kecil" data-panduan>${I.buku} Panduan Penulis</button>
+      <button class="btn btn-garis btn-kecil" data-usul>${I.tag} Usulkan Judul</button></div></div></div>`);
   kartu.querySelector('[data-usul]').onclick = () => dialogUsulJudul();
+  kartu.querySelector('[data-panduan]').onclick = () => bacaPanduan();
   if (!tugas.length && !usul.length) {
     kartu.appendChild(el(`<div class="kosong-erp" style="padding:22px">${I.kotak}<p>Belum ada penugasan</p>
       <small>PJ Artikel akan membagikan judul, atau usulkan judul Anda sendiri.</small></div>`));
@@ -1952,6 +1956,18 @@ function kartuTugasSaya() {
     <td><span class="lencana ${a.usul.status === 'menunggu' ? 'l-kuning' : 'l-merah'}">usulan ${esc(a.usul.status)}</span></td><td></td></tr>`)));
   kartu.appendChild(t);
   return kartu;
+}
+
+/** Panduan Penulis untuk dibaca — penyuntingannya tetap di halaman PJ Artikel. */
+function bacaPanduan() {
+  const panduan = Store.db.redaksi?.panduan || [];
+  const isi = el(`<div>${panduan.length ? panduan.map((b, i) => `<div class="panduan-bagian">
+    <div class="panduan-kepala"><span class="no">${i + 1}</span><h4>${esc(b.judul)}</h4></div>
+    <ul>${(b.isi || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')
+    : `<div class="kosong-erp">${I.kotak}<p>Panduan belum ditulis PJ Artikel</p></div>`}</div>`);
+  const kaki = el(`<div style="display:flex;justify-content:flex-end"><button class="btn btn-garis" data-b>Tutup</button></div>`);
+  modal({ judul: 'Panduan Penulis', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
 }
 
 function dialogUsulJudul() {
@@ -7834,7 +7850,8 @@ function dialogMateri(k) {
     </div>
     <div class="grup" style="margin:0"><label>Catatan Revisi untuk Pemakalah</label>
       <textarea data-catatan style="min-height:70px" placeholder="Wajib bila statusnya Perlu Revisi — pemakalah membacanya di Kajian Saya">${esc(k.revisiCatatan || '')}</textarea></div>
-    <div class="bantu">Berkas tidak diunggah ke sini; yang disimpan tautannya. Pemakalah juga dapat menyerahkan tautannya sendiri dari Kajian Saya.</div>
+    <div class="bantu">Berkas tidak diunggah ke sini; yang disimpan tautannya. Pemakalah juga dapat menyerahkan tautannya sendiri dari Kajian Saya.
+      Makalah yang dinyatakan <b>Final</b> otomatis menjadi draf artikel pemakalahnya, untuk ia kirim ke PJ Artikel.</div>
   </div>`);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);

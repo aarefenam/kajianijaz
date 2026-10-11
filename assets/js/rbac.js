@@ -223,7 +223,7 @@ const IZIN_KOLEKSI = {
   users           : ['anggota.manage', 'user.manage', 'anggota.kelompok'],
   dataDiri        : ['anggota.manage', 'user.manage'],
   pendaftaran     : ['anggota.manage', 'user.manage'],
-  artikel         : ['artikel.write', 'artikel.review', 'artikel.publish'],
+  artikel         : ['artikel.write', 'artikel.review', 'artikel.publish', 'artikel.assign'],
   kajian          : ['kajian.manage', 'kajian.attendance', 'kajian.notulensi', 'kajian.materi'],
   keuangan        : ['keuangan.manage', 'keuangan.approve'],
   akunKas         : ['keuangan.akun'],

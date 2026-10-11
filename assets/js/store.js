@@ -1227,6 +1227,7 @@ function periksaPindahArtikel(user, a, status, catatan) {
       throw new Error('Hanya penulis yang dapat mengirim artikelnya untuk ditinjau.');
     if (!(a.isi || []).length) throw new Error('Isi artikel masih kosong.');
     if (!String(a.ringkas || '').trim()) throw new Error('Ringkasan artikel belum diisi.');
+    if (!String(a.kategori || '').trim()) throw new Error('Kategori artikel belum dipilih.');
   } else if (status === 'terbit') {
     RBAC.assertCan(user, 'artikel.publish');
     /* Tak seorang pun menerbitkan tulisannya sendiri — kecuali Ketua Umum,
@@ -1495,8 +1496,31 @@ function simpanMateri(user, id, data) {
   if (data.ppt !== undefined || bersih.tautanPpt !== undefined)
     bersih.ppt = !!(data.ppt || (bersih.tautanPpt ?? k.tautanPpt));
   Object.assign(k, bersih);
+  if (bersih.revisiStatus === 'final') drafDariMakalah(user, k);
   catat(user, 'kajian.materi', id, `Memperbarui materi "${k.judul}"${bersih.revisiStatus ? ` — revisi: ${bersih.revisiStatus}` : ''}`);
   simpan();
+}
+
+/** Makalah yang dinyatakan final menjadi DRAF artikel atas nama
+    pemakalahnya — sekali saja per kajian. Ia tetap draf: pemakalah yang
+    menyalin isinya dan mengirimnya, lalu PJ Artikel meninjau seperti
+    naskah lain. Penanda disimpan di kajian (`artikelId`), sebab koordinator
+    tidak menerima draf orang lain untuk diperiksa keberadaannya. */
+function drafDariMakalah(user, k) {
+  if (k.artikelId || !k.pemakalahId || !getUser(k.pemakalahId)) return null;
+  if (!RBAC.canAny(user, ['artikel.assign', 'artikel.review'])) return null;
+  const id = uid('a');
+  const baru = {
+    id, status: 'draft', penulisId: k.pemakalahId, dilihat: 0, tanggal: hariIni(),
+    reviewNote: '', reviewerId: '', tag: [], isi: [], riwayat: [], kategori: '',
+    cover: window.__ph('ARTIKEL BARU', '#1B5E20', '#0E2E1C', 'مقال'),
+    judul: k.judul, ringkas: '', slug: slugArtikel(k.judul, id),
+    kajianId: k.id, tautanMakalah: k.tautanMakalah || '',
+  };
+  db.artikel.unshift(baru);
+  k.artikelId = id;
+  catat(user, 'artikel.buat', id, `Makalah final "${k.judul}" dijadikan draf artikel ${namaUser(k.pemakalahId)}`);
+  return baru;
 }
 
 /** Pemakalah menyerahkan tautan makalah dan PPT-nya sendiri. */

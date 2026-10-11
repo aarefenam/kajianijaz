@@ -233,6 +233,14 @@ dibuang sekali oleh `bersihkanPenugasanContoh()`.
 disetujui PJ Artikel, ia menjadi penugasan bertenggat yang langsung tertaut;
 ditolak, wajib beralasan.
 
+**Makalah kajian yang final menjadi draf artikel pemakalahnya**
+(`drafDariMakalah()`), sekali per kajian, lengkap dengan tautan makalahnya. Ia
+tetap draf: pemakalah yang menyalin isinya dan mengirimnya, lalu ditinjau
+seperti naskah lain. Untuk itu `artikel` juga dapat ditulis pemegang
+`artikel.assign` — dan hanya sebatas membuat draf atas nama penulisnya; sisanya
+ditolak `susunArtikel()`. **Panduan Penulis** dapat dibaca setiap penulis dari
+kartu *Penugasan Saya*.
+
 **Capaian Anggota, Rekap Bulanan, dan Laporan Penulisan** semuanya dari rumus
 yang sama; laporan bulanan dapat dicetak sebagai lembar A4 berkop, juga oleh
 Ketua dari tab *Penulisan* di Pantau Divisi.
