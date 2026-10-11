@@ -380,6 +380,12 @@ tetapi aturannya dijaga: tautan video wajib http(s), yang sedang tampil harus
 dijadikan draf sebelum dihapus, dan status *Dijadwalkan* membuatnya tampil
 sendiri pada tanggal *Mulai Tampil* (`tayangKah()` di peramban dan server).
 
+**Dua pintu publik dijaga.** Formulir kontak (`api/pesan.php`) punya jebakan
+bot dan batas lima pesan per jam per alamat. Hitungan pengunjung
+(`api/kunjung.php`) dibatasi 120 penanda per jam per alamat dan ditulis dalam
+transaksi pengunci — dulu dua kunjungan bersamaan saling menimpa. Alamat
+pengirim hanya disimpan sebagai sidik.
+
 **Kartu Struktur Organisasi dapat berfoto.** Tiap jabatan punya medan `foto`
 yang diunggah dari Editor Halaman; tanpa foto, kartunya memakai ikon jabatan.
 Editor mengenali medan gambar dari isinya, sehingga foto yang masih kosong

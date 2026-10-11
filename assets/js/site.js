@@ -1236,6 +1236,7 @@ const RENDER = {
           <div class="grup"><label>Subjek</label><select name="subjek" style="max-width:none">
             ${d.subjek.map((x) => `<option>${esc(x)}</option>`).join('')}
           </select></div>
+          <div class="jebak" aria-hidden="true"><label>Situs web</label><input name="situs" tabindex="-1" autocomplete="off"></div>
           <div class="grup"><label>Pesan</label><textarea name="isi" required placeholder="Tuliskan pesan Anda..."></textarea></div>
           <button class="tombol" type="submit">Kirim Pesan ${IK.kirim}</button>
         </form>
@@ -1262,10 +1263,10 @@ const RENDER = {
       try {
         await Store.kirimPesan({
           nama: f.get('nama'), email: f.get('email'),
-          subjek: f.get('subjek'), isi: f.get('isi'),
+          subjek: f.get('subjek'), isi: f.get('isi'), situs: f.get('situs') || '',
         });
         e.target.reset();
-        toast('Pesan terkirim. Masuk ke kotak masuk Sekretaris di ERP.');
+        toast('Pesan terkirim. Terima kasih — kami akan membalas lewat surel Anda.');
       } catch (err) {
         /* Jangan kosongkan formulirnya bila gagal — yang sudah diketik
            pengunjung tidak boleh hilang hanya karena jaringan tersendat. */
