@@ -455,9 +455,39 @@ peserta ke N kelompok (mengisi yang belum berkelompok, acak ulang, atau urut
 nama) dengan pratinjau sebelum disimpan; *Ubah Jenjang* menaikkan seluruh
 peserta angkatan sekaligus.
 
-**Presensi punya tiga keadaan** — hadir, terlambat, tidak hadir — beserta jam
-datangnya. Bentuk lama yang hanya berupa daftar nama dipetakan menjadi "hadir",
-bukan dibuang.
+**Presensi punya lima keadaan** — hadir, terlambat, izin, sakit, tidak hadir —
+dan **seluruh perubahannya lewat `api/presensi.php`**, bukan lewat penyimpanan
+koleksi biasa. Tiap catatan adalah satu perubahan kecil pada satu kajian yang
+ditulis dalam transaksi pengunci, sehingga beberapa ponsel dapat memindai di
+pintu yang sama tanpa saling menolak; dulu seluruh koleksi `kajian` terkirim
+tiap pindaian, dan pindaian ponsel kedua hilang oleh 409. Server mengembalikan
+baris kajian terbaru (dan seluruh koleksi bila peramban tertinggal), sementara
+`jagaKajian()` menolak perubahan presensi yang datang lewat `simpan.php`.
+
+Karena jalurnya satu, aturannya ditegakkan di sana:
+
+- **Jatah izin + sakit: 2 kali per anggota per jenjang** (`JATAH_IZIN`).
+  Pengajuan yang masih menunggu ikut terhitung; yang ditolak tidak.
+- **Anggota mengajukan izin sendiri** dari *Kajian Saya*; koordinator
+  menyetujui atau menolak (penolakan wajib beralasan) dari halaman Presensi.
+  Koordinator juga dapat mencatat izin langsung, dengan alasan.
+- **Tutup Presensi mengunci.** Yang belum tercatat menjadi tidak hadir;
+  sesudah itu hanya penjadwal kajian yang dapat mengubah, wajib beralasan, dan
+  tiap perubahan tercatat di `ubahPresensi`. Membuka kembali pun beralasan.
+- **Alasan izin bersifat pribadi**: `kajianUntuk()` hanya mengirimkannya kepada
+  pengurus presensi dan pemiliknya sendiri.
+
+Hadir atau terlambat tetap diputuskan peramban petugas dari jam setempat —
+server tidak tahu zona waktu tempat kajiannya berlangsung.
+
+**Kajian Saya** tersedia bagi setiap anggota yang masih berkajian, apa pun
+perannya: kajian mendatang angkatannya, tugas yang ia pegang, sisa jatah izin,
+dan riwayat kehadirannya.
+
+**Jejak audit digabung, bukan dikunci versi.** Setiap penyimpanan menyertakan
+`audit`; selama ia ikut dikunci versi, dua pengurus yang bekerja bersamaan
+selalu saling menolak, apa pun yang mereka kerjakan. `gabungAudit()` di server
+kini menambahkan baris baru ke yang tersimpan.
 
 **QR-nya sungguhan.** `assets/js/qr.js` adalah pembangkit QR yang ditulis sendiri
 (mode byte, koreksi galat L, versi 1–4, lengkap dengan Reed–Solomon dan pemilihan

@@ -227,6 +227,22 @@ function tulisKoleksi(string $nama, $isi, ?int $versiDipegang): int {
   return $baru;
 }
 
+/** Gabungkan baris audit kiriman peramban ke yang tersimpan: yang baru
+    ditambahkan, yang sudah ada tak tersentuh, 400 terbaru dipertahankan. */
+function gabungAudit($kiriman): array {
+  $tersimpan = bacaKoleksi('audit')['isi'] ?? [];
+  if (!is_array($tersimpan)) $tersimpan = [];
+  $ada = [];
+  foreach ($tersimpan as $b) $ada[$b['id'] ?? ''] = true;
+  foreach (is_array($kiriman) ? $kiriman : [] as $b) {
+    if (!is_array($b) || ($b['id'] ?? '') === '' || isset($ada[$b['id']])) continue;
+    $tersimpan[] = $b;
+    $ada[$b['id']] = true;
+  }
+  usort($tersimpan, fn($a, $b) => strcmp((string) ($b['ts'] ?? ''), (string) ($a['ts'] ?? '')));
+  return array_slice($tersimpan, 0, 400);
+}
+
 /**
  * Catat satu baris jejak. Aksi yang dilakukan pengguna dicatat peramban
  * dan ikut terkirim lewat simpan.php; yang dicatat DI SINI hanyalah
@@ -455,7 +471,7 @@ function jagaKajian(array $user, $isiBaru): void {
   foreach (bacaKoleksi('kajian')['isi'] ?? [] as $k) {
     $id = $k['id'] ?? '';
     if ($id === '') continue;
-    $lama[$id] = true;
+    $lama[$id] = $k;
     if (isset($baru[$id])) continue;
 
     if (!bolehkah($user, 'kajian.manage')) galat('Anda tidak berwenang menghapus jadwal kajian.', 403);
@@ -466,6 +482,88 @@ function jagaKajian(array $user, $isiBaru): void {
   if (!bolehkah($user, 'kajian.manage') && array_diff_key($baru, $lama)) {
     galat('Anda tidak berwenang menambah jadwal kajian.', 403);
   }
+
+  /* Presensi, kuncinya, dan pengajuan izin hanya berubah lewat
+     api/presensi.php — di sanalah jatah izin, kunci, dan alasan perubahan
+     ditegakkan. Lewat simpan.php kolom-kolom itu harus kembali persis
+     seperti yang tersimpan. Satu kekecualian: daftar peserta yang belum
+     ada boleh dibubuhkan penjadwal (pembekuan kajian lama). */
+  $sama = fn($a, $b) => json_encode($a ?? null) === json_encode($b ?? null);
+  foreach ($isiBaru as $k) {
+    if (!is_array($k)) galat('Bentuk data kajian tidak sah.');
+    $id = $k['id'] ?? '';
+    if ($id === '' || !isset($lama[$id])) {
+      if (!empty($k['presensi']) || !empty($k['izin']) || !empty($k['presensiTutup'])) {
+        galat('Kajian baru tidak dapat langsung memuat presensi.', 403);
+      }
+      continue;
+    }
+    $a = $lama[$id];
+    foreach (['presensi', 'presensiTutup', 'izin', 'ubahPresensi'] as $kunci) {
+      $kosongA = empty($a[$kunci]); $kosongB = empty($k[$kunci]);
+      if ($kosongA && $kosongB) continue;
+      if (!$sama($a[$kunci] ?? null, $k[$kunci] ?? null)) {
+        galat('Presensi hanya dapat diubah lewat halaman presensi.', 403);
+      }
+    }
+    if (isset($a['peserta']) && !$sama($a['peserta'], $k['peserta'] ?? null)) {
+      galat('Daftar peserta kajian yang sudah dibekukan tidak dapat diubah.', 403);
+    }
+    if (!isset($a['peserta']) && isset($k['peserta']) && !bolehkah($user, 'kajian.manage')) {
+      galat('Daftar peserta hanya dibekukan oleh penjadwal kajian.', 403);
+    }
+  }
+}
+
+/** Boleh melihat alasan izin dan pengajuan milik orang lain? */
+function pengurusPresensi(?array $user): bool {
+  return bolehSalahSatu($user, ['kajian.attendance', 'kajian.manage']);
+}
+
+/**
+ * Baris kajian sebagaimana boleh dilihat pengguna ini. Alasan izin dan
+ * sakit adalah urusan pribadi: anggota biasa hanya menerima miliknya
+ * sendiri, dan catatan perubahan presensi tidak ikut sama sekali.
+ */
+function kajianUntuk(?array $user, array $k): array {
+  if (pengurusPresensi($user)) return $k;
+  $aku = $user['id'] ?? null;
+  if (isset($k['izin']) && is_array($k['izin'])) {
+    $k['izin'] = array_values(array_filter($k['izin'], fn($x) => ($x['userId'] ?? null) === $aku));
+  }
+  if (isset($k['presensi']) && is_array($k['presensi'])) {
+    $k['presensi'] = array_map(function ($p) use ($aku) {
+      if (($p['userId'] ?? null) !== $aku) unset($p['alasan']);
+      return $p;
+    }, $k['presensi']);
+  }
+  unset($k['ubahPresensi']);
+  return $k;
+}
+
+/** Anggota aktif yang masih berjenjang — sama dengan berkajian() di store.js. */
+function berkajian(array $u): bool {
+  return ($u['status'] ?? '') === 'aktif' && ($u['angkatan'] ?? '') !== ''
+    && !in_array($u['level'] ?? '', ['Alumni', '-', ''], true);
+}
+
+/**
+ * Mulai transaksi tulis yang mengunci koleksi sampai selesai, supaya dua
+ * pemindai yang mencatat pada detik yang sama tidak saling menimpa.
+ */
+function mulaiTulis(string $nama): void {
+  $pdo = pdo();
+  if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+    $pdo->exec('BEGIN IMMEDIATE');
+  } else {
+    $pdo->beginTransaction();
+    $pdo->prepare('SELECT versi FROM koleksi WHERE nama = ? FOR UPDATE')->execute([$nama]);
+  }
+}
+function selesaiTulis(): void {
+  $pdo = pdo();
+  if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') $pdo->exec('COMMIT');
+  else $pdo->commit();
 }
 
 /**

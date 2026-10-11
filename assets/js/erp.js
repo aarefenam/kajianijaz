@@ -362,6 +362,9 @@ const MENU = [
   { id: 'dasbor',    label: () => ruangKetua() ? 'Dashboard Ketua Umum' : ruangBuku() ? 'Dashboard' : 'Dasbor',
     ikon: () => ruangKetua() ? I.rumah : I.dasbor, izin: null },
   { id: 'kartu-saya', label: 'Kartu Saya', ikon: I.qr, izin: null },
+  /* Jadwal, tugas, dan izin kajian milik sendiri — hanya bagi yang masih berkajian. */
+  { id: 'kajian-saya', label: 'Kajian Saya', ikon: I.kalender, izin: null, tersembunyiBila: () => !Store.berkajian(U),
+    lonceng: () => tugasKajianSaya().length },
 
   /* --- ruang kerja Ketua Umum --- */
   { id: 'pengurus',    label: 'Data Pengurus',                ikon: I.grup,    izin: ['organisasi.manage'] },
@@ -539,6 +542,7 @@ const bolehMenu = (m) => {
 const MENU_KETUA = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
   { grup: 'Putuskan' },
   { id: 'pengajuan', label: 'Persetujuan Website' },
   { id: 'persetujuan-kas' },
@@ -585,6 +589,7 @@ const ALIAS_KETUA = { kajian: 'pantau-kajian', keuangan: 'pantau-kas', surat: 'p
 const MENU_SEKRETARIS = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
   { grup: 'Tindak Lanjuti' },
   { id: 'pesan' },
   { id: 'surat-masuk' },
@@ -621,6 +626,7 @@ const TAB_SEKRETARIS = { pengaturan: ['cms', 'pengajuan', 'log'] };
 const MENU_BENDAHARA = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
   { grup: 'Terima' },
   { id: 'iuran-anggota' },
   { id: 'masuk-internal' },
@@ -651,9 +657,10 @@ const MENU_BENDAHARA = [
 const MENU_KAJIAN = [
   { id: 'dasbor' },
   { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
   { grup: 'Kajian' },
   { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => perluKajian().belumLengkap.filter((x) => x.sisa <= 3).length },
-  { id: 'presensi', lonceng: () => perluKajian().tanpaPresensi.length + perluKajian().belumTutup.length },
+  { id: 'presensi', lonceng: () => { const p = perluKajian(); return p.izin.length + p.tanpaPresensi.length + p.belumTutup.length; } },
   { id: 'materi', label: 'Materi & Makalah' },
   { id: 'notulen', label: 'Notulen', lonceng: () => perluKajian().tanpaNotulen.length },
   { grup: 'Peserta' },
@@ -2107,48 +2114,106 @@ function dialogBatalKajian(k) {
 }
 
 function dialogAbsensi(k) {
-  const peserta = Store.pesertaKajian(k);
-  const cari = (id) => (k.presensi || []).find((p) => p.userId === id);
+  const id = k.id;
+  const kini = () => Store.db.kajian.find((x) => x.id === id) || k;
+  const peserta = () => Store.pesertaKajian(kini()).sort((a, b) => a.nama.localeCompare(b.nama));
+  const cari = (uid) => (kini().presensi || []).find((p) => p.userId === uid);
+  const kelola = RBAC.can(U, 'kajian.manage');
 
   const isi = el(`<div>
-    <p style="margin:0 0 14px;font-size:13.4px;color:var(--e-abu)">
-      Tandai kehadiran peserta pada kajian <b>${esc(k.judul)}</b>${k.angkatan ? ` · ${esc(k.angkatan)}` : ''}.</p>
+    <p style="margin:0 0 12px;font-size:13.4px;color:var(--e-abu)">
+      Kehadiran peserta pada kajian <b>${esc(k.judul)}</b>${k.angkatan ? ` · ${esc(k.angkatan)}` : ''} · ${tgl(k.tanggal)}.</p>
+    <div data-kunci></div>
     <div class="daftar-presensi"></div>
     <p style="margin:16px 0 0;font-size:13px"><b data-hit></b></p>
   </div>`);
   const wadah = isi.querySelector('.daftar-presensi');
-
-  const hitung = () => {
-    const h = peserta.filter((u) => cari(u.id)?.status === 'hadir').length;
-    const t = peserta.filter((u) => cari(u.id)?.status === 'terlambat').length;
-    const x = peserta.filter((u) => cari(u.id)?.status === 'tidak-hadir').length;
-    isi.querySelector('[data-hit]').textContent =
-      `${h} hadir · ${t} terlambat · ${x} tidak hadir · ${peserta.length - h - t - x} belum absen`;
-  };
-
-  peserta.forEach((u) => {
-    const baris = el(`<div class="presensi-baris">
-      <img src="${u.foto}" alt=""><span class="nm">${esc(u.nama)}</span>
-      <span class="jm" data-jam></span>
-      <span class="pilih">${Store.STATUS_PRESENSI.map((st) =>
-        `<button data-st="${st}">${st === 'hadir' ? 'Hadir' : st === 'terlambat' ? 'Terlambat' : 'Tidak Hadir'}</button>`).join('')}</span>
-    </div>`);
-    const segarkan = () => {
-      const p = cari(u.id);
-      baris.querySelectorAll('[data-st]').forEach((b) =>
-        b.classList.toggle('aktif', p?.status === b.dataset.st));
-      baris.querySelector('[data-jam]').textContent = p?.jam || '';
-      hitung();
-    };
-    baris.querySelectorAll('[data-st]').forEach((b) => {
-      b.onclick = () => aman(() => { Store.setPresensi(U, k.id, u.id, b.dataset.st); segarkan(); });
-    });
-    segarkan();
-    wadah.appendChild(baris);
-  });
-
-  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end;align-items:center">
+    <span data-aksi-kunci style="margin-right:auto"></span>
     <button class="btn btn-lime" data-s>Selesai</button></div>`);
+
+  const label = { hadir: 'Hadir', terlambat: 'Terlambat', izin: 'Izin', sakit: 'Sakit', 'tidak-hadir': 'Tidak Hadir' };
+  const gambarIsi = () => {
+    const kj = kini();
+    const terkunci = !!kj.presensiTutup;
+    const bolehUbah = !terkunci || kelola;
+    const r = Store.rekapKajian(kj);
+    isi.querySelector('[data-hit]').textContent =
+      `${r.hadir} hadir · ${r.terlambat} terlambat · ${r.izin} izin/sakit · ${r.tidakHadir} tidak hadir · ${r.belum} belum absen`;
+
+    isi.querySelector('[data-kunci]').innerHTML = terkunci ? `<div class="notis notis-kuning" style="margin-bottom:12px">${I.gembok}<div>
+      <b>Presensi ditutup ${tgl(kj.presensiTutup.slice(0, 10))}${kj.presensiTutupOleh ? ` oleh ${esc(namaPendek(kj.presensiTutupOleh))}` : ''}</b>
+      ${kelola ? `Perubahan masih mungkin, tetapi wajib beralasan dan tercatat.
+        <input data-alasan-ubah placeholder="Alasan perubahan — contoh: salah catat, bukti hadir menyusul" style="margin-top:8px">`
+        : 'Hanya koordinator kajian yang dapat mengubahnya.'}
+      ${(kj.ubahPresensi || []).length ? `<div style="margin-top:8px;font-size:12px">${kj.ubahPresensi.slice(-3).reverse().map((x) =>
+        `• ${x.userId ? esc(namaPendek(x.userId)) + ': ' : ''}${esc(x.dari || 'belum absen')} → ${esc(x.ke)} — ${esc(x.alasan)} (${esc(namaPendek(x.oleh))})`).join('<br>')}</div>` : ''}
+    </div></div>` : '';
+
+    const aksi = kaki.querySelector('[data-aksi-kunci]');
+    aksi.innerHTML = terkunci
+      ? (kelola ? `<button class="btn btn-garis" data-buka>${I.gembok} Buka Kembali</button>` : '')
+      : `<button class="btn btn-merah" data-tutup title="Yang belum tercatat menjadi tidak hadir, lalu presensi dikunci">${I.gembok} Tutup Presensi</button>`;
+    /* Dua ketukan, bukan dialog konfirmasi: dialog itu akan menggantikan
+       daftar presensi yang sedang dibuka. */
+    aksi.querySelector('[data-tutup]')?.addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      if (!b.dataset.yakin) {
+        b.dataset.yakin = '1';
+        b.textContent = `Yakin? ${r.belum} orang menjadi tidak hadir — ketuk lagi`;
+        return;
+      }
+      const n = await amanTunggu(null, () => Store.tutupPresensi(U, id));
+      if (n !== null) toast(`Presensi ditutup. ${n} orang dicatat tidak hadir.`);
+      gambarIsi();
+    });
+    aksi.querySelector('[data-buka]')?.addEventListener('click', async () => {
+      const alasan = isi.querySelector('[data-alasan-ubah]')?.value.trim();
+      if (!alasan) return toast('Isi alasan pada kotak di atas lebih dulu.', true);
+      if (await amanTunggu(null, async () => { await Store.bukaPresensi(U, id, alasan); return true; })) { toast('Presensi dibuka kembali.'); gambarIsi(); }
+    });
+
+    wadah.innerHTML = '';
+    peserta().forEach((u) => {
+      const p = cari(u.id);
+      const jatah = Store.jatahIzin(u.id, kj);
+      const sudahIzin = p?.status === 'izin' || p?.status === 'sakit';
+      const baris = el(`<div class="presensi-baris${p ? '' : ' belum'}">
+        <img src="${u.foto}" alt=""><span class="nm">${esc(u.nama)}
+          ${p?.alasan ? `<small>${esc(p.alasan)}</small>` : ''}</span>
+        <span class="jm">${esc(p?.jam || '')}</span>
+        <span class="pilih">${Store.STATUS_PRESENSI.map((st) => {
+          const habis = (st === 'izin' || st === 'sakit') && !sudahIzin && jatah.sisa === 0;
+          return `<button data-st="${st}" class="${p?.status === st ? 'aktif' : ''}" ${!bolehUbah || habis ? 'disabled' : ''}
+            title="${habis ? `Jatah izin/sakit habis (${jatah.terpakai}/${jatah.batas})` : ''}">${label[st]}</button>`; }).join('')}
+          ${p && bolehUbah ? `<button data-st="kosong" title="Hapus catatan — kembali ke belum absen">${I.tutup}</button>` : ''}</span>
+      </div>`);
+      const catat = async (st, alasan) => {
+        const alasanUbah = isi.querySelector('[data-alasan-ubah]')?.value.trim() || '';
+        if (terkunci && !alasanUbah) return toast('Presensi sudah ditutup — isi alasan perubahan di atas lebih dulu.', true);
+        baris.classList.add('sibuk');
+        await amanTunggu(null, () => Store.setPresensi(U, id, u.id, st, { alasan, alasanUbah }));
+        gambarIsi();
+      };
+      baris.querySelectorAll('[data-st]').forEach((b) => {
+        b.onclick = () => {
+          const st = b.dataset.st;
+          if (st !== 'izin' && st !== 'sakit') return catat(st);
+          /* Izin dan sakit menuntut alasan: kotaknya dibuka di baris itu juga. */
+          baris.querySelector('.alasan-izin')?.remove();
+          const kotak = el(`<span class="alasan-izin"><input placeholder="Alasan ${st} (jatah tersisa ${jatah.sisa} dari ${jatah.batas})" value="${esc(sudahIzin ? p.alasan || '' : '')}">
+            <button class="btn btn-lime btn-kecil">Catat ${label[st]}</button></span>`);
+          baris.appendChild(kotak);
+          kotak.querySelector('input').focus();
+          const kirim = () => catat(st, kotak.querySelector('input').value.trim());
+          kotak.querySelector('button').onclick = kirim;
+          kotak.querySelector('input').onkeydown = (e) => { if (e.key === 'Enter') kirim(); };
+        };
+      });
+      wadah.appendChild(baris);
+    });
+  };
+  gambarIsi();
   modal({ judul: 'Presensi Kehadiran', isi, kaki, lebar: true });
   kaki.querySelector('[data-s]').onclick = () => { tutupModal(); gambar(); };
 }
@@ -5982,6 +6047,8 @@ const lencanaKajian = (k) => {
 const PRESENSI = {
   hadir        : { l: 'Hadir',       c: 'l-hijau'  },
   terlambat    : { l: 'Terlambat',   c: 'l-kuning' },
+  izin         : { l: 'Izin',        c: 'l-biru'   },
+  sakit        : { l: 'Sakit',       c: 'l-biru'   },
   'tidak-hadir': { l: 'Tidak Hadir', c: 'l-merah'  },
 };
 /* Satu rumus untuk seluruh halaman — lihat Store.rekapKajian(). */
@@ -6004,8 +6071,9 @@ function perluKajian() {
     belumLengkap: semua.filter((k) => k.tanggal >= nowTanggal() && selisihHari(k.tanggal) <= 7)
       .map((k) => ({ k, sisa: selisihHari(k.tanggal), kurang: CEKLIS.filter((c) => !lengkapKah(k, c.k)).map((c) => c.l) }))
       .filter((x) => x.kurang.length),
+    izin: Store.izinMenunggu(semua),
     tanpaPresensi: lampau.filter((k) => !(k.presensi || []).length),
-    belumTutup: tercatat.filter((k) => !k.presensiTutup && rekapPresensi(k).belum > 0),
+    belumTutup: tercatat.filter((k) => !k.presensiTutup),
     tanpaNotulen: lampau.filter((k) => !String(k.notulensi || '').trim()),
     tanpaKelompok: anggota.filter((u) => !u.kelompok),
     jarangHadir: anggota.filter((u) => {
@@ -6018,6 +6086,9 @@ function antreanKajian() {
   const p = perluKajian();
   const dekat = p.belumLengkap[0];
   return kartuAntrean('Perlu Ditindak', [
+    { rute: 'presensi', ikon: I.surat, judul: 'Pengajuan Izin', n: p.izin.length,
+      satuan: 'pengajuan izin/sakit menunggu keputusan', kosong: 'Tidak ada pengajuan izin',
+      rinci: p.izin[0] && `${Store.namaUser(p.izin[0].z.userId)} — ${p.izin[0].z.jenis}, ${p.izin[0].k.judul}` },
     { rute: 'jadwal-kajian', ikon: I.peringatan, judul: 'Kajian Belum Lengkap', n: p.belumLengkap.length,
       satuan: 'kajian dalam 7 hari masih kurang data', kosong: 'Kajian sepekan ke depan sudah lengkap',
       rinci: dekat && `${dekat.k.judul} (${dekat.sisa === 0 ? 'hari ini' : dekat.sisa + ' hari lagi'}) — kurang ${dekat.kurang.join(', ')}` },
@@ -6025,7 +6096,7 @@ function antreanKajian() {
       satuan: 'kajian lampau tanpa presensi', kosong: 'Semua kajian lampau berpresensi',
       rinci: p.tanpaPresensi[0] && `${p.tanpaPresensi[0].judul} · ${tgl(p.tanpaPresensi[0].tanggal)}` },
     { rute: 'presensi', ikon: I.gembok, judul: 'Presensi Belum Ditutup', n: p.belumTutup.length,
-      satuan: 'kajian masih menyisakan peserta tanpa keterangan', kosong: 'Tidak ada presensi yang menggantung',
+      satuan: 'kajian lampau presensinya belum dikunci', kosong: 'Semua presensi lampau sudah ditutup',
       rinci: p.belumTutup[0] && `${p.belumTutup[0].judul} — ${rekapPresensi(p.belumTutup[0]).belum} orang belum absen` },
     { rute: 'notulen', ikon: I.dok, judul: 'Notulen Belum Ditulis', n: p.tanpaNotulen.length,
       satuan: 'kajian lampau tanpa notulen', kosong: 'Semua kajian lampau bernotulen',
@@ -6097,7 +6168,8 @@ function dasborKoordinator() {
   baris1.appendChild(jad.el);
 
   const kHari = kajianHariIni();
-  const pres = panelMW('Presensi Kajian Hari Ini', I.daftarCek, 'Lihat Semua', () => bukaModul('presensi'));
+  const pres = panelMW(!kHari ? 'Presensi Kajian' : kHari.tanggal === nowTanggal() ? 'Presensi Kajian Hari Ini'
+    : kHari.tanggal > nowTanggal() ? 'Kajian Berikutnya' : 'Kajian Terakhir', I.daftarCek, 'Lihat Semua', () => bukaModul('presensi'));
   if (!kHari) pres.isi.appendChild(el(`<div class="kosong-erp" style="padding:26px">${I.kotak}<p>Belum ada kajian</p></div>`));
   else {
     const r = rekapPresensi(kHari);
@@ -6413,7 +6485,11 @@ function layarPindai(judul, sub, isi) {
    orang: nama dan statusnya tampil besar, lalu layar siap untuk orang
    berikutnya tanpa perlu disentuh. */
 function modePresensi(k) {
+  if (k.presensiTutup) return toast('Presensi kajian ini sudah ditutup.', true);
   const batas = Store.toleransiKajian(k);
+  /* Objek kajian di memori dapat berganti saat data dimuat ulang. */
+  const idKajian = k.id;
+  const kini = () => Store.db.kajian.find((x) => x.id === idKajian) || k;
   layarPindai(k.judul, `${tgl(k.tanggal)} · mulai ${k.jam || '—'} · batas terlambat ${batas} menit · ${k.angkatan || 'semua angkatan'}`, (sisi) => {
     sisi.innerHTML = `
       <div class="lp-hitung" data-hitung></div>
@@ -6425,9 +6501,9 @@ function modePresensi(k) {
     const riwayat = sisi.querySelector('[data-riwayat]');
 
     const segarHitung = () => {
-      const r = Store.rekapKajian(k);
+      const r = Store.rekapKajian(kini());
       hitung.innerHTML = [['Hadir', r.hadir, 'hijau'], ['Terlambat', r.terlambat, 'merah'],
-        ['Tidak Hadir', r.tidakHadir, 'abu'], ['Belum Absen', r.belum, 'abu']]
+        ['Izin/Sakit', r.izin, 'abu'], ['Belum Absen', r.belum, 'abu']]
         .map(([l, n, c]) => `<div class="lp-sel ${c}"><b>${n}</b><span>${l}</span></div>`).join('');
     };
     const tampil = (kelas, kepala, nama, ket, foto) => {
@@ -6437,14 +6513,20 @@ function modePresensi(k) {
     };
 
     sisi.querySelector('[data-tutup-presensi]').onclick = () => konfirmasi('Tutup presensi',
-      'Semua peserta yang belum memindai akan dicatat tidak hadir. Yang datang sesudahnya tetap dapat memindai dan tercatat terlambat.',
-      () => aman(() => { const n = Store.tutupPresensi(U, k.id); toast(`Presensi ditutup. ${n} orang dicatat tidak hadir.`); segarHitung(); }),
+      'Semua peserta yang belum memindai akan dicatat tidak hadir, lalu presensi dikunci. Sesudah itu hanya koordinator yang dapat mengubahnya, dengan alasan.',
+      async () => {
+        const n = await amanTunggu(null, () => Store.tutupPresensi(U, idKajian));
+        if (n === null) return;
+        toast(`Presensi ditutup. ${n} orang dicatat tidak hadir.`);
+        segarHitung();
+        sisi.closest('.layar-pindai')?.querySelector('[data-tutup]')?.click();
+      },
       'Ya, tutup presensi');
 
     segarHitung();
-    return (kode) => {
+    return async (kode) => {
       try {
-        const h = Store.presensiDariKode(U, k.id, kode);
+        const h = await Store.presensiDariKode(U, idKajian, kode);
         const telat = h.status === 'terlambat';
         tampil(h.sudah ? 'sudah' : telat ? 'telat' : 'hadir',
           h.sudah ? 'SUDAH TERCATAT' : telat ? 'TERLAMBAT' : 'HADIR',
@@ -6830,6 +6912,106 @@ function kartuIuranSaya() {
     </div></div>`;
 }
 
+/* ============================================================
+   KAJIAN SAYA — jadwal, tugas, izin, dan kehadiran milik sendiri
+   ============================================================ */
+const PERAN_TUGAS = { pemakalahId: 'Pemakalah', moderatorId: 'Moderator', notulenId: 'Notulen' };
+const kajianAngkatanku = () => Store.db.kajian.filter((k) => Store.kajianJalan(k) && k.angkatan === U?.angkatan)
+  .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+const tugasku = (k) => Object.keys(PERAN_TUGAS).filter((kunci) => k[kunci] === U?.id).map((kunci) => PERAN_TUGAS[kunci]);
+/** Kajian mendatang yang menugasi saya. */
+const tugasKajianSaya = () => (U && Store.berkajian(U)
+  ? kajianAngkatanku().filter((k) => k.tanggal >= nowTanggal() && tugasku(k).length) : []);
+
+function dialogAjukanIzin(k) {
+  const jatah = Store.jatahIzin(U.id, k);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)} ${esc(k.jam || '')}</p>
+    <div class="grup"><label>Jenis</label><select data-jenis><option value="izin">Izin</option><option value="sakit">Sakit</option></select></div>
+    <div class="grup" style="margin:0"><label>Alasan</label>
+      <textarea data-alasan style="min-height:76px" placeholder="Tuliskan dengan jelas — koordinator kajian yang memutuskan"></textarea>
+      <div class="bantu">Jatah izin + sakit: ${jatah.batas} kali per jenjang. Anda sudah memakai ${jatah.terpakai}; pengajuan ini memakai satu lagi.
+        Pengajuan yang ditolak tidak mengurangi jatah.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Ajukan</button></div>`);
+  modal({ judul: 'Ajukan izin kajian', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = async (e) => {
+    if (await amanTunggu(e.currentTarget, async () => {
+      await Store.ajukanIzin(k.id, isi.querySelector('[data-jenis]').value, isi.querySelector('[data-alasan]').value); return true;
+    })) { tutupModal(); toast('Pengajuan terkirim. Menunggu keputusan koordinator.'); gambar(); }
+  };
+}
+
+HAL['kajian-saya'] = () => {
+  const semua = kajianAngkatanku();
+  const datang = semua.filter((k) => k.tanggal >= nowTanggal());
+  const lampau = semua.filter((k) => k.tanggal < nowTanggal() && (k.presensi || []).length
+    && Store.pesertaKajian(k).some((u) => u.id === U.id)).reverse();
+  const h = Store.kehadiranAnggota(U.id, semua);
+  const acuan = datang[0] || semua[semua.length - 1];
+  const jatah = acuan ? Store.jatahIzin(U.id, acuan) : { batas: Store.JATAH_IZIN, terpakai: 0, sisa: Store.JATAH_IZIN };
+  const box = el('<div></div>');
+
+  box.appendChild(el(`<div class="grid-stat">
+    ${[{ ik: I.kalender, n: datang.length, l: 'Kajian mendatang', w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+       { ik: I.orang, n: tugasKajianSaya().length, l: 'Tugas saya', w: 'rgba(240,149,30,.15)', wc: '#B87310' },
+       { ik: I.bagan, n: h.wajib ? h.persen + '%' : '—', l: `Kehadiran (${h.datang}/${h.wajib})`, w: 'rgba(47,169,140,.14)', wc: '#1F7A64' },
+       { ik: I.surat, n: `${jatah.sisa}/${jatah.batas}`, l: 'Sisa jatah izin/sakit', w: 'rgba(62,127,184,.14)', wc: '#2C6091' }]
+      .map((s) => `<div class="stat" style="--w:${s.w};--wc:${s.wc}">
+        <div class="stat-ik">${s.ik}</div><div class="stat-nilai">${esc(String(s.n))}</div>
+        <div class="stat-label">${esc(s.l)}</div></div>`).join('')}
+  </div>`));
+
+  const k1 = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Kajian Mendatang</h3><span class="hitung">(${datang.length} kajian · ${esc(U.angkatan || '')})</span></div></div>`);
+  if (!datang.length) k1.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kajian terjadwal</p></div>`));
+  else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Tempat</th><th>Pemakalah</th>
+        <th>Tugas Saya</th><th>Izin</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    datang.forEach((k, i) => {
+      const z = [...(k.izin || [])].reverse().find((x) => x.userId === U.id);
+      const p = (k.presensi || []).find((x) => x.userId === U.id);
+      const tugas = tugasku(k);
+      const ket = p ? `<span class="lencana ${PRESENSI[p.status].c}">${PRESENSI[p.status].l}</span>`
+        : z ? `<span class="lencana ${z.status === 'menunggu' ? 'l-kuning' : 'l-merah'}">${z.jenis} · ${z.status}</span>${z.catatan ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(z.catatan)}</span>` : ''}` : '—';
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+        <td class="utuh">${tgl(k.tanggal)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.jam || '')} · terlambat sesudah ${Store.toleransiKajian(k)} menit</span></td>
+        <td><b>${esc(k.judul)}</b></td><td class="utuh">${esc(k.tempat || '—')}</td>
+        <td>${esc(namaPendek(k.pemakalahId))}</td>
+        <td>${tugas.length ? tugas.map((x) => `<span class="lencana l-kuning">${x}</span>`).join(' ') : '—'}</td>
+        <td>${ket}</td>
+        <td class="kol-aksi"><div class="sel-aksi">
+          ${z?.status === 'menunggu' ? `<button class="btn btn-garis btn-kecil" data-tarik>Tarik</button>`
+            : p || k.presensiTutup ? '' : `<button class="btn btn-garis btn-kecil" data-izin ${jatah.sisa ? '' : 'disabled title="Jatah izin/sakit Anda habis"'}>Ajukan Izin</button>`}</div></td></tr>`);
+      tr.querySelector('[data-izin]')?.addEventListener('click', () => dialogAjukanIzin(k));
+      tr.querySelector('[data-tarik]')?.addEventListener('click', async (e) => {
+        if (await amanTunggu(e.currentTarget, async () => { await Store.tarikIzin(k.id, z.id); return true; })) { toast('Pengajuan ditarik.'); gambar(); }
+      });
+      t.querySelector('tbody').appendChild(tr);
+    });
+    k1.appendChild(t);
+  }
+  box.appendChild(k1);
+
+  const k2 = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Riwayat Kehadiran Saya</h3><span class="hitung">(${lampau.length} kajian tercatat)</span></div></div>`);
+  if (!lampau.length) k2.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kehadiran tercatat</p></div>`));
+  else k2.appendChild(el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Tugas Saya</th><th>Jam Datang</th><th>Kehadiran</th></tr></thead>
+    <tbody>${lampau.map((k, i) => {
+      const p = k.presensi.find((x) => x.userId === U.id);
+      return `<tr><td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td><td><b>${esc(k.judul)}</b></td>
+        <td>${tugasku(k).join(', ') || '—'}</td><td class="utuh">${esc(p?.jam || '—')}</td>
+        <td>${p ? `<span class="lencana ${PRESENSI[p.status].c}">${PRESENSI[p.status].l}</span>${p.alasan ? ` <span style="color:var(--e-abu);font-size:11.6px">${esc(p.alasan)}</span>` : ''}`
+          : '<span class="lencana l-abu">belum dicatat</span>'}</td></tr>`; }).join('')}</tbody></table></div>`));
+  box.appendChild(k2);
+  return box;
+};
+HAL['kajian-saya'].judul = () => ['Kajian Saya', 'Jadwal, tugas, izin, dan kehadiran Anda pada kajian angkatan.'];
+
 HAL['kartu-saya'] = () => {
   const diri = Store.dataDiri(U.id);
   const box = el(`<div class="ks">
@@ -7043,15 +7225,16 @@ HAL.presensi = () => {
     <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Laporan Presensi</button></div>
   </div></div>`);
   kartu.querySelector('[data-export]').onclick = () => {
-    const baris = [['Tanggal', 'Judul Kajian', 'Hadir', 'Terlambat', 'Tidak Hadir', 'Belum Absen', 'Persentase']];
+    const baris = [['Tanggal', 'Judul Kajian', 'Peserta', 'Hadir', 'Terlambat', 'Izin/Sakit', 'Tidak Hadir', 'Belum Absen', 'Persentase', 'Ditutup']];
     semua.forEach((k) => { const r = rekapPresensi(k);
-      baris.push([k.tanggal, k.judul, r.hadir, r.terlambat, r.tidakHadir, r.belum, r.persen + '%']); });
+      baris.push([k.tanggal, k.judul, r.total, r.hadir, r.terlambat, r.izin, r.tidakHadir, r.belum, r.persen + '%', k.presensiTutup ? 'ya' : 'belum']); });
     unduhCsv(`presensi-${angkatanAktif().replace(/\s/g, '-').toLowerCase()}.csv`, baris);
   };
 
+  box.appendChild(kartuPengajuanIzin(semua));
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Hadir</th>
-      <th>Terlambat</th><th>Tidak Hadir</th><th>Belum Absen</th><th style="min-width:150px">Kehadiran</th>
+      <th>Terlambat</th><th>Izin/Sakit</th><th>Tidak Hadir</th><th>Belum Absen</th><th style="min-width:150px">Kehadiran</th>
       <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   semua.forEach((k, i) => {
@@ -7059,23 +7242,61 @@ HAL.presensi = () => {
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td>
       <td class="utuh">${tgl(k.tanggal)}</td>
-      <td>${esc(k.judul)}</td>
+      <td>${esc(k.judul)}${k.presensiTutup ? ` <span class="lencana l-abu" title="Presensi ditutup dan terkunci">${I.gembok} ditutup</span>` : ''}</td>
       <td class="utuh"><b style="color:#4A7A1E">${r.hadir}</b></td>
-      <td class="utuh">${r.terlambat}</td><td class="utuh">${r.tidakHadir}</td><td class="utuh">${r.belum}</td>
+      <td class="utuh">${r.terlambat}</td><td class="utuh">${r.izin}</td><td class="utuh">${r.tidakHadir}</td><td class="utuh">${r.belum}</td>
       <td><div style="display:flex;align-items:center;gap:9px">
         <div class="bar-maju" style="flex:1"><span style="width:${r.persen}%"></span></div>
         <b style="font-size:12.2px">${r.persen}%</b></div></td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Isi presensi">${I.daftarCek}</button>
-        <button class="ikon-aksi" data-scan title="Mode Presensi — pindai kartu">${I.qr}</button></div></td></tr>`);
+        ${k.presensiTutup ? '' : `<button class="ikon-aksi" data-scan title="Mode Presensi — pindai kartu">${I.qr}</button>`}</div></td></tr>`);
     tr.querySelector('.sunting').onclick = () => dialogAbsensi(k);
-    tr.querySelector('[data-scan]').onclick = () => dialogScan(k);
+    tr.querySelector('[data-scan]')?.addEventListener('click', () => dialogScan(k));
     tb.appendChild(tr);
   });
   kartu.appendChild(t);
   box.appendChild(kartu);
   return box;
 };
+/** Pengajuan izin/sakit yang menunggu keputusan. Kosong → tak tampil. */
+function kartuPengajuanIzin(daftar) {
+  const tunggu = Store.izinMenunggu(daftar);
+  if (!tunggu.length) return el('<div></div>');
+  const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Pengajuan Izin</h3><span class="hitung">(${tunggu.length} menunggu keputusan · jatah ${Store.JATAH_IZIN} kali per anggota per jenjang)</span></div>
+    <div class="kj-izin"></div></div>`);
+  const wadah = kartu.querySelector('.kj-izin');
+  tunggu.forEach(({ k, z }) => {
+    const u = Store.getUser(z.userId);
+    const jatah = Store.jatahIzin(z.userId, k);
+    /* Pengajuan ini sendiri sudah terhitung; yang ditampilkan pemakaian di luar dirinya. */
+    const b = el(`<div class="kj-izin-br">
+      <img src="${u?.foto || ''}" alt="">
+      <div class="isi"><b>${esc(u?.nama || '—')}</b> <span class="lencana l-biru">${esc(z.jenis)}</span>
+        <div class="kt">${esc(k.judul)} · ${tgl(k.tanggal)}</div>
+        <div class="al">"${esc(z.alasan)}"</div>
+        <div class="kt">Izin/sakit ke-${jatah.terpakai} dari ${jatah.batas} pada jenjang ini · diajukan ${tgl(z.pada.slice(0, 10))}</div></div>
+      <div class="aksi"><button class="btn btn-lime btn-kecil" data-ya>Setujui</button>
+        <button class="btn btn-garis btn-kecil" data-tidak>Tolak</button></div>
+    </div>`);
+    b.querySelector('[data-ya]').onclick = async (e) => {
+      if (await amanTunggu(e.currentTarget, async () => { await Store.putuskanIzin(U, k.id, z.id, true); return true; })) { toast('Izin disetujui.'); gambar(); }
+    };
+    b.querySelector('[data-tidak]').onclick = () => {
+      if (b.querySelector('.alasan-izin')) return;
+      const kotak = el(`<div class="alasan-izin"><input placeholder="Alasan penolakan"><button class="btn btn-merah btn-kecil">Tolak</button></div>`);
+      b.querySelector('.isi').appendChild(kotak);
+      kotak.querySelector('input').focus();
+      kotak.querySelector('button').onclick = async (e) => {
+        if (await amanTunggu(e.currentTarget, async () => { await Store.putuskanIzin(U, k.id, z.id, false, kotak.querySelector('input').value); return true; })) { toast('Pengajuan ditolak.'); gambar(); }
+      };
+    };
+    wadah.appendChild(b);
+  });
+  return kartu;
+}
+
 HAL.presensi.judul = () => ['Presensi Kajian', 'Kehadiran tiap pertemuan beserta rekapnya.'];
 
 HAL.materi = () => {
@@ -9519,7 +9740,7 @@ Store.berlanggananStatus((keadaan, muatan) => {
 Store.berlangganan(() => {
   if (!U) return;
   document.querySelectorAll('.sb-item').forEach((b) => {
-    const m = MENU.find((x) => x.id === b.dataset.rute);
+    const m = (tugas() ? menuTugas() : MENU).find((x) => x.id === b.dataset.rute);
     const n = m?.lonceng?.() || 0;
     let lb = b.querySelector('.sb-lonceng');
     if (n && !lb) { b.appendChild(el(`<span class="sb-lonceng">${n}</span>`)); }

@@ -24,6 +24,14 @@ $versiBaru = [];
 foreach ($perubahan as $nama => $bagian) {
   $isi = $bagian['isi'];
   if ($nama === 'users') $isi = jagaRahasiaPengguna($isi, $sandiBaru);
+  /* Jejak audit hanya bertambah, dan SETIAP penyimpanan menyertakannya.
+     Kalau ia ikut dikunci versi, dua orang yang bekerja bersamaan akan
+     selalu saling menolak — apa pun yang mereka kerjakan. Karena itu
+     baris barunya digabungkan ke yang tersimpan, bukan menimpanya. */
+  if ($nama === 'audit') {
+    $versiBaru[$nama] = tulisKoleksi('audit', gabungAudit($isi), null);
+    continue;
+  }
   $versiBaru[$nama] = tulisKoleksi((string) $nama, $isi, isset($bagian['versi']) ? (int) $bagian['versi'] : null);
 }
 

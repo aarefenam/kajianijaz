@@ -109,6 +109,12 @@ if ($u && !bolehSalahSatu($u, ['anggota.manage', 'user.manage'])) {
   }
 }
 
+/* Alasan izin dan sakit hanya untuk pengurus presensi; anggota lain
+   menerima miliknya sendiri saja. */
+if ($u && isset($semua['isi']['kajian']) && is_array($semua['isi']['kajian'])) {
+  $semua['isi']['kajian'] = array_map(fn($k) => is_array($k) ? kajianUntuk($u, $k) : $k, $semua['isi']['kajian']);
+}
+
 jawab([
   'isi'      => $semua['isi'],
   'versi'    => $semua['versi'],

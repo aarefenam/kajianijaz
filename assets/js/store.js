@@ -1258,7 +1258,7 @@ function rekapKajian(k) {
   const jml = (st) => p.filter((x) => x.status === st).length;
   const hadir = jml('hadir'), terlambat = jml('terlambat'), tidakHadir = jml('tidak-hadir');
   const total = id.size;
-  return { hadir, terlambat, tidakHadir, total, datang: hadir + terlambat,
+  return { hadir, terlambat, tidakHadir, izin: jml('izin') + jml('sakit'), total, datang: hadir + terlambat,
     belum: Math.max(0, total - p.length),
     persen: total ? Math.round(((hadir + terlambat) / total) * 100) : 0 };
 }
@@ -1270,7 +1270,7 @@ function kehadiranAnggota(userId, daftar) {
   const st = (k) => k.presensi.find((p) => p.userId === userId)?.status;
   const jml = (x) => wajib.filter((k) => st(k) === x).length;
   const hadir = jml('hadir'), terlambat = jml('terlambat'), tidakHadir = jml('tidak-hadir');
-  return { wajib: wajib.length, hadir, terlambat, tidakHadir, datang: hadir + terlambat,
+  return { wajib: wajib.length, hadir, terlambat, tidakHadir, izin: jml('izin') + jml('sakit'), datang: hadir + terlambat,
     persen: wajib.length ? Math.round(((hadir + terlambat) / wajib.length) * 100) : 0 };
 }
 
@@ -1418,7 +1418,10 @@ function pulihkanKajian(user, id) {
   simpan();
 }
 
-const STATUS_PRESENSI = ['hadir', 'terlambat', 'tidak-hadir'];
+const STATUS_PRESENSI = ['hadir', 'terlambat', 'izin', 'sakit', 'tidak-hadir'];
+/** Izin + sakit yang boleh dipakai seorang anggota dalam satu jenjang.
+    Angka yang berlaku ditegakkan api/presensi.php; ini cerminnya untuk layar. */
+const JATAH_IZIN = 2;
 
 /** Isi QR pada kartu anggota: nomor induknya. Sengaja bukan nama atau
     surel — kartu dicetak dan dibawa-bawa, jadi yang tercecer tak boleh
@@ -1443,25 +1446,51 @@ function hariIni() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function setPresensi(user, idKajian, userId, status, jam) {
+/* --- presensi: seluruh perubahannya lewat api/presensi.php ---
+   Tiap catatan adalah satu perubahan kecil pada satu kajian, bukan kiriman
+   seluruh koleksi — sehingga beberapa ponsel dapat memindai bersamaan tanpa
+   saling menolak. Server mengembalikan baris kajiannya yang terbaru (sudah
+   memuat catatan pemindai lain); baris itu menggantikan yang di memori. */
+async function aksiPresensi(aksi, data) {
+  /* Suntingan jadwal yang belum terkirim didahulukan, supaya baris yang
+     kembali dari server tidak menimpanya. */
+  if (koleksiKotor().kajian !== undefined) await kirimPerubahan();
+  const d = await panggil('presensi.php', { method: 'POST',
+    body: JSON.stringify({ aksi, versi: versiKoleksi.kajian ?? 0, ...data }) });
+  /* Isi baris diganti DI TEMPAT: layar yang sedang memegang objek kajian
+     ini langsung melihat keadaan terbarunya. */
+  const timpa = (k, baru) => { Object.keys(k).forEach((kunci) => delete k[kunci]); Object.assign(k, baru); };
+  if (Array.isArray(d.semua)) {
+    /* Peramban ini tertinggal dari ponsel lain: server mengirim seluruh
+       koleksi, dan semuanya disegarkan sekaligus. */
+    const lama = new Map(db.kajian.map((k) => [k.id, k]));
+    db.kajian = d.semua.map((baru) => {
+      const k = lama.get(baru.id);
+      if (!k) return baru;
+      timpa(k, baru);
+      return k;
+    });
+  } else {
+    const k = db.kajian.find((x) => x.id === d.kajian?.id);
+    if (k) timpa(k, d.kajian);
+  }
+  if (d.versi?.kajian) versiKoleksi.kajian = d.versi.kajian;
+  bayangan.kajian = JSON.stringify(db.kajian);
+  beritahu();
+  return d;
+}
+
+const jamKini = () => new Date().toTimeString().slice(0, 5);
+
+/** Catat kehadiran satu orang. `opsi.alasan` wajib untuk izin dan sakit;
+    `opsi.alasanUbah` wajib bila presensinya sudah ditutup. Status 'kosong'
+    menghapus catatannya. */
+async function setPresensi(user, idKajian, userId, status, opsi = {}) {
   RBAC.assertCan(user, 'kajian.attendance');
-  if (!STATUS_PRESENSI.includes(status)) throw new Error('Status presensi tidak dikenal.');
-  const k = db.kajian.find((x) => x.id === idKajian);
-  if (!k) throw new Error('Kajian tidak ditemukan.');
-  if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat diisi.`);
-  k.presensi = k.presensi || [];
-  /* Presensi pertama membekukan daftar peserta. Yang datang belakangan dan
-     belum terdaftar — anggota yang baru masuk angkatan — ikut ditambahkan. */
-  bekukanPeserta(k);
-  if (!k.peserta.includes(userId)) k.peserta.push(userId);
-  const ada = k.presensi.find((p) => p.userId === userId);
-  const waktu = jam !== undefined ? jam
-    : (status === 'tidak-hadir' ? '' : new Date().toTimeString().slice(0, 5));
-  if (ada) { ada.status = status; ada.jam = waktu; }
-  else k.presensi.push({ userId, status, jam: waktu });
-  catat(user, 'kajian.presensi', idKajian, `${namaUser(userId)} → ${status} pada "${k.judul}"`);
-  simpan();
-  return k.presensi.find((p) => p.userId === userId);
+  if (status !== 'kosong' && !STATUS_PRESENSI.includes(status)) throw new Error('Status presensi tidak dikenal.');
+  const d = await aksiPresensi('catat', { idKajian, userId, status, timpa: true,
+    jam: opsi.jam !== undefined ? opsi.jam : jamKini(), alasan: opsi.alasan || '', alasanUbah: opsi.alasanUbah || '' });
+  return d.entri || null;
 }
 
 /** Batas terlambat sebuah kajian, dalam menit sesudah jam mulainya.
@@ -1478,7 +1507,7 @@ const toleransiKajian = (k) => {
     Yang terlambat TETAP boleh masuk; ia hanya tercatat terlambat. Yang
     sudah tercatat hadir tidak ditimpa bila kartunya terpindai lagi, agar
     jam datangnya yang pertama tidak bergeser. */
-function presensiDariKode(user, idKajian, kode) {
+async function presensiDariKode(user, idKajian, kode) {
   RBAC.assertCan(user, 'kajian.attendance');
   const k = db.kajian.find((x) => x.id === idKajian);
   if (!k) throw new Error('Kajian tidak ditemukan.');
@@ -1487,42 +1516,60 @@ function presensiDariKode(user, idKajian, kode) {
   if (k.angkatan && u.angkatan !== k.angkatan)
     throw new Error(`${u.nama} bukan peserta ${k.angkatan}.`);
   if (u.status !== 'aktif') throw new Error(`${u.nama} tidak berstatus aktif.`);
+  if (k.presensiTutup) throw new Error('Presensi kajian ini sudah ditutup.');
 
   const tanggal = hariIni();
   if (tanggal < k.tanggal)
-    throw new Error(`Kajian ini dijadwalkan ${new Date(`${k.tanggal}T00:00`).toLocaleDateString('id-ID',
-      { day: 'numeric', month: 'long', year: 'numeric' })}. Presensi dibuka pada harinya.`);
+    throw new Error(`Kajian ini dijadwalkan ${tglKajian(k.tanggal)}. Presensi dibuka pada harinya.`);
 
-  const lama = (k.presensi || []).find((p) => p.userId === u.id);
-  if (lama && lama.status !== 'tidak-hadir')
-    return { user: u, status: lama.status, jam: lama.jam, sudah: true };
-
-  const sekarang = new Date().toTimeString().slice(0, 5);
+  const sekarang = jamKini();
   const menit = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
   /* Dipindai sesudah harinya lewat selalu terlambat, pukul berapa pun. */
   const telat = tanggal > k.tanggal || menit(sekarang) > menit(k.jam || '00:00') + toleransiKajian(k);
   const status = telat ? 'terlambat' : 'hadir';
-  setPresensi(user, idKajian, u.id, status, sekarang);
-  return { user: u, status, jam: sekarang, sudah: false };
+  /* Tanpa `timpa`: server tidak menggeser catatan hadir yang sudah ada,
+     dari ponsel mana pun catatan itu berasal. */
+  const d = await aksiPresensi('catat', { idKajian, userId: u.id, status, jam: sekarang });
+  return d.sudah ? { user: u, status: d.entri.status, jam: d.entri.jam, sudah: true }
+    : { user: u, status, jam: sekarang, sudah: false };
 }
 
 /** Tutup presensi: setiap peserta yang belum tercatat ditulis tidak
-    hadir, supaya tak seorang pun menggantung tanpa keterangan. Yang
-    datang sesudahnya tetap dapat memindai dan berubah menjadi terlambat. */
-function tutupPresensi(user, idKajian) {
+    hadir, dan presensinya TERKUNCI. Sesudah itu hanya koordinator yang
+    dapat mengubahnya, dengan alasan yang tercatat. */
+async function tutupPresensi(user, idKajian) {
   RBAC.assertCan(user, 'kajian.attendance');
-  const k = db.kajian.find((x) => x.id === idKajian);
-  if (!k) throw new Error('Kajian tidak ditemukan.');
-  if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat ditutup.`);
-  k.presensi = k.presensi || [];
-  bekukanPeserta(k);
-  const sudah = new Set(k.presensi.map((p) => p.userId));
-  const absen = pesertaKajian(k).filter((u) => !sudah.has(u.id));
-  absen.forEach((u) => k.presensi.push({ userId: u.id, status: 'tidak-hadir', jam: '' }));
-  k.presensiTutup = new Date().toISOString();
-  catat(user, 'kajian.presensi', idKajian, `Menutup presensi "${k.judul}" — ${absen.length} orang dicatat tidak hadir`);
-  simpan();
-  return absen.length;
+  return (await aksiPresensi('tutup', { idKajian })).absen || 0;
+}
+async function bukaPresensi(user, idKajian, alasan) {
+  RBAC.assertCan(user, 'kajian.manage');
+  await aksiPresensi('buka', { idKajian, alasan });
+}
+
+/* --- izin & sakit --- */
+/** Kajian sejenjang dengan `k`: angkatan dan jenjang yang sama, masih berjalan. */
+const sejenjang = (k) => db.kajian.filter((x) => kajianJalan(x) && x.angkatan === k.angkatan && x.level === k.level);
+/** Jatah izin + sakit seorang anggota pada jenjang kajian `k`. Pengajuan
+    yang masih menunggu ikut terhitung. */
+function jatahIzin(userId, k) {
+  const terpakai = sejenjang(k).filter((x) =>
+    (x.presensi || []).some((p) => p.userId === userId && (p.status === 'izin' || p.status === 'sakit'))
+    || (x.izin || []).some((z) => z.userId === userId && z.status === 'menunggu')).length;
+  return { batas: JATAH_IZIN, terpakai, sisa: Math.max(0, JATAH_IZIN - terpakai) };
+}
+/** Pengajuan izin yang masih menunggu, beserta kajiannya. */
+const izinMenunggu = (daftar = db.kajian) => daftar.flatMap((k) =>
+  (k.izin || []).filter((z) => z.status === 'menunggu').map((z) => ({ k, z })));
+
+async function ajukanIzin(idKajian, jenis, alasan) {
+  await aksiPresensi('ajukan', { idKajian, jenis, alasan });
+}
+async function tarikIzin(idKajian, idIzin) {
+  await aksiPresensi('tarik', { idKajian, idIzin });
+}
+async function putuskanIzin(user, idKajian, idIzin, setuju, catatan) {
+  RBAC.assertCan(user, 'kajian.attendance');
+  await aksiPresensi('putuskan', { idKajian, idIzin, setuju, catatan: catatan || '' });
 }
 
 /** Penyuntingan anggota versi koordinator: terbatas pada jenjang,
@@ -2640,6 +2687,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  bukaPresensi, jatahIzin, izinMenunggu, ajukanIzin, tarikIzin, putuskanIzin, JATAH_IZIN,
   pesertaKajian, rekapKajian, kehadiranAnggota, simpanAnggotaMassal, berkajian,
   tundaKajian, batalkanKajian, pulihkanKajian, keadaanKajian, kajianJalan, kajianBerisi, angkatanPeserta, pesertaAngkatan,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
