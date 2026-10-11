@@ -1152,11 +1152,24 @@ function rollback(user, idVersi) {
 /* ============================================================
    ARTIKEL — alur: draft -> review -> terbit
    ============================================================ */
+/** Alamat artikel dari judulnya: huruf kecil, tanpa tanda, unik. Judul
+    yang seluruhnya non-Latin jatuh ke id-nya. */
+function slugArtikel(judul, id) {
+  const dasar = String(judul || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/['’`]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || `artikel-${id}`;
+  let slug = dasar;
+  for (let n = 2; db.artikel.some((x) => x.id !== id && x.slug === slug); n += 1) slug = `${dasar}-${n}`;
+  return slug;
+}
+
 function simpanArtikel(user, data) {
   RBAC.assertCan(user, 'artikel.write');
+  if (!String(data.judul ?? 'x').trim()) throw new Error('Judul artikel wajib diisi.');
+  /* Status, riwayat, dan tanggal terbit tidak diubah lewat penyuntingan. */
+  const { status: _s, riwayat: _r, terbitPertama: _t, slug: _g, ...isi } = data;
   let simpul;
-  if (data.id) {
-    const a = db.artikel.find((x) => x.id === data.id);
+  if (isi.id) {
+    const a = db.artikel.find((x) => x.id === isi.id);
     if (!a) throw new Error('Artikel tidak ditemukan.');
     const pemilik = a.penulisId === user.id;
     if (!pemilik && !RBAC.can(user, 'artikel.review'))
@@ -1165,15 +1178,19 @@ function simpanArtikel(user, data) {
       throw new Error('Artikel sudah terbit. Minta PJ Artikel untuk menariknya kembali ke draft.');
     if (a.status === 'review' && !RBAC.can(user, 'artikel.review'))
       throw new Error('Naskah sedang ditinjau. Tarik kembali ke draf untuk mengubahnya.');
-    Object.assign(a, data);
+    Object.assign(a, isi);
+    /* Alamat artikel yang pernah terbit tidak ikut berganti bersama
+       judulnya — tautan yang sudah dibagikan harus tetap hidup. */
+    if (!a.terbitPertama && isi.judul !== undefined) a.slug = slugArtikel(a.judul, a.id);
     simpul = a;
     catat(user, 'artikel.ubah', a.id, `Menyunting artikel "${a.judul}"`);
   } else {
+    const id = uid('a');
     const baru = {
-      id: uid('a'), status: 'draft', penulisId: user.id, dilihat: 0,
-      tanggal: nowISO().slice(0, 10), reviewNote: '', reviewerId: '',
+      id, status: 'draft', penulisId: user.id, dilihat: 0,
+      tanggal: hariIni(), reviewNote: '', reviewerId: '',
       cover: window.__ph('ARTIKEL BARU', '#1B5E20', '#0E2E1C', 'مقال'),
-      tag: [], isi: [], ...data,
+      tag: [], isi: [], riwayat: [], ...isi, slug: slugArtikel(isi.judul, id),
     };
     db.artikel.unshift(baru);
     simpul = baru;
@@ -1181,37 +1198,80 @@ function simpanArtikel(user, data) {
   }
   selaraskanPenugasan(simpul);
   simpan();
+  return simpul;
 }
 
-function ubahStatusArtikel(user, id, status, catatanReview) {
-  const a = db.artikel.find((x) => x.id === id);
-  if (!a) throw new Error('Artikel tidak ditemukan.');
+/* --- alur naskah ---
+   draf → ditinjau → terbit, dengan dua jalan pulang: dikembalikan untuk
+   revisi, atau ditarik. Hanya perpindahan di bawah ini yang sah; yang
+   sama ditegakkan susunArtikel() di server, yang juga menulis riwayatnya. */
+const ALUR_ARTIKEL = {
+  draft : ['review'],
+  revisi: ['review'],
+  review: ['revisi', 'terbit', 'draft'],
+  terbit: ['draft'],
+};
+const NAMA_STATUS_ARTIKEL = { draft: 'draf', review: 'ditinjau', revisi: 'perlu revisi', terbit: 'terbit' };
 
+/** Bolehkah pengguna ini memindahkan naskah `a` ke `status`? Melempar
+    galat berbahasa manusia bila tidak. */
+function periksaPindahArtikel(user, a, status, catatan) {
+  if (!(ALUR_ARTIKEL[a.status] || []).includes(status))
+    throw new Error(`Naskah yang ${NAMA_STATUS_ARTIKEL[a.status] || a.status} tidak dapat langsung menjadi ${NAMA_STATUS_ARTIKEL[status] || status}.`);
+  const pemilik = a.penulisId === user.id;
   if (status === 'review') {
-    if (a.penulisId !== user.id && !RBAC.can(user, 'artikel.review'))
+    if (!pemilik && !RBAC.can(user, 'artikel.review'))
       throw new Error('Hanya penulis yang dapat mengirim artikelnya untuk ditinjau.');
+    if (!(a.isi || []).length) throw new Error('Isi artikel masih kosong.');
+    if (!String(a.ringkas || '').trim()) throw new Error('Ringkasan artikel belum diisi.');
   } else if (status === 'terbit') {
     RBAC.assertCan(user, 'artikel.publish');
     /* Tak seorang pun menerbitkan tulisannya sendiri — kecuali Ketua Umum,
-       yang di atasnya memang tak ada peninjau lagi. Ditegakkan pula oleh
-       susunArtikel() di server. */
-    if (a.penulisId === user.id && !RBAC.can(user, 'user.manage'))
+       yang di atasnya memang tak ada peninjau lagi. */
+    if (pemilik && !RBAC.can(user, 'user.manage'))
       throw new Error('Tulisan Anda sendiri diterbitkan oleh Ketua Umum.');
   } else if (status === 'revisi') {
     RBAC.assertCan(user, 'artikel.review');
-    if (!catatanReview?.trim()) throw new Error('Catatan revisi wajib diisi.');
+    if (!String(catatan || '').trim()) throw new Error('Catatan revisi wajib diisi.');
   } else if (status === 'draft') {
-    if (a.status === 'terbit') RBAC.assertCan(user, 'artikel.publish');
-    else if (a.penulisId !== user.id) RBAC.assertCan(user, 'artikel.review');
+    if (a.status === 'terbit') {
+      RBAC.assertCan(user, 'artikel.publish');
+      if (!String(catatan || '').trim()) throw new Error('Alasan menarik artikel wajib diisi.');
+    } else if (!pemilik) RBAC.assertCan(user, 'artikel.review');
   }
+}
+/** Perpindahan yang terbuka bagi pengguna ini — untuk menyusun tombol. */
+const pindahArtikel = (user, a) => (ALUR_ARTIKEL[a.status] || []).filter((st) => {
+  try { periksaPindahArtikel(user, a, st, 'x'); return true; } catch (_) { return false; }
+});
+
+function ubahStatusArtikel(user, id, status, catatan) {
+  const a = db.artikel.find((x) => x.id === id);
+  if (!a) throw new Error('Artikel tidak ditemukan.');
+  periksaPindahArtikel(user, a, status, catatan);
+  const dari = a.status;
+  const teks = String(catatan || '').trim();
 
   a.status = status;
-  if (catatanReview !== undefined) a.reviewNote = catatanReview;
+  /* Catatan peninjau yang tampil ke penulis: berlaku selama naskahnya
+     perlu revisi, dan tetap terbaca sampai naskah itu terbit. */
+  if (status === 'revisi') a.reviewNote = teks;
+  if (status === 'terbit') a.reviewNote = '';
   if (['terbit', 'revisi'].includes(status)) a.reviewerId = user.id;
-  if (status === 'terbit') a.tanggal = nowISO().slice(0, 10);
+  if (status === 'terbit' && !a.terbitPertama) {
+    /* Tanggal artikel adalah tanggal terbit PERTAMA-nya: menarik lalu
+       menerbitkan ulang tidak membuatnya tampak baru. */
+    a.tanggal = hariIni();
+    a.terbitPertama = new Date().toISOString();
+  }
+  /* Cermin riwayat untuk layar ini; yang tersimpan ditulis server. */
+  a.riwayat = [...(a.riwayat || []), { dari, ke: status, oleh: user.id, pada: new Date().toISOString(), catatan: teks }];
+  /* Alasan menarik dititipkan ke server lewat `_catatan`; pada perpindahan
+     lain titipan lama dibuang supaya tidak terbawa. */
+  if (dari === 'terbit') a._catatan = teks; else delete a._catatan;
 
   selaraskanPenugasan(a);
-  catat(user, 'artikel.status', id, `Artikel "${a.judul}" -> ${status}`);
+  catat(user, 'artikel.status', id, `Artikel "${a.judul}": ${NAMA_STATUS_ARTIKEL[dari]} → ${NAMA_STATUS_ARTIKEL[status]}${teks ? ` — ${teks}` : ''}`);
   simpan();
 }
 
@@ -2851,6 +2911,7 @@ window.Store = {
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
+  pindahArtikel, ALUR_ARTIKEL,
   catatKunjungan, catatBaca, centangTugas, simpanSeo,
   KUNJUNG_SESI, KUNJUNG_BARU,
   kirimPesan, tandaiDibaca, berlanggananNewsletter,

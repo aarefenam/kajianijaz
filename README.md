@@ -245,6 +245,20 @@ Naskah yang belum terbit hanya dikirim kepada penulisnya dan pengurus artikel
 (`artikelUntuk()`); karena kiriman penulis biasa lalu tidak utuh, koleksinya
 disusun ulang dari yang tersimpan dan baris orang lain dipertahankan apa adanya.
 
+**Alur naskah terkunci**: draf → ditinjau → terbit, dengan dua jalan pulang —
+dikembalikan untuk revisi (wajib bercatatan) atau ditarik dari website (wajib
+beralasan). Perpindahan lain ditolak `periksaPindahArtikel()`; tombol di layar
+disusun dari `Store.pindahArtikel()`, jadi yang tampil selalu yang memang
+boleh. Naskah yang sedang ditinjau tidak dapat disunting penulisnya sampai ia
+menariknya kembali.
+
+**Riwayat tinjauan ditulis server** (`riwayat`): siapa memindahkan dari status
+apa ke status apa, kapan, dengan catatan apa. Peramban tidak dapat
+memalsukannya. **Tanggal artikel adalah tanggal terbit pertamanya**
+(`terbitPertama`) — menarik lalu menerbitkan ulang tidak membuatnya tampak
+baru — dan **alamatnya (`slug`) membeku sejak terbit pertama**, unik, dengan
+judul non-Latin jatuh ke id-nya.
+
 **Hitungan baca milik server dan tidak memajukan versi.** `api/lihat.php`
 dulu menaikkan versi koleksi tiap kali artikel dibuka pengunjung, sehingga
 penulis yang sedang menyunting ditolak sebagai "diubah orang lain". Kini ia

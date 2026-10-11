@@ -1835,8 +1835,10 @@ function halamanArtikel(kunci, milik = false) {
           <span class="lencana ${st.c}">${st.l}</span>
           <div class="kanan" data-aksi></div>
         </div>
-        ${a.reviewNote ? `<div class="panel-isi" style="padding-top:14px;padding-bottom:14px">
-          <div class="notis notis-merah" style="margin:0">${I.peringatan}<div><b>Catatan peninjau</b>${esc(a.reviewNote)}</div></div></div>` : ''}
+        ${a.reviewNote && a.status !== 'terbit' ? `<div class="panel-isi" style="padding-top:14px;padding-bottom:14px">
+          <div class="notis ${a.status === 'revisi' ? 'notis-merah' : 'notis-kuning'}" style="margin:0">${I.peringatan}<div><b>Catatan peninjau${a.status === 'revisi' ? '' : ' (sudah diperbaiki penulis, menunggu ditinjau ulang)'}</b>${esc(a.reviewNote)}</div></div></div>` : ''}
+        ${a.status === 'review' && milikSaya && RBAC.can(U, 'artikel.publish') && !RBAC.can(U, 'user.manage') ? `<div class="panel-isi" style="padding-top:14px;padding-bottom:14px">
+          <div class="notis notis-info" style="margin:0">${I.info}<div><b>Menunggu Ketua Umum</b>Tulisan PJ Artikel sendiri ditinjau dan diterbitkan Ketua Umum.</div></div></div>` : ''}
       </div>`);
       const aks = n.querySelector('[data-aksi]');
 
@@ -1845,42 +1847,54 @@ function halamanArtikel(kunci, milik = false) {
         b.onclick = fn; aks.appendChild(b);
       };
 
-      if (milikSaya || bisaTinjau) btn('Sunting', I.sunting, 'btn-garis', () => formArtikel(a));
-      if (milikSaya && ['draft', 'revisi'].includes(a.status))
-        btn('Kirim untuk Ditinjau', I.kirim, 'btn-lime', () => aman(() => {
-          Store.ubahStatusArtikel(U, a.id, 'review', ''); toast('Artikel dikirim ke PJ Artikel.'); gambarDaftar();
-        }));
-      if (bisaTinjau && a.status === 'review') {
-        btn('Minta Revisi', I.putar, 'btn-merah', () => {
-          const isi = el(`<div class="grup"><label>Catatan revisi <span style="color:var(--e-merah)">*</span></label>
-            <textarea id="cr" placeholder="Contoh: Mohon lengkapi rujukan pada paragraf ketiga dan periksa transliterasi istilah Arab."></textarea></div>`);
-          const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
-            <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-k>Kirim Catatan Revisi</button></div>`);
-          modal({ judul: 'Minta Revisi', isi, kaki });
-          kaki.querySelector('[data-b]').onclick = tutupModal;
-          kaki.querySelector('[data-k]').onclick = () => aman(() => {
-            Store.ubahStatusArtikel(U, a.id, 'revisi', isi.querySelector('#cr').value.trim());
-            tutupModal(); toast('Catatan revisi dikirim ke penulis.'); gambarDaftar();
-          });
-        });
+      /* Tombol disusun dari perpindahan yang memang terbuka bagi pengguna
+         ini pada naskah ini — bukan dari statusnya saja. */
+      const boleh = Store.pindahArtikel(U, a);
+      const pindah = (ke, pesan, catatan) => {
+        if (aman(() => Store.ubahStatusArtikel(U, a.id, ke, catatan))) { tutupModal(); toast(pesan); gambar(); }
+      };
+      const tanyaCatatan = (judul, label, ph, tombol, ke, pesan) => {
+        const isi = el(`<div class="grup" style="margin:0"><label>${label} <span style="color:var(--e-merah)">*</span></label>
+          <textarea id="cr" placeholder="${ph}"></textarea></div>`);
+        const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+          <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-k>${tombol}</button></div>`);
+        modal({ judul, isi, kaki });
+        kaki.querySelector('[data-b]').onclick = tutupModal;
+        kaki.querySelector('[data-k]').onclick = () => pindah(ke, pesan, isi.querySelector('#cr').value.trim());
+      };
+      const bolehSunting = (milikSaya && ['draft', 'revisi'].includes(a.status))
+        || (bisaTinjau && (a.status !== 'terbit' || RBAC.can(U, 'artikel.publish')));
+
+      btn('Baca', I.mata, 'btn-garis', () => bacaNaskah(a));
+      if (bolehSunting) btn('Sunting', I.sunting, 'btn-garis', () => formArtikel(a));
+      if (boleh.includes('review') && milikSaya)
+        btn(a.status === 'revisi' ? 'Kirim Ulang' : 'Kirim untuk Ditinjau', I.kirim, 'btn-lime',
+          () => pindah('review', a.penulisId === U.id && RBAC.can(U, 'artikel.publish') && !RBAC.can(U, 'user.manage')
+            ? 'Naskah dikirim. Tulisan Anda sendiri diterbitkan Ketua Umum.' : 'Naskah dikirim untuk ditinjau.'));
+      if (a.status === 'review' && boleh.includes('revisi') && !milikSaya)
+        btn('Minta Revisi', I.putar, 'btn-merah', () => tanyaCatatan('Minta revisi', 'Catatan revisi',
+          'Contoh: Mohon lengkapi rujukan pada paragraf ketiga dan periksa transliterasi istilah Arab.',
+          'Kirim Catatan Revisi', 'revisi', 'Catatan revisi dikirim ke penulis.'));
+      if (boleh.includes('terbit'))
         btn('Setujui & Terbitkan', I.cek, 'btn-lime', () => konfirmasi('Terbitkan artikel',
           'Artikel akan langsung muncul di halaman Artikel website publik.',
-          () => aman(() => { Store.ubahStatusArtikel(U, a.id, 'terbit', ''); toast('Artikel terbit di website.'); gambarDaftar(); }), 'Terbitkan', false));
-      }
-      if (bisaTinjau && a.status === 'terbit')
-        btn('Tarik ke Draft', I.putar, 'btn-garis', () => konfirmasi('Tarik artikel',
-          'Artikel akan disembunyikan dari website dan kembali berstatus draft.',
-          () => aman(() => { Store.ubahStatusArtikel(U, a.id, 'draft', ''); toast('Artikel ditarik dari website.'); gambarDaftar(); })));
-      if (milikSaya || bisaTinjau)
-        btn('', I.hapus, 'btn-merah btn-ikon', () => konfirmasi('Hapus artikel', `"${a.judul}" akan dihapus permanen.`,
-          () => aman(() => { Store.hapusArtikel(U, a.id); toast('Artikel dihapus.'); gambarDaftar(); })));
+          () => pindah('terbit', 'Artikel terbit di website.'), 'Terbitkan', false));
+      if (a.status === 'review' && milikSaya && boleh.includes('draft'))
+        btn('Tarik Kiriman', I.putar, 'btn-garis', () => pindah('draft', 'Naskah ditarik kembali ke draf.'));
+      if (a.status === 'terbit' && boleh.includes('draft'))
+        btn('Tarik dari Website', I.putar, 'btn-garis', () => tanyaCatatan('Tarik artikel dari website',
+          'Alasan menarik', 'Contoh: ada kekeliruan kutipan yang perlu diperbaiki.', 'Tarik Artikel', 'draft', 'Artikel ditarik dari website.'));
+      if ((milikSaya || bisaTinjau) && a.status !== 'terbit' && (a.status !== 'review' || bisaTinjau))
+        btn('', I.hapus, 'btn-merah btn-ikon', () => konfirmasi('Hapus naskah', `"${a.judul}" akan dihapus permanen.`,
+          () => { if (aman(() => Store.hapusArtikel(U, a.id))) { toast('Naskah dihapus.'); gambarDaftar(); } }));
 
       wadah.appendChild(n);
       kartuArt.push(n);
     });
     pasangPilihKartu(wadah, kartuArt, data, {
-      satuan: 'artikel', sesudah: gambarDaftar,
-      boleh: (a) => bisaTinjau || a.penulisId === U.id,
+      satuan: 'naskah', sesudah: gambarDaftar,
+      /* Yang terbit ditarik dulu; yang sedang ditinjau hanya dihapus peninjau. */
+      boleh: (a) => a.status !== 'terbit' && (bisaTinjau || (a.penulisId === U.id && a.status !== 'review')),
       hapus: (a) => Store.hapusArtikel(U, a.id),
     });
   }
@@ -1889,6 +1903,27 @@ function halamanArtikel(kunci, milik = false) {
   kepala.querySelector('#btnBaru')?.addEventListener('click', () => formArtikel(null));
   gambarDaftar();
   return box;
+}
+
+/** Baca naskah utuh beserta riwayat tinjauannya — tanpa membuka formulir sunting. */
+function bacaNaskah(a) {
+  const st = STATUS_ART[a.status];
+  const riwayat = a.riwayat || [];
+  const isi = el(`<div>
+    <p style="margin:0 0 12px;font-size:13px;color:var(--e-abu)">${esc(Store.namaUser(a.penulisId))} · ${esc(a.kategori || '—')} · ${tgl(a.tanggal)}
+      &nbsp;<span class="lencana ${st.c}">${st.l}</span>${(a.tag || []).length ? ` · ${a.tag.map(esc).join(', ')}` : ''}</p>
+    ${a.ringkas ? `<p style="margin:0 0 14px;font-weight:600;color:#44534A">${esc(a.ringkas)}</p>` : ''}
+    <div class="naskah-isi">${(a.isi || []).map((p) => `<p>${esc(p)}</p>`).join('') || '<p style="color:var(--e-abu)">Isi masih kosong.</p>'}</div>
+    <h4 style="margin:18px 0 8px;font-size:13.4px">Riwayat tinjauan</h4>
+    ${riwayat.length ? `<div class="naskah-riwayat">${[...riwayat].reverse().map((r) => `<div class="br">
+      <span class="lencana ${STATUS_ART[r.ke]?.c || 'l-abu'}">${esc(STATUS_ART[r.ke]?.l || r.ke)}</span>
+      <div><b>${esc(Store.namaUser(r.oleh))}</b> <span style="color:var(--e-abu)">· ${tgl(String(r.pada).slice(0, 10))}</span>
+        ${r.catatan ? `<div class="ct">${esc(r.catatan)}</div>` : ''}</div></div>`).join('')}</div>`
+      : '<p style="margin:0;font-size:12.8px;color:var(--e-abu)">Belum ada perpindahan status tercatat.</p>'}
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end"><button class="btn btn-garis" data-b>Tutup</button></div>`);
+  modal({ judul: a.judul, isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
 }
 
 const JUDUL_ART = { review: 'Naskah Masuk', terbit: 'Artikel Terbit', draft: 'Draf', revisi: 'Menunggu Revisi' };
@@ -1946,7 +1981,7 @@ function formArtikel(a) {
         tag: isi.querySelector('#t').value.split(',').map((s) => s.trim()).filter(Boolean),
         ringkas: isi.querySelector('#r').value.trim(),
         isi: isi.querySelector('#i').value.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean),
-        cover, slug: judul.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60),
+        cover,
       });
       tutupModal(); toast('Artikel tersimpan.'); gambar();
     });

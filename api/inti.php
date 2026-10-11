@@ -488,6 +488,7 @@ function susunArtikel(array $user, $isiBaru): array {
   $terbitkan = bolehkah($user, 'artikel.publish');
   $penuh = $tinjau || $terbitkan;
   $sama = fn($a, $b) => json_encode($a) === json_encode($b);
+  $kini = gmdate('c');
 
   $lama = [];
   foreach (bacaKoleksi('artikel')['isi'] ?? [] as $a) {
@@ -519,6 +520,9 @@ function susunArtikel(array $user, $isiBaru): array {
       if ($st === 'terbit') $cekTerbit($b);
       if ($st === 'revisi' && !$tinjau) galat('Status itu hanya ditetapkan peninjau.', 403);
       $b['dilihat'] = 0;
+      unset($b['_catatan'], $b['terbitPertama']);
+      $b['riwayat'] = $st === 'draft' ? [] : [['dari' => 'draft', 'ke' => $st, 'oleh' => $aku, 'pada' => $kini, 'catatan' => '']];
+      if ($st === 'terbit') $b['terbitPertama'] = $kini;
       $baruDulu[$id] = $b;
       continue;
     }
@@ -527,7 +531,15 @@ function susunArtikel(array $user, $isiBaru): array {
     $milikku = ($a['penulisId'] ?? '') === $aku;
     if (!$penuh && !$milikku) continue;            // baris orang lain: kirimannya diabaikan
     $b['dilihat'] = (int) ($a['dilihat'] ?? 0);
-    if ($sama($a, $b)) { $ubah[$id] = $a; continue; }
+    /* Riwayat tinjauan dan tanggal terbit pertama ditulis server, bukan
+       peramban: kiriman peramban untuk keduanya diabaikan, dan catatan
+       perpindahan status dititipkan lewat `_catatan`. */
+    $catatanPindah = mb_substr(trim((string) ($b['_catatan'] ?? '')), 0, 1000);
+    unset($b['_catatan'], $b['riwayat'], $b['terbitPertama']);
+    if (isset($a['riwayat'])) $b['riwayat'] = $a['riwayat'];
+    if (isset($a['terbitPertama'])) $b['terbitPertama'] = $a['terbitPertama'];
+    $urut = function (array $x) { ksort($x); return $x; };
+    if ($sama($urut($a), $urut($b))) { $ubah[$id] = $a; continue; }
     $stA = (string) ($a['status'] ?? 'draft');
 
     if (!$tinjau) {
@@ -543,6 +555,15 @@ function susunArtikel(array $user, $isiBaru): array {
     } else {
       if ($st === 'terbit' && $stA !== 'terbit') $cekTerbit($b);
       if ($stA === 'terbit' && !$terbitkan) galat('Artikel terbit hanya diubah oleh yang berwenang menerbitkan.', 403);
+      if ($st === 'revisi' && $stA !== 'revisi' && trim((string) ($b['reviewNote'] ?? '')) === '') galat('Catatan revisi wajib diisi.');
+      if ($stA === 'terbit' && $st !== 'terbit' && $catatanPindah === '') galat('Alasan menarik artikel wajib diisi.');
+    }
+    if ($st !== $stA) {
+      $b['riwayat'] = is_array($b['riwayat'] ?? null) ? $b['riwayat'] : [];
+      $b['riwayat'][] = ['dari' => $stA, 'ke' => $st, 'oleh' => $aku, 'pada' => $kini,
+        'catatan' => $st === 'revisi' ? mb_substr(trim((string) ($b['reviewNote'] ?? '')), 0, 1000)
+          : ($stA === 'terbit' ? $catatanPindah : '')];
+      if ($st === 'terbit' && empty($b['terbitPertama'])) $b['terbitPertama'] = $kini;
     }
     $ubah[$id] = $b;
   }
