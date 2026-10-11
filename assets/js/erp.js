@@ -659,7 +659,7 @@ const MENU_KAJIAN = [
   { id: 'kartu-saya' },
   { id: 'kajian-saya' },
   { grup: 'Kajian' },
-  { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => perluKajian().belumLengkap.filter((x) => x.sisa <= 3).length },
+  { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => { const p = perluKajian(); return p.berhalangan.length + p.belumLengkap.filter((x) => x.sisa <= 3).length; } },
   { id: 'presensi', lonceng: () => { const p = perluKajian(); return p.izin.length + p.tanpaPresensi.length + p.belumTutup.length; } },
   { id: 'materi', label: 'Materi & Makalah' },
   { id: 'notulen', label: 'Notulen', lonceng: () => perluKajian().tanpaNotulen.length },
@@ -2032,17 +2032,23 @@ function formKajian(k) {
   const petugas = { pm: 'pemakalahId', md: 'moderatorId', nt: 'notulenId' };
   const isiPetugas = (pertahankan) => {
     const peserta = Store.pesertaAngkatan(g('ak')).sort((a, b) => a.nama.localeCompare(b.nama));
+    /* Giliran: yang paling jarang memegang tugas itu tampil paling atas,
+       beserta hitungannya — kajian yang sedang disunting tidak dihitung. */
+    const beban = new Map(Store.bebanTugas(g('ak'), Store.db.kajian.filter((x) => x.angkatan === g('ak') && x.level === g('lv') && x.id !== k?.id))
+      .map((b) => [b.u.id, b]));
     Object.entries(petugas).forEach(([id, kunci]) => {
       const sel = isi.querySelector('#' + id);
       const kini = pertahankan ? sel.value : (k?.[kunci] || '');
       const asing = kini && !peserta.some((u) => u.id === kini) ? Store.getUser(kini) : null;
       sel.innerHTML = `<option value="">— belum ditentukan —</option>`
         + (asing ? `<option value="${asing.id}">${esc(asing.nama)} (${esc(asing.angkatan || 'angkatan lain')})</option>` : '')
-        + peserta.map((u) => `<option value="${u.id}">${esc(u.nama)}</option>`).join('');
+        + [...peserta].sort((a, b) => (beban.get(a.id)?.[kunci] || 0) - (beban.get(b.id)?.[kunci] || 0)
+            || (beban.get(a.id)?.total || 0) - (beban.get(b.id)?.total || 0) || a.nama.localeCompare(b.nama))
+          .map((u) => `<option value="${u.id}">${esc(u.nama)} · ${beban.get(u.id)?.[kunci] || 0}× (total ${beban.get(u.id)?.total || 0})</option>`).join('');
       sel.value = [...sel.options].some((o) => o.value === kini) ? kini : '';
     });
     isi.querySelector('[data-ket-petugas]').textContent = peserta.length
-      ? `Pilihan petugas: ${peserta.length} anggota aktif ${g('ak')}. Satu orang hanya memegang satu tugas.`
+      ? `Pilihan petugas: ${peserta.length} anggota aktif ${g('ak')}, diurutkan dari yang paling jarang memegang tugas itu. Satu orang hanya memegang satu tugas.`
       : `${g('ak')} belum punya anggota aktif.`;
   };
   isiPetugas(false);
@@ -2050,6 +2056,7 @@ function formKajian(k) {
     if (!k) isi.querySelector('#lv').value = jenjangAngkatan(g('ak'));
     isiPetugas(true);
   };
+  isi.querySelector('#lv').onchange = () => isiPetugas(true);
 
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan Jadwal</button></div>`);
@@ -6072,6 +6079,8 @@ function perluKajian() {
       .map((k) => ({ k, sisa: selisihHari(k.tanggal), kurang: CEKLIS.filter((c) => !lengkapKah(k, c.k)).map((c) => c.l) }))
       .filter((x) => x.kurang.length),
     izin: Store.izinMenunggu(semua),
+    berhalangan: semua.filter((k) => k.tanggal >= nowTanggal())
+      .flatMap((k) => Store.petugasBerhalangan(k).map((x) => ({ k, ...x }))),
     tanpaPresensi: lampau.filter((k) => !(k.presensi || []).length),
     belumTutup: tercatat.filter((k) => !k.presensiTutup),
     tanpaNotulen: lampau.filter((k) => !String(k.notulensi || '').trim()),
@@ -6089,6 +6098,9 @@ function antreanKajian() {
     { rute: 'presensi', ikon: I.surat, judul: 'Pengajuan Izin', n: p.izin.length,
       satuan: 'pengajuan izin/sakit menunggu keputusan', kosong: 'Tidak ada pengajuan izin',
       rinci: p.izin[0] && `${Store.namaUser(p.izin[0].z.userId)} — ${p.izin[0].z.jenis}, ${p.izin[0].k.judul}` },
+    ...(p.berhalangan.length ? [{ rute: 'jadwal-kajian', ikon: I.orang, judul: 'Petugas Berhalangan', n: p.berhalangan.length,
+      satuan: 'petugas kajian mendatang perlu diganti', kosong: '',
+      rinci: `${p.berhalangan[0].peran} "${p.berhalangan[0].k.judul}": ${p.berhalangan[0].user?.nama || '—'} ${p.berhalangan[0].sebab}` }] : []),
     { rute: 'jadwal-kajian', ikon: I.peringatan, judul: 'Kajian Belum Lengkap', n: p.belumLengkap.length,
       satuan: 'kajian dalam 7 hari masih kurang data', kosong: 'Kajian sepekan ke depan sudah lengkap',
       rinci: dekat && `${dekat.k.judul} (${dekat.sisa === 0 ? 'hari ini' : dekat.sisa + ' hari lagi'}) — kurang ${dekat.kurang.join(', ')}` },
@@ -6586,13 +6598,18 @@ HAL['jadwal-kajian'] = () => {
       : jejak?.ke ? `Dipindah dari ${tgl(jejak.dari)} — ${jejak.alasan}` : '';
     const berisi = Store.kajianBerisi(k);
     const adaPresensi = (k.presensi || []).length > 0;
+    const halang = keadaan === 'terjadwal' && k.tanggal >= nowTanggal() ? Store.petugasBerhalangan(k) : [];
+    const selPetugas = (kunci) => {
+      const h = halang.find((x) => x.kunci === kunci);
+      return `${esc(namaPendek(k[kunci]))}${h ? `<br><span class="lencana l-merah" title="Perlu diganti">${esc(h.sebab)}</span>` : ''}`;
+    };
     const tr = el(`<tr class="${keadaan === 'dibatalkan' ? 'baris-batal' : ''}">
       <td class="kol-no">${i + 1}</td>
       <td class="utuh">${tgl(k.tanggal)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.jam)}</span></td>
       <td><b>${esc(k.judul)}</b>${ket ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(ket)}</span>` : ''}</td>
-      <td>${esc(namaPendek(k.pemakalahId))}</td>
-      <td>${esc(namaPendek(k.moderatorId))}</td>
-      <td>${esc(namaPendek(k.notulenId))}</td>
+      <td>${selPetugas('pemakalahId')}</td>
+      <td>${selPetugas('moderatorId')}</td>
+      <td>${selPetugas('notulenId')}</td>
       <td class="kol-tengah">${tandaLengkap(k.ppt)}</td>
       <td class="kol-tengah">${tandaLengkap(k.revisi)}</td>
       <td class="utuh">${esc(k.tempat || '—')}</td>
@@ -6620,8 +6637,38 @@ HAL['jadwal-kajian'] = () => {
   /* Yang sudah memuat presensi atau notulen tak dapat dipilih untuk dihapus. */
   pasangPilih(t, semua, { satuan: 'jadwal kajian', boleh: (k) => !Store.kajianBerisi(k), hapus: (k) => Store.hapusKajian(U, k.id) });
   kartu.appendChild(t);
-  return kartu;
+  const box = el('<div></div>');
+  box.append(kartu, kartuGiliran());
+  return box;
 };
+
+/** Giliran tugas peserta dalam lingkup: siapa sudah berapa kali memegang
+    apa, dan siapa yang belum pernah — bahan membagi tugas dengan adil. */
+function kartuGiliran() {
+  const beban = Store.bebanTugas(angkatanAktif(), kajianAktif())
+    .sort((a, b) => a.total - b.total || a.u.nama.localeCompare(b.u.nama));
+  const belum = beban.filter((b) => !b.total).length;
+  const kartu = el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala">
+    <h3>Giliran Tugas</h3><span class="hitung">(${beban.length} peserta · ${belum} belum pernah bertugas · urut dari yang paling jarang)</span>
+    <div class="kanan"><button class="btn btn-garis btn-kecil" data-export>${I.unduh} Unduh CSV</button></div></div></div>`);
+  kartu.querySelector('[data-export]').onclick = () => unduhCsv(`giliran-tugas-${angkatanAktif().replace(/\s/g, '-').toLowerCase()}.csv`,
+    [['Nama', 'Kelompok', 'Pemakalah', 'Moderator', 'Notulen', 'Total', 'Tugas Berikutnya', 'Terakhir Bertugas'],
+      ...beban.map((b) => [b.u.nama, b.u.kelompok || '', b.pemakalahId, b.moderatorId, b.notulenId, b.total,
+        b.berikut ? `${b.berikut.peran} ${b.berikut.k.tanggal}` : '', b.terakhir])]);
+  if (!beban.length) { kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>${esc(angkatanAktif())} belum punya peserta aktif</p></div>`)); return kartu; }
+  const maks = Math.max(1, ...beban.map((b) => b.total));
+  kartu.appendChild(el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Nama</th><th>Kelompok</th><th class="kol-tengah">Pemakalah</th><th class="kol-tengah">Moderator</th>
+      <th class="kol-tengah">Notulen</th><th style="min-width:130px">Total</th><th>Tugas Berikutnya</th><th>Terakhir Bertugas</th></tr></thead>
+    <tbody>${beban.map((b, i) => `<tr><td class="kol-no">${i + 1}</td>
+      <td><b>${esc(b.u.nama)}</b></td><td class="utuh">${esc(b.u.kelompok || '—')}</td>
+      <td class="kol-tengah">${b.pemakalahId || '—'}</td><td class="kol-tengah">${b.moderatorId || '—'}</td><td class="kol-tengah">${b.notulenId || '—'}</td>
+      <td>${b.total ? `<div style="display:flex;align-items:center;gap:9px"><div class="bar-maju" style="flex:1"><span style="width:${Math.round((b.total / maks) * 100)}%"></span></div><b style="font-size:12.2px">${b.total}</b></div>`
+        : '<span class="lencana l-kuning">belum pernah</span>'}</td>
+      <td>${b.berikut ? `${esc(b.berikut.peran)} · ${tgl(b.berikut.k.tanggal)}` : '—'}</td>
+      <td class="utuh">${b.terakhir ? tgl(b.terakhir) : '—'}</td></tr>`).join('')}</tbody></table></div>`));
+  return kartu;
+}
 HAL['jadwal-kajian'].judul = () => ['Jadwal & Tugas', 'Jadwal, pembagian pemakalah–moderator–notulen, dan kesiapan tiap pertemuan.'];
 
 /** Kelompok yang sudah dipakai sebuah angkatan, urut alami (2 sebelum 10). */

@@ -1348,6 +1348,38 @@ function simpanKajian(user, data) {
   simpan();
 }
 
+/* --- giliran tugas ---
+   Berapa kali tiap peserta sudah (dan akan) memegang tiap tugas pada
+   sederet kajian. Dasar saran di formulir jadwal dan tabel Giliran Tugas. */
+function bebanTugas(angkatan, daftar) {
+  const kini = hariIni();
+  return pesertaAngkatan(angkatan).map((u) => {
+    const b = { u, pemakalahId: 0, moderatorId: 0, notulenId: 0, total: 0, berikut: null, terakhir: '' };
+    daftar.filter(kajianJalan).forEach((k) => Object.keys(PERAN_KAJIAN).forEach((kunci) => {
+      if (k[kunci] !== u.id) return;
+      b[kunci] += 1; b.total += 1;
+      if (k.tanggal >= kini) { if (!b.berikut || k.tanggal < b.berikut.k.tanggal) b.berikut = { k, peran: PERAN_KAJIAN[kunci] }; }
+      else if (k.tanggal > b.terakhir) b.terakhir = k.tanggal;
+    }));
+    return b;
+  });
+}
+
+/** Petugas sebuah kajian yang tak dapat bertugas: sudah izin/sakit atau
+    mengajukannya, tidak lagi aktif, atau sudah bukan anggota angkatan itu. */
+function petugasBerhalangan(k) {
+  return Object.keys(PERAN_KAJIAN).filter((kunci) => k[kunci]).map((kunci) => {
+    const u = getUser(k[kunci]);
+    const p = (k.presensi || []).find((x) => x.userId === k[kunci]);
+    const sebab = !u ? 'akunnya sudah tidak ada'
+      : !berkajian(u) ? 'tidak lagi aktif berkajian'
+      : u.angkatan !== k.angkatan ? `kini di ${u.angkatan}`
+      : p && (p.status === 'izin' || p.status === 'sakit') ? p.status
+      : (k.izin || []).some((z) => z.userId === u.id && z.status === 'menunggu') ? 'mengajukan izin' : '';
+    return sebab ? { kunci, peran: PERAN_KAJIAN[kunci], user: u, sebab } : null;
+  }).filter(Boolean);
+}
+
 const ambilKajian = (id) => {
   const k = db.kajian.find((x) => x.id === id);
   if (!k) throw new Error('Kajian tidak ditemukan.');
@@ -2687,6 +2719,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  bebanTugas, petugasBerhalangan, PERAN_KAJIAN,
   bukaPresensi, jatahIzin, izinMenunggu, ajukanIzin, tarikIzin, putuskanIzin, JATAH_IZIN,
   pesertaKajian, rekapKajian, kehadiranAnggota, simpanAnggotaMassal, berkajian,
   tundaKajian, batalkanKajian, pulihkanKajian, keadaanKajian, kajianJalan, kajianBerisi, angkatanPeserta, pesertaAngkatan,

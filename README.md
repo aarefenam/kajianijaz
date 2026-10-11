@@ -480,6 +480,13 @@ Karena jalurnya satu, aturannya ditegakkan di sana:
 Hadir atau terlambat tetap diputuskan peramban petugas dari jam setempat —
 server tidak tahu zona waktu tempat kajiannya berlangsung.
 
+**Giliran tugas dihitung, bukan diingat.** `Store.bebanTugas()` menghitung
+berapa kali tiap peserta memegang tiap tugas; formulir jadwal mengurutkan
+pilihan petugas dari yang paling jarang, dan kartu *Giliran Tugas* di bawah
+jadwal menampilkan siapa yang belum pernah bertugas. Petugas kajian mendatang
+yang izin, sakit, nonaktif, atau pindah angkatan ditandai di tabel dan masuk
+antrean *Petugas Berhalangan* (`Store.petugasBerhalangan()`).
+
 **Kajian Saya** tersedia bagi setiap anggota yang masih berkajian, apa pun
 perannya: kajian mendatang angkatannya, tugas yang ia pegang, sisa jatah izin,
 dan riwayat kehadirannya.
