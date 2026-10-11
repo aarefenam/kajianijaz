@@ -662,7 +662,7 @@ const MENU_KAJIAN = [
   { id: 'jadwal-kajian', label: 'Jadwal & Tugas', lonceng: () => { const p = perluKajian(); return p.berhalangan.length + p.belumLengkap.filter((x) => x.sisa <= 3).length; } },
   { id: 'presensi', lonceng: () => { const p = perluKajian(); return p.izin.length + p.tanpaPresensi.length + p.belumTutup.length; } },
   { id: 'materi', label: 'Materi & Makalah', lonceng: () => { const p = perluKajian(); return p.makalahPeriksa.length + p.makalahTelat.length; } },
-  { id: 'notulen', label: 'Notulen', lonceng: () => perluKajian().tanpaNotulen.length },
+  { id: 'notulen', label: 'Notulen', lonceng: () => { const p = perluKajian(); return p.notulenAjuan.length + p.tanpaNotulen.length; } },
   { grup: 'Peserta' },
   { id: 'anggota-kajian', label: 'Anggota & Kelompok' },
   { id: 'statistik', label: 'Kehadiran Anggota' },
@@ -2220,18 +2220,86 @@ function dialogAbsensi(k) {
   kaki.querySelector('[data-s]').onclick = () => { tutupModal(); gambar(); };
 }
 
+const NOTULEN = {
+  kosong  : { l: 'Belum Ditulis',        c: 'l-abu'    },
+  draf    : { l: 'Draf',                 c: 'l-kuning' },
+  diajukan: { l: 'Menunggu Pengesahan',  c: 'l-biru'   },
+  sah     : { l: 'Sah',                  c: 'l-hijau'  },
+};
+const lencanaNotulen = (k) => { const n = NOTULEN[Store.statusNotulen(k)]; return `<span class="lencana ${n.c}">${n.l}</span>`; };
+
+/** Lembar notulen siap cetak: kop, data kajian, empat bagian, tanda tangan. */
+function lembarNotulen(k) {
+  const s = Store.cms.situs;
+  const n = Store.isiNotulen(k);
+  const r = Store.rekapKajian(k);
+  const data = [['Hari, tanggal', tglSurat(k.tanggal)], ['Waktu', `${k.jam || '—'} WK`], ['Tempat', k.tempat || '—'],
+    ['Angkatan / Jenjang', `${k.angkatan || '—'} / ${k.level || '—'}`], ['Pemakalah', Store.namaUser(k.pemakalahId)],
+    ['Moderator', Store.namaUser(k.moderatorId)], ['Notulen', Store.namaUser(k.notulenId)],
+    ['Kehadiran', (k.presensi || []).length ? `${r.datang} dari ${r.total} peserta (${r.persen}%) · ${r.terlambat} terlambat · ${r.izin} izin/sakit · ${r.tidakHadir} tidak hadir` : 'belum dicatat']];
+  return el(`<div class="lk">
+    <div class="lk-kop">${lambang(40)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div></div>
+    <h2>Notulen Kajian</h2>
+    <p class="lk-periode">${esc(k.judul)}</p>
+    <table><tbody>${data.map(([l, v]) => `<tr><td style="width:42mm;font-weight:700">${l}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>
+    ${Store.BAGIAN_NOTULEN.map(([kunci, label]) => `<h3>${label}</h3>
+      <div style="font-size:10.5pt;line-height:1.55;white-space:pre-wrap">${n[kunci] ? esc(n[kunci]) : '<i style="color:#666">—</i>'}</div>`).join('')}
+    <div class="lk-ttd">
+      <div>Notulen,<div class="lk-ruang"></div><b>${esc(Store.namaUser(k.notulenId))}</b></div>
+      <div>Mengesahkan,<div class="lk-ruang"></div><b>${esc(n.disahkanOleh ? Store.namaUser(n.disahkanOleh) : '………………………')}</b></div>
+    </div>
+    ${Store.statusNotulen(k) === 'sah' ? '' : '<p class="lk-catatan">Dokumen ini belum disahkan.</p>'}
+  </div>`);
+}
+const cetakNotulen = (k) => cetakKhusus(lembarNotulen(k), '@page { size: A4; margin: 15mm; }', `Notulen ${k.tanggal} ${k.judul}`);
+
+/** Notulen satu kajian. Pengurus notulen (koordinator, sekretaris, ketua)
+    menulis dan mengesahkan; petugas notulen yang bukan pengurus menulis
+    lalu mengajukannya. Nama lama dipertahankan — tiga halaman memanggilnya. */
 function dialogNotulensi(k) {
-  const isi = el(`<div class="grup"><label>Notulensi / Risalah Kajian</label>
-    <textarea id="n" style="min-height:220px" placeholder="Ringkasan pembahasan, poin diskusi penting, dan kesimpulan kajian.">${esc(k.notulensi || '')}</textarea>
-    <div class="bantu">Mengisi notulensi otomatis menandai kajian sebagai selesai.</div></div>`);
-  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
-    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan Notulensi</button></div>`);
-  modal({ judul: `Notulensi — ${k.judul}`, isi, kaki, lebar: true });
+  const pengurus = RBAC.can(U, 'kajian.notulensi');
+  const petugas = k.notulenId === U.id;
+  const st = Store.statusNotulen(k);
+  const n = Store.isiNotulen(k);
+  const terkunci = st === 'sah' || (!pengurus && !petugas);
+  const isi = el(`<div>
+    <p style="margin:0 0 12px;font-size:13.4px;color:var(--e-abu)"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)} · notulen ${esc(namaPendek(k.notulenId))}
+      &nbsp;${lencanaNotulen(k)}${n.disahkanPada ? ` · disahkan ${esc(namaPendek(n.disahkanOleh))}, ${tgl(n.disahkanPada.slice(0, 10))}` : ''}</p>
+    ${n.catatan && st !== 'sah' ? `<div class="notis notis-kuning" style="margin-bottom:12px">${I.info}<div><b>Dikembalikan untuk diperbaiki</b>${esc(n.catatan)}</div></div>` : ''}
+    ${Store.BAGIAN_NOTULEN.map(([kunci, label], i) => `<div class="grup"><label>${label}${i ? '' : ' *'}</label>
+      <textarea data-bag="${kunci}" style="min-height:${i ? 80 : 130}px" ${terkunci ? 'readonly' : ''} placeholder="${
+        ['Apa yang dipaparkan pemakalah, secara ringkas.', 'Pertanyaan, tanggapan, dan perbedaan pendapat yang muncul.',
+         'Simpulan yang disepakati.', 'Yang perlu dikerjakan sesudah kajian, dan oleh siapa.'][i]}">${esc(n[kunci] || '')}</textarea></div>`).join('')}
+    ${pengurus && st === 'diajukan' ? `<div class="grup" style="margin:0"><label>Catatan bila dikembalikan</label>
+      <input data-catatan placeholder="Apa yang perlu diperbaiki notulen"></div>` : ''}
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn btn-garis" data-cetak style="margin-right:auto">${I.unduh} Cetak / PDF</button>
+    <button class="btn btn-garis" data-b>Tutup</button>
+    ${st === 'sah' ? (pengurus ? '<button class="btn btn-garis" data-buka>Buka Kembali</button>' : '')
+      : pengurus ? `${st === 'diajukan' ? '<button class="btn btn-merah" data-kembali>Kembalikan</button>' : ''}
+          <button class="btn btn-garis" data-simpan>Simpan Draf</button><button class="btn btn-lime" data-sah>Sahkan</button>`
+      : petugas ? '<button class="btn btn-garis" data-simpan>Simpan Draf</button><button class="btn btn-lime" data-ajukan>Ajukan untuk Disahkan</button>' : ''}
+  </div>`);
+  modal({ judul: 'Notulen kajian', isi, kaki, lebar: true });
+  const baca = () => Object.fromEntries(Store.BAGIAN_NOTULEN.map(([kunci]) => [kunci, isi.querySelector(`[data-bag="${kunci}"]`).value]));
+  const usai = (pesan) => { tutupModal(); toast(pesan); gambar(); };
   kaki.querySelector('[data-b]').onclick = tutupModal;
-  kaki.querySelector('[data-s]').onclick = () => aman(() => {
-    Store.setNotulensi(U, k.id, isi.querySelector('#n').value);
-    tutupModal(); toast('Notulensi tersimpan.'); gambar();
-  });
+  kaki.querySelector('[data-cetak]').onclick = () => cetakNotulen(k);
+  const pasang = (pilih, fn) => kaki.querySelector(pilih)?.addEventListener('click', fn);
+  if (pengurus) {
+    pasang('[data-simpan]', () => { if (aman(() => Store.simpanNotulen(U, k.id, baca(), 'simpan'))) usai('Draf notulen tersimpan.'); });
+    pasang('[data-sah]', () => { if (aman(() => Store.simpanNotulen(U, k.id, baca(), 'sahkan'))) usai('Notulen disahkan.'); });
+    pasang('[data-kembali]', () => { if (aman(() => Store.simpanNotulen(U, k.id, baca(), 'kembalikan', isi.querySelector('[data-catatan]').value))) usai('Notulen dikembalikan kepada penulisnya.'); });
+    pasang('[data-buka]', () => { if (aman(() => Store.simpanNotulen(U, k.id, null, 'buka'))) usai('Notulen dibuka kembali sebagai draf.'); });
+  } else if (petugas) {
+    const kirim = (ajukan) => async (e) => {
+      if (await amanTunggu(e.currentTarget, async () => { await Store.kirimNotulen(k.id, baca(), ajukan); return true; }))
+        usai(ajukan ? 'Notulen diajukan untuk disahkan.' : 'Draf notulen tersimpan.');
+    };
+    pasang('[data-simpan]', kirim(false));
+    pasang('[data-ajukan]', kirim(true));
+  }
 }
 
 /* ============================================================
@@ -6080,7 +6148,8 @@ function perluKajian() {
       .flatMap((k) => Store.petugasBerhalangan(k).map((x) => ({ k, ...x }))),
     tanpaPresensi: lampau.filter((k) => !(k.presensi || []).length),
     belumTutup: tercatat.filter((k) => !k.presensiTutup),
-    tanpaNotulen: lampau.filter((k) => !String(k.notulensi || '').trim()),
+    tanpaNotulen: lampau.filter((k) => ['kosong', 'draf'].includes(Store.statusNotulen(k))),
+    notulenAjuan: semua.filter((k) => Store.statusNotulen(k) === 'diajukan'),
     tanpaKelompok: anggota.filter((u) => !u.kelompok),
     jarangHadir: anggota.filter((u) => {
       const h = Store.kehadiranAnggota(u.id, tercatat);
@@ -6113,8 +6182,11 @@ function antreanKajian() {
     { rute: 'presensi', ikon: I.gembok, judul: 'Presensi Belum Ditutup', n: p.belumTutup.length,
       satuan: 'kajian lampau presensinya belum dikunci', kosong: 'Semua presensi lampau sudah ditutup',
       rinci: p.belumTutup[0] && `${p.belumTutup[0].judul} — ${rekapPresensi(p.belumTutup[0]).belum} orang belum absen` },
-    { rute: 'notulen', ikon: I.dok, judul: 'Notulen Belum Ditulis', n: p.tanpaNotulen.length,
-      satuan: 'kajian lampau tanpa notulen', kosong: 'Semua kajian lampau bernotulen',
+    { rute: 'notulen', ikon: I.dokCek, judul: 'Notulen Menunggu Pengesahan', n: p.notulenAjuan.length,
+      satuan: 'notulen diajukan penulisnya', kosong: 'Tidak ada notulen yang menunggu',
+      rinci: p.notulenAjuan[0] && `${p.notulenAjuan[0].judul} — ${Store.namaUser(p.notulenAjuan[0].notulenId)}` },
+    { rute: 'notulen', ikon: I.dok, judul: 'Notulen Belum Selesai', n: p.tanpaNotulen.length,
+      satuan: 'kajian lampau notulennya belum ditulis atau masih draf', kosong: 'Semua kajian lampau bernotulen',
       rinci: p.tanpaNotulen[0] && `${p.tanpaNotulen[0].judul} · ${tgl(p.tanpaNotulen[0].tanggal)}` },
     { rute: 'anggota-kajian', ikon: I.grup, judul: 'Anggota Tanpa Kelompok', n: p.tanpaKelompok.length,
       satuan: `anggota ${angkatanAktif()} belum berkelompok`, kosong: 'Semua anggota sudah berkelompok',
@@ -6971,7 +7043,10 @@ const kajianAngkatanku = () => Store.db.kajian.filter((k) => Store.kajianJalan(k
 const tugasku = (k) => Object.keys(PERAN_TUGAS).filter((kunci) => k[kunci] === U?.id).map((kunci) => PERAN_TUGAS[kunci]);
 /** Kajian mendatang yang menugasi saya. */
 const tugasKajianSaya = () => (U && Store.berkajian(U)
-  ? kajianAngkatanku().filter((k) => k.tanggal >= nowTanggal() && tugasku(k).length) : []);
+  ? [...kajianAngkatanku().filter((k) => k.tanggal >= nowTanggal() && tugasku(k).length), ...notulenSaya().filter((k) => k.tanggal < nowTanggal())] : []);
+/** Kajian yang sudah berlangsung dan notulennya masih menjadi tanggungan saya. */
+const notulenSaya = () => kajianAngkatanku().filter((k) => k.notulenId === U?.id && k.tanggal <= nowTanggal()
+  && Store.statusNotulen(k) !== 'sah');
 
 function dialogAjukanIzin(k) {
   const jatah = Store.jatahIzin(U.id, k);
@@ -7070,6 +7145,24 @@ HAL['kajian-saya'] = () => {
     k1.appendChild(t);
   }
   box.appendChild(k1);
+
+  const utang = notulenSaya();
+  if (utang.length) {
+    const kn = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+      <h3>Notulen yang Harus Saya Tulis</h3><span class="hitung">(${utang.length} kajian)</span></div>
+      <div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Status</th>
+        <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div></div>`);
+    utang.forEach((k, i) => {
+      const cat = k.notulen?.catatan;
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td>
+        <td><b>${esc(k.judul)}</b>${cat ? `<br><span style="color:#B23E37;font-size:11.6px">Dikembalikan: ${esc(cat)}</span>` : ''}</td>
+        <td>${lencanaNotulen(k)}</td>
+        <td class="kol-aksi"><div class="sel-aksi"><button class="btn btn-lime btn-kecil">${Store.statusNotulen(k) === 'kosong' ? 'Tulis Notulen' : 'Lanjutkan'}</button></div></td></tr>`);
+      tr.querySelector('button').onclick = () => dialogNotulensi(k);
+      kn.querySelector('tbody').appendChild(tr);
+    });
+    box.appendChild(kn);
+  }
 
   const k2 = el(`<div class="kartu"><div class="kartu-kepala">
     <h3>Riwayat Kehadiran Saya</h3><span class="hitung">(${lampau.length} kajian tercatat)</span></div></div>`);
@@ -7454,32 +7547,38 @@ function dialogMateri(k) {
 HAL.materi.judul = () => ['Materi & Makalah', 'Tautan makalah dan PPT, tenggat, serta status revisi tiap kajian.'];
 
 HAL.notulen = () => {
-  const semua = [...kajianAktif()].reverse();
+  /* Notulen ditulis sesudah kajiannya berlangsung: yang mendatang tak ikut tampil. */
+  const semua = kajianAktif().filter((k) => k.tanggal <= nowTanggal()).reverse();
+  const jml = (st) => semua.filter((k) => Store.statusNotulen(k) === st).length;
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Revisi & Notulen</h3>
-    <span class="hitung">(${semua.filter((k) => k.notulensi).length} dari ${semua.length} sudah bernotulen)</span></div></div>`);
+    <h3>Notulen</h3>
+    <span class="hitung">(${jml('sah')} sah · ${jml('diajukan')} menunggu pengesahan · ${jml('draf')} draf · ${jml('kosong')} belum ditulis)</span></div></div>`);
+  if (!semua.length) { kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kajian yang berlangsung</p></div>`)); return kartu; }
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
     <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Judul Kajian</th><th>Notulen</th>
-      <th>Ringkasan</th><th class="kol-tengah">Revisi</th><th class="kol-aksi">Aksi</th></tr></thead>
+      <th>Status</th><th>Ringkasan</th><th class="kol-aksi">Aksi</th></tr></thead>
     <tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   semua.forEach((k, i) => {
+    const ringkas = Store.isiNotulen(k).ringkasan || '';
     const tr = el(`<tr>
       <td class="kol-no">${i + 1}</td><td class="utuh">${tgl(k.tanggal)}</td>
       <td><b>${esc(k.judul)}</b></td>
-      <td>${esc(namaPendek(k.notulenId))}</td>
-      <td>${k.notulensi ? esc(k.notulensi.slice(0, 90)) + (k.notulensi.length > 90 ? '…' : '')
-        : '<span style="color:var(--e-abu)">belum ditulis</span>'}</td>
-      <td class="kol-tengah">${tandaLengkap(k.revisi)}</td>
+      <td>${k.notulenId ? esc(namaPendek(k.notulenId)) : '<span class="lencana l-merah">belum ditunjuk</span>'}</td>
+      <td>${lencanaNotulen(k)}</td>
+      <td>${ringkas ? esc(ringkas.slice(0, 90)) + (ringkas.length > 90 ? '…' : '')
+        : '<span style="color:var(--e-abu)">—</span>'}</td>
       <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting" title="Tulis notulen">${I.dok}</button></div></td></tr>`);
+        <button class="ikon-aksi sunting" title="Tulis / periksa notulen">${I.dok}</button>
+        ${Store.statusNotulen(k) === 'kosong' ? '' : `<button class="ikon-aksi" data-cetak title="Cetak / PDF">${I.unduh}</button>`}</div></td></tr>`);
     tr.querySelector('.sunting').onclick = () => dialogNotulensi(k);
+    tr.querySelector('[data-cetak]')?.addEventListener('click', () => cetakNotulen(k));
     tb.appendChild(tr);
   });
   kartu.appendChild(t);
   return kartu;
 };
-HAL.notulen.judul = () => ['Revisi & Notulen', 'Catatan hasil kajian dan status revisinya.'];
+HAL.notulen.judul = () => ['Notulen', 'Catatan hasil tiap kajian: ditulis notulen, disahkan koordinator.'];
 
 HAL['rekap-kajian'] = () => {
   const semua = kajianAktif();

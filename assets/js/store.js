@@ -1694,12 +1694,58 @@ function simpanAnggotaMassal(user, daftar, keterangan) {
   return n;
 }
 
-function setNotulensi(user, idKajian, teks) {
+/* --- notulen terstruktur ---
+   Empat bagian tetap, dan tiga keadaan: draf → diajukan → sah. Teks
+   polosnya (`notulensi`) tetap dipelihara, sebab halaman lain membacanya
+   untuk tahu notulen sudah ditulis atau belum. Urutan dan judul bagian
+   harus sama dengan BAGIAN_NOTULEN di api/petugas-kajian.php. */
+const BAGIAN_NOTULEN = [['ringkasan', 'Ringkasan Pembahasan'], ['diskusi', 'Poin Diskusi'],
+  ['kesimpulan', 'Kesimpulan'], ['tindakLanjut', 'Tindak Lanjut']];
+const susunNotulensi = (n) => BAGIAN_NOTULEN.filter(([k]) => String(n?.[k] || '').trim())
+  .map(([k, l]) => `${l}\n${String(n[k]).trim()}`).join('\n\n');
+/** kosong | draf | diajukan | sah. Notulen lama (teks polos saja) dianggap sah. */
+const statusNotulen = (k) => (k?.notulen?.status || (String(k?.notulensi || '').trim() ? 'sah' : 'kosong'));
+/** Isi notulen sebagai empat bagian; notulen lama masuk ke ringkasan. */
+const isiNotulen = (k) => (k?.notulen ? { ...k.notulen }
+  : { ringkasan: k?.notulensi || '', diskusi: '', kesimpulan: '', tindakLanjut: '' });
+
+/** Pengurus notulen menulis, mengesahkan, mengembalikan, atau membuka
+    kembali. `aksi`: simpan | sahkan | kembalikan | buka. */
+function simpanNotulen(user, idKajian, isi, aksi = 'simpan', catatan = '') {
   RBAC.assertCan(user, 'kajian.notulensi');
-  const k = db.kajian.find((x) => x.id === idKajian);
-  k.notulensi = teks;
-  catat(user, 'kajian.notulensi', idKajian, `Notulensi "${k.judul}" diperbarui`);
+  const k = ambilKajian(idKajian);
+  const kini = statusNotulen(k);
+  const n = { ...isiNotulen(k) };
+  if (aksi === 'buka') {
+    if (kini !== 'sah') throw new Error('Hanya notulen yang sudah sah yang dapat dibuka kembali.');
+    n.status = 'draf';
+  } else {
+    if (kini === 'sah') throw new Error('Notulen ini sudah disahkan. Buka kembali lebih dulu untuk mengubahnya.');
+    BAGIAN_NOTULEN.forEach(([kunci]) => { if (isi?.[kunci] !== undefined) n[kunci] = String(isi[kunci] || '').trim(); });
+    if (aksi === 'sahkan') {
+      if (!n.ringkasan) throw new Error('Ringkasan pembahasan wajib diisi sebelum disahkan.');
+      Object.assign(n, { status: 'sah', disahkanOleh: user.id, disahkanPada: new Date().toISOString(), catatan: '' });
+    } else if (aksi === 'kembalikan') {
+      if (!String(catatan).trim()) throw new Error('Tuliskan apa yang perlu diperbaiki.');
+      Object.assign(n, { status: 'draf', catatan: String(catatan).trim() });
+    } else {
+      n.status = kini === 'diajukan' ? 'diajukan' : 'draf';
+    }
+  }
+  if (!n.penulis) n.penulis = user.id;
+  n.diubah = new Date().toISOString();
+  k.notulen = n;
+  k.notulensi = susunNotulensi(n);
+  catat(user, 'kajian.notulensi', idKajian, `Notulen "${k.judul}": ${aksi}`);
   simpan();
+}
+/* Nama lama: teks polos masuk sebagai ringkasan. */
+function setNotulensi(user, idKajian, teks) { simpanNotulen(user, idKajian, { ringkasan: teks }); }
+
+/** Petugas notulen menulis notulennya sendiri; `ajukan` menyerahkannya
+    untuk disahkan. */
+async function kirimNotulen(idKajian, isi, ajukan) {
+  await aksiPetugas('notulen', { idKajian, ...isi, ajukan: !!ajukan });
 }
 
 function hapusKajian(user, id) {
@@ -2778,6 +2824,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  BAGIAN_NOTULEN, statusNotulen, isiNotulen, simpanNotulen, kirimNotulen,
   STATUS_REVISI, statusRevisi, tenggatMakalah, simpanMateri, kirimMakalah,
   bebanTugas, petugasBerhalangan, PERAN_KAJIAN,
   bukaPresensi, jatahIzin, izinMenunggu, ajukanIzin, tarikIzin, putuskanIzin, JATAH_IZIN,

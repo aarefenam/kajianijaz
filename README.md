@@ -497,6 +497,15 @@ makalah yang sudah final terkunci baginya. Makalah lewat tenggat dan makalah
 yang menunggu diperiksa masuk antrean dasbor. Kolom boolean `ppt` dan `revisi`
 tetap dipelihara, sebab kesiapan kajian membacanya.
 
+**Notulen terstruktur dan bertahap.** Empat bagian tetap — ringkasan
+pembahasan, poin diskusi, kesimpulan, tindak lanjut — dan tiga keadaan: draf →
+diajukan → sah. Petugas notulen menulis dan mengajukannya sendiri dari *Kajian
+Saya* (`api/petugas-kajian.php`); pengurus notulen mengesahkan, atau
+mengembalikannya dengan catatan. Notulen yang sah terkunci sampai dibuka
+kembali, dan dapat dicetak sebagai lembar A4 berkop dengan data kajian dan
+kehadirannya. Teks polos `notulensi` tetap dipelihara dari keempat bagian itu,
+dan notulen lama yang hanya berupa teks dibaca sebagai sah.
+
 **Kajian Saya** tersedia bagi setiap anggota yang masih berkajian, apa pun
 perannya: kajian mendatang angkatannya, tugas yang ia pegang, sisa jatah izin,
 dan riwayat kehadirannya.

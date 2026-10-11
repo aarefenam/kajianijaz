@@ -17,6 +17,14 @@ require_once __DIR__ . '/inti.php';
 wajibPost();
 $aku = wajibMasuk();
 
+/* Urutan dan judul bagian harus sama dengan BAGIAN_NOTULEN di store.js. */
+const BAGIAN_NOTULEN = [
+  'ringkasan'    => 'Ringkasan Pembahasan',
+  'diskusi'      => 'Poin Diskusi',
+  'kesimpulan'   => 'Kesimpulan',
+  'tindakLanjut' => 'Tindak Lanjut',
+];
+
 $d = bacaJson();
 $aksi = (string) ($d['aksi'] ?? '');
 $idKajian = (string) ($d['idKajian'] ?? '');
@@ -64,6 +72,33 @@ switch ($aksi) {
     $k['tautanPpt'] = $ppt;
     if ($ppt !== '') $k['ppt'] = true;
     $jejak = ($aku['nama'] ?? '?') . ' menyerahkan makalah/PPT untuk "' . ($k['judul'] ?? '') . '"';
+    break;
+  }
+
+  /* ---------- notulen menulis notulennya ---------- */
+  case 'notulen': {
+    if (($k['notulenId'] ?? '') !== $aku['id']) galat('Hanya notulen kajian ini yang dapat menulis notulennya.', 403);
+    $lama = is_array($k['notulen'] ?? null) ? $k['notulen'] : [];
+    if (($lama['status'] ?? '') === 'sah') galat('Notulen ini sudah disahkan. Hubungi koordinator bila perlu mengubahnya.');
+    $n = [];
+    foreach (BAGIAN_NOTULEN as $kunci => $label) {
+      $n[$kunci] = mb_substr(trim((string) ($d[$kunci] ?? '')), 0, 6000);
+    }
+    $ajukan = !empty($d['ajukan']);
+    if ($ajukan && $n['ringkasan'] === '') galat('Ringkasan pembahasan wajib diisi sebelum diajukan.');
+    $n['status'] = $ajukan ? 'diajukan' : 'draf';
+    $n['penulis'] = $aku['id'];
+    $n['diubah'] = $kini;
+    if (!$ajukan && ($lama['catatan'] ?? '') !== '') $n['catatan'] = $lama['catatan'];
+    $k['notulen'] = $n;
+    /* `notulensi` — teks polosnya — tetap dipelihara: halaman lama dan
+       rekap membacanya untuk tahu notulen sudah ditulis atau belum. */
+    $teks = [];
+    foreach (BAGIAN_NOTULEN as $kunci => $label) {
+      if ($n[$kunci] !== '') $teks[] = $label . "\n" . $n[$kunci];
+    }
+    $k['notulensi'] = implode("\n\n", $teks);
+    $jejak = ($aku['nama'] ?? '?') . ($ajukan ? ' mengajukan' : ' menyimpan draf') . ' notulen "' . ($k['judul'] ?? '') . '"';
     break;
   }
 
