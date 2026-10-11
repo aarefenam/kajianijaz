@@ -1574,6 +1574,30 @@ input[type="month"].pilih-saring { min-width: 150px; }
 .tb-rekon input { min-width: 120px; padding: 7px 10px; font-size: 13px; }
 .sub-sel .perlu, span.perlu { color: var(--e-merah); }
 
+/* --------- kuitansi & iuran saya --------- */
+.kw-bungkus { background: #E7EBE7; border-radius: 12px; padding: 14px; }
+.kw { background: #fff; color: #111; padding: 9mm 10mm; font-family: 'Times New Roman', Times, serif; font-size: 11.5pt; border: .3mm solid #C9D3CC; }
+.kw-kop { display: flex; align-items: center; gap: 4mm; padding-bottom: 4mm; margin-bottom: 5mm; border-bottom: .7mm double #111; }
+.kw-kop > div:first-of-type { flex: 1; line-height: 1.25; }
+.kw-kop b { display: block; font-size: 13.5pt; letter-spacing: .4pt; }
+.kw-kop span { font-size: 9pt; }
+.kw-judul { text-align: right; font-size: 15pt; font-weight: 700; letter-spacing: 2pt; line-height: 1.2; }
+.kw-judul small { display: block; font-size: 8.6pt; font-weight: 400; letter-spacing: 0; font-family: ui-monospace, Menlo, monospace; }
+.kw-isi { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+.kw-isi td { border: 0; padding: 1.6mm 2mm 1.6mm 0; font-size: 11.5pt; vertical-align: top; background: transparent; }
+.kw-isi td:first-child { width: 42mm; } .kw-isi td:nth-child(2) { width: 4mm; }
+.kw .kw-isi tr:hover { background: transparent; }
+.kw-kaki { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; }
+.kw-catatan { font-size: 9pt; font-style: italic; color: #444; }
+.kw-ttd { text-align: center; min-width: 52mm; line-height: 1.35; }
+.kw-ttd img { display: block; height: 15mm; margin: 1mm auto; object-fit: contain; }
+.kw-ruang { height: 16mm; }
+.ks-iuran { display: grid; gap: 10px; }
+.ks-iuran > div { display: flex; justify-content: space-between; gap: 14px; align-items: center; font-size: 13.4px; }
+.ks-iuran > div > span:first-child { color: var(--e-abu); }
+.ks-iuran-bulan b { font-weight: 600; font-size: 12.6px; text-align: right; }
+b.perlu { color: var(--e-merah); }
+
 /* --------- layar pindai --------- */
 .layar-pindai {
   position: fixed; inset: 0; z-index: 120; background: #0B1F14; color: #fff;
@@ -1694,4 +1718,14 @@ input[type="month"].pilih-saring { min-width: 150px; }
   body.cetak-kartu .ks-panggung .ka-kartu { zoom: 1 !important; }
   body.cetak-kartu .ks { max-width: none !important; }
   .layar-pindai { display: none !important; }
+}
+
+/* Mencetak kuitansi: hanya lembar kuitansinya, dari dalam jendela modal. */
+@media print {
+  body.cetak-kuitansi .tata, body.cetak-kuitansi .modal-kepala, body.cetak-kuitansi .modal-kaki { display: none !important; }
+  body.cetak-kuitansi .tirai-erp { position: static !important; background: transparent !important; display: block !important; padding: 0 !important; }
+  body.cetak-kuitansi .tirai-erp .modal { box-shadow: none !important; max-width: none !important; width: auto !important; max-height: none !important; border-radius: 0 !important; overflow: visible !important; }
+  body.cetak-kuitansi .modal-isi { padding: 0 !important; overflow: visible !important; max-height: none !important; }
+  body.cetak-kuitansi .kw-bungkus { background: transparent !important; padding: 0 !important; }
+  body.cetak-kuitansi .kw { border: .3mm solid #666 !important; }
 }

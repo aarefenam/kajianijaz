@@ -6515,6 +6515,21 @@ function cetakKartu() {
 /* Kartu Saya — tiap anggota melihat kartunya sendiri dan memasang pas
    fotonya tanpa menunggu Sekretaris. Fotonya langsung berlaku: kartu di
    halaman ini, dan kartu yang dicetak Sekretaris, berubah saat itu juga. */
+/** Ringkasan iuran milik sendiri, pada halaman Kartu Saya. */
+function kartuIuranSaya() {
+  const a = Store.db.aturKas || {};
+  if (!Number(a.iuranRp) && !Number(a.iuranEgp)) return '';
+  const kini = bulanIni();
+  const i = Store.iuranAnggota(U.id, kini), tg = Store.tunggakanIuran(U.id);
+  return `<div class="kartu"><div class="kartu-kepala"><h3>Iuran Saya</h3>
+    <span class="hitung">${esc([a.iuranRp ? rpFmt(a.iuranRp) : '', a.iuranEgp ? egpFmt(a.iuranEgp) : ''].filter(Boolean).join(' atau '))} per bulan</span></div>
+    <div class="panel-isi ks-iuran">
+      <div><span>${esc(namaBulan(kini))}</span>${LENCANA_IURAN[i.status]}</div>
+      <div><span>Tunggakan</span>${tg.bulan.length ? `<b class="perlu">${tg.bulan.length} bulan · ${esc(uangAtau(tg.rp, tg.egp))}</b>` : '<b style="color:#4A7A1E">Tidak ada</b>'}</div>
+      ${tg.bulan.length ? `<div class="ks-iuran-bulan"><span>Belum lunas</span><b>${esc(tg.bulan.map(namaBulan).join(', '))}</b></div>` : ''}
+    </div></div>`;
+}
+
 HAL['kartu-saya'] = () => {
   const diri = Store.dataDiri(U.id);
   const box = el(`<div class="ks">
@@ -6538,6 +6553,7 @@ HAL['kartu-saya'] = () => {
         <div class="bantu">Pas foto hanya untuk kartu anggota. Ia tidak tampil di website dan hanya terlihat oleh Anda,
           Sekretaris, dan Ketua Umum.</div>
       </div></div>
+    ${kartuIuranSaya()}
     <div class="notis notis-info">${I.info}<div><b>Bawa kartu ini ke setiap kajian</b>
       QR-nya dipindai petugas saat presensi dan oleh Bendahara saat Anda membayar iuran. Cukup tunjukkan dari layar
       ponsel, atau cetak dan simpan di dompet.${U.nia ? '' : ' Nomor induk Anda terbit setelah Sekretaris membuka ERP; QR sementara ini tetap terbaca.'}</div></div>
@@ -7613,7 +7629,10 @@ function formIuran(wadah, { user = null, bulan = bulanIni(), sesudah }) {
         ${anggota.map((u) => `<option value="${esc(u.id)}">${esc(u.nia || '')} · ${esc(u.nama)}</option>`).join('')}</select></div>`}
     <div class="fi-status" data-status></div>
     <div class="grid-form">
-      <div class="grup"><label>Iuran Bulan</label><input type="month" data-bulan value="${esc(bulan)}"></div>
+      <div class="grup"><label>Iuran Bulan</label><div style="display:flex;gap:8px">
+        <input type="month" data-bulan value="${esc(bulan)}" style="flex:1">
+        <select data-jumlah style="width:118px" title="Bayar beberapa bulan sekaligus">${[1, 2, 3, 4, 5, 6, 12].map((n) => `<option value="${n}">${n} bulan</option>`).join('')}</select></div>
+        <div class="bantu">Lebih dari satu bulan: nominal di bawah berlaku per bulan, dicatat berurutan mulai bulan ini.</div></div>
       <div class="grup"><label>Tanggal Terima</label><input type="date" data-tanggal value="${Store.hariIni()}"></div>
     </div>
     <div class="grid-form">
@@ -7650,10 +7669,12 @@ function formIuran(wadah, { user = null, bulan = bulanIni(), sesudah }) {
        bawaan mengisi keduanya, dan anggota membayar dengan salah satu. */
     const rp = Number(q('[data-rp]').value || 0), egp = Number(q('[data-egp]').value || 0);
     const kirim = () => {
-      if (aman(() => Store.terimaIuran(U, { userId: u.id, bulan: q('[data-bulan]').value, rp, egp,
-        akunId: q('[data-akun]').value, tanggal: q('[data-tanggal]').value, ket: q('[data-ket]').value.trim() }))) {
-        toast(`Iuran ${u.nama} tercatat.`);
-        sesudah?.(u);
+      let hasil = null;
+      if (aman(() => { hasil = Store.terimaIuran(U, { userId: u.id, bulan: q('[data-bulan]').value, rp, egp,
+        akunId: q('[data-akun]').value, tanggal: q('[data-tanggal]').value, ket: q('[data-ket]').value.trim(),
+        jumlahBulan: q('[data-jumlah]').value }); })) {
+        toast(`Iuran ${u.nama} tercatat${hasil.length > 1 ? ` untuk ${hasil.length} bulan` : ''}.`);
+        sesudah?.(u, hasil);
       }
     };
     if (rp && egp) konfirmasi('Dua mata uang sekaligus',
@@ -7664,9 +7685,51 @@ function formIuran(wadah, { user = null, bulan = bulanIni(), sesudah }) {
   return n;
 }
 
+/* Kuitansi iuran — bukti untuk si pembayar. Satu kuitansi dapat memuat
+   beberapa bulan bila dibayar sekaligus. Dicetak lewat pencetak
+   peramban, sama seperti surat dan kartu. */
+function kuitansiIuran(daftar) {
+  const tx = (Array.isArray(daftar) ? daftar : [daftar]).filter(Boolean)
+    .sort((x, y) => String(x.bulanIuran || '').localeCompare(String(y.bulanIuran || '')));
+  if (!tx.length) return;
+  const u = Store.getUser(tx[0].userId);
+  const s = Store.cms.situs;
+  const rp = jumlahKas(tx, 'rp'), egp = jumlahKas(tx, 'egp');
+  const bulan = tx.map((t) => t.bulanIuran).filter(Boolean).sort();
+  const penerima = Store.getUser(tx[0].oleh);
+  const ttd = Store.db.tandaTangan.find((t) => /bendahara/i.test(`${t.jabatan} ${t.divisi}`));
+  const isi = el(`<div class="kw-bungkus"><div class="kw">
+    <div class="kw-kop">${lambang(34)}<div><b>KAJIAN ${esc(String(s.nama).toUpperCase())}</b><span>${esc(s.naungan || s.tagline || '')}</span></div>
+      <div class="kw-judul">KUITANSI<small>${esc(tx.map((t) => t.nomor).join(', '))}</small></div></div>
+    <table class="kw-isi"><tbody>
+      <tr><td>Telah terima dari</td><td>:</td><td><b>${esc(u?.nama || tx[0].sumber)}</b>${u?.nia ? ` <span class="nia">(${esc(u.nia)})</span>` : ''}</td></tr>
+      <tr><td>Uang sejumlah</td><td>:</td><td><b>${esc(uangDua(rp, egp))}</b></td></tr>
+      <tr><td>Untuk pembayaran</td><td>:</td><td>Iuran anggota ${esc(bulan.length > 1
+        ? `${namaBulan(bulan[0])} s.d. ${namaBulan(bulan[bulan.length - 1])} (${bulan.length} bulan)` : namaBulan(bulan[0] || bulanIni()))}</td></tr>
+      <tr><td>Disimpan di</td><td>:</td><td>${esc(namaAkun(tx[0].akunId))}</td></tr>
+    </tbody></table>
+    <div class="kw-kaki"><div class="kw-catatan">Kuitansi ini sah sebagai bukti pembayaran iuran.<br>Simpan untuk arsip Anda.</div>
+      <div class="kw-ttd"><div>Kairo, ${esc(tglSurat(tx[0].tanggal))}<br>Bendahara</div>
+        ${ttd?.gambar ? `<img src="${esc(ttd.gambar)}" alt="">` : '<div class="kw-ruang"></div>'}
+        <b>${esc(ttd ? namaOrang(ttd) : penerima?.nama || '')}</b></div></div>
+  </div></div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Tutup</button><button class="btn btn-lime" data-c>${I.unduh} Cetak / Simpan PDF</button></div>`);
+  modal({ judul: 'Kuitansi Iuran', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-c]').onclick = () => {
+    document.body.classList.add('cetak-kuitansi');
+    const kertas = document.head.appendChild(Object.assign(document.createElement('style'), { textContent: '@page { size: A5 landscape; margin: 10mm; }' }));
+    const usai = () => { document.body.classList.remove('cetak-kuitansi'); kertas.remove(); window.removeEventListener('afterprint', usai); };
+    window.addEventListener('afterprint', usai);
+    window.print();
+  };
+}
+
 function dialogIuran(user = null, bulan = bulanIni()) {
   const isi = el('<div></div>');
-  formIuran(isi, { user, bulan, sesudah: () => { tutupModal(); gambar(); } });
+  /* Sesudah tersimpan, kuitansinya langsung dapat dicetak untuk si pembayar. */
+  formIuran(isi, { user, bulan, sesudah: (u, hasil) => { gambar(); kuitansiIuran(hasil); } });
   modal({ judul: 'Terima Iuran Anggota', isi, lebar: true });
 }
 
@@ -7683,7 +7746,7 @@ function pindaiIuran() {
       if (!u) { tunggu(`Kode "${kode}" tidak dikenali sebagai anggota.`, 'galat'); navigator.vibrate?.([200, 80, 200]); return; }
       navigator.vibrate?.(70);
       sisi.innerHTML = '<div class="lp-form"></div>';
-      formIuran(sisi.firstElementChild, { user: u, sesudah: (x) => tunggu(`Iuran ${x.nama} tercatat. Pindai kartu berikutnya.`, 'hadir') });
+      formIuran(sisi.firstElementChild, { user: u, sesudah: (x, hasil) => tunggu(`Iuran ${x.nama} tercatat (${hasil.map((t) => t.nomor).join(', ')}). Pindai kartu berikutnya.`, 'hadir') });
     };
   });
 }
@@ -7701,7 +7764,7 @@ HAL['iuran-anggota'] = () => {
 
   const semua = Store.db.users.filter((u) => u.status === 'aktif' && (!saringIuran.angkatan || u.angkatan === saringIuran.angkatan))
     .sort((x, y) => String(x.nia || '').localeCompare(String(y.nia || '')))
-    .map((u) => ({ u, i: Store.iuranAnggota(u.id, bulan),
+    .map((u) => ({ u, i: Store.iuranAnggota(u.id, bulan), tg: Store.tunggakanIuran(u.id),
       tahun: Store.kasSah().filter((t) => t.userId === u.id && String(t.bulanIuran || '').startsWith(tahun)) }));
   const data = semua.filter((x) => !saringIuran.status || x.i.status === saringIuran.status);
   const jml = (st) => semua.filter((x) => x.i.status === st).length;
@@ -7753,14 +7816,16 @@ HAL['iuran-anggota'] = () => {
   const uang = (rp, egp) => [rp ? rpFmt(rp) : '', egp ? egpFmt(egp) : ''].filter(Boolean).join(' + ') || '—';
   kartu.querySelector('[data-unduh]').onclick = () => unduhCsv(`iuran-${bulan}.csv`,
     [['Nomor Induk', 'Nama', 'Angkatan', 'Status', 'Rp', 'EGP', `Bulan terbayar ${tahun}`],
-      ...data.map((x) => [x.u.nia || '', x.u.nama, x.u.angkatan, x.i.status, x.i.rp, x.i.egp, new Set(x.tahun.map((t) => t.bulanIuran)).size])]);
+      ...data.map((x) => [x.u.nia || '', x.u.nama, x.u.angkatan, x.i.status, x.i.rp, x.i.egp, new Set(x.tahun.map((t) => t.bulanIuran)).size])]
+      .concat([[], ['Tunggakan sampai bulan ini'], ['Nomor Induk', 'Nama', 'Angkatan', 'Bulan tertunggak', 'Rp', 'EGP'],
+        ...semua.filter((x) => x.tg.bulan.length).map((x) => [x.u.nia || '', x.u.nama, x.u.angkatan, x.tg.bulan.length, x.tg.rp, x.tg.egp])]));
 
   if (!data.length) {
     kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada anggota pada saringan ini</p></div>`));
   } else {
     const t = el(`<div class="tabel-bungkus"><table class="t-org">
       <thead><tr><th class="kol-no">No.</th><th>Anggota</th><th>Angkatan</th><th>Dibayar ${esc(namaBulan(bulan))}</th>
-        <th>Status</th><th>Bulan Terbayar ${esc(tahun)}</th>${bisaTerima ? '<th class="kol-aksi">Aksi</th>' : ''}</tr></thead>
+        <th>Status</th><th>Tunggakan s.d. Kini</th>${bisaTerima ? '<th class="kol-aksi lebar">Aksi</th>' : ''}</tr></thead>
       <tbody></tbody></table></div>`);
     const tb = t.querySelector('tbody');
     data.forEach((x, i) => {
@@ -7769,14 +7834,36 @@ HAL['iuran-anggota'] = () => {
         <td class="utuh">${esc(x.u.angkatan || '—')}</td>
         <td class="utuh">${uang(x.i.rp, x.i.egp)}</td>
         <td>${LENCANA_IURAN[x.i.status]}</td>
-        <td class="utuh">${new Set(x.tahun.map((b) => b.bulanIuran)).size} bulan</td>
-        ${bisaTerima ? `<td class="kol-aksi"><button class="ikon-aksi" data-terima title="Terima iuran">${I.masukKas}</button></td>` : ''}</tr>`);
-      tr.querySelector('[data-terima]')?.addEventListener('click', () => dialogIuran(x.u, bulan));
+        <td class="utuh">${x.tg.bulan.length ? `<b class="perlu">${x.tg.bulan.length} bulan</b><br><span class="sub-sel">${esc(uangAtau(x.tg.rp, x.tg.egp))}</span>` : '<span style="color:#4A7A1E">—</span>'}</td>
+        ${bisaTerima ? `<td class="kol-aksi lebar"><div class="sel-aksi">
+          <button class="ikon-aksi" data-terima title="Terima iuran">${I.masukKas}</button>
+          ${x.i.kali ? `<button class="ikon-aksi" data-kuitansi title="Kuitansi ${esc(namaBulan(bulan))}">${I.dok}</button>` : ''}</div></td>` : ''}</tr>`);
+      /* Yang menunggak ditawari bulan tertunggak terlamanya lebih dulu. */
+      tr.querySelector('[data-terima]')?.addEventListener('click', () => dialogIuran(x.u, x.tg.bulan[0] || bulan));
+      tr.querySelector('[data-kuitansi]')?.addEventListener('click', () => kuitansiIuran(
+        Store.kasSah().filter((t) => t.userId === x.u.id && t.bulanIuran === bulan)));
       tb.appendChild(tr);
     });
     kartu.appendChild(t);
   }
   box.appendChild(kartu);
+
+  /* Rekap per angkatan: siapa yang paling perlu diingatkan. */
+  const rekap = angkatan.map((a) => {
+    const g = semua.filter((x) => x.u.angkatan === a);
+    return { a, n: g.length, lunas: g.filter((x) => x.i.status === 'lunas').length,
+      tunggak: g.filter((x) => x.tg.bulan.length).length,
+      rp: g.reduce((j, x) => j + x.tg.rp, 0), egp: g.reduce((j, x) => j + x.tg.egp, 0) };
+  }).filter((r) => r.n);
+  if (rekap.length && !saringIuran.angkatan) {
+    box.appendChild(el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala"><h3>Rekap per Angkatan</h3>
+      <span class="hitung">tunggakan dihitung sejak awal periode sampai ${esc(namaBulan(bulanIni()))}</span></div>
+      <div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>Angkatan</th><th>Anggota Aktif</th>
+        <th>Lunas ${esc(namaBulan(bulan))}</th><th>Menunggak</th><th>Total Tunggakan</th></tr></thead>
+      <tbody>${rekap.map((r, i) => `<tr><td class="kol-no">${i + 1}</td><td><b>${esc(r.a)}</b></td><td class="utuh">${r.n}</td>
+        <td class="utuh">${r.lunas} dari ${r.n}</td><td class="utuh">${r.tunggak ? `<b class="perlu">${r.tunggak} orang</b>` : '—'}</td>
+        <td class="utuh">${esc(uangAtau(r.rp, r.egp))}</td></tr>`).join('')}</tbody></table></div></div>`));
+  }
   return box;
 };
 HAL['iuran-anggota'].judul = () => ['Iuran per Anggota', 'Siapa sudah membayar, siapa belum, dan nominal iuran bulanan.'];
@@ -7890,6 +7977,8 @@ HAL['tutup-buku'].judul = () => ['Tutup Buku', 'Cocokkan uang yang ada dengan bu
 /* ------------------------------------------------------------
    TRANSFER & TUKAR — uang berpindah, bukan bertambah atau berkurang
    ------------------------------------------------------------ */
+/* Tunggakan iuran ditagih dalam SALAH SATU mata uang, jadi "atau". */
+const uangAtau = (rp, egp) => [Number(rp) ? rpFmt(rp) : '', Number(egp) ? egpFmt(egp) : ''].filter(Boolean).join(' atau ') || '—';
 const uangDua = (rp, egp) => [Number(rp) ? rpFmt(rp) : '', Number(egp) ? egpFmt(egp) : ''].filter(Boolean).join(' + ') || '—';
 
 function formTransfer(t) {

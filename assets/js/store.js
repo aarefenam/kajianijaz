@@ -1393,7 +1393,8 @@ function simpanAnggota(user, data) {
     const { id: _tanpaId, ...bersih } = data;
     const baru = {
       id: uid('u'), status: 'aktif', role: 'anggota',
-      kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'), ...bersih,
+      kategori: 'anggota', foto: window.__avatar(data.nama || 'Anggota', '#5B7C5F'),
+      bergabung: hariIni(), ...bersih,
     };
     baru.nia = niaBerikut(db.users, baru.angkatan);
     db.users.push(baru);
@@ -1763,15 +1764,66 @@ function iuranAnggota(userId, bulan) {
 }
 
 /** Catat penerimaan iuran dari seorang anggota. */
-function terimaIuran(user, { userId, bulan, rp, egp, akunId, tanggal, ket }) {
+/** Bulan-bulan dari `dari` sampai `sampai` ("2026-07" … "2026-10"). */
+function deretBulan(dari, sampai) {
+  const hasil = [];
+  let [y, m] = String(dari).split('-').map(Number);
+  const [ya, ma] = String(sampai).split('-').map(Number);
+  while (y < ya || (y === ya && m <= ma)) {
+    hasil.push(`${y}-${String(m).padStart(2, '0')}`);
+    if (++m > 12) { m = 1; y++; }
+    if (hasil.length > 240) break;
+  }
+  return hasil;
+}
+/** Rentang periode kepengurusan yang berlaku — atau tahun kalender ini
+    bila belum ditetapkan. */
+function periodeAktif() {
+  const p = db.aturKas?.periode;
+  const kini = hariIni();
+  if (p?.mulai && p?.selesai && kini >= p.mulai && kini <= p.selesai) return { mulai: p.mulai, selesai: p.selesai, ditetapkan: true };
+  return { mulai: `${kini.slice(0, 4)}-01-01`, selesai: `${kini.slice(0, 4)}-12-31`, ditetapkan: false };
+}
+
+/** Tunggakan seorang anggota: bulan-bulan wajib iuran yang belum lunas,
+    dihitung sejak awal periode — atau sejak ia bergabung, bila lebih
+    belakangan — sampai bulan ini. Tanpa nominal iuran yang ditetapkan
+    tak ada yang bisa disebut menunggak. */
+function tunggakanIuran(userId) {
+  const u = getUser(userId);
+  const a = db.aturKas || {};
+  if (!u || (!Number(a.iuranRp) && !Number(a.iuranEgp))) return { bulan: [], rp: 0, egp: 0 };
+  const kini = hariIni().slice(0, 7);
+  const awal = [periodeAktif().mulai.slice(0, 7), String(u.bergabung || '').slice(0, 7)].filter(Boolean).sort().pop();
+  const belum = deretBulan(awal, kini).filter((b) => iuranAnggota(u.id, b).status !== 'lunas');
+  /* Yang ditagih: sisa terhadap nominal, dalam mata uang yang ditetapkan. */
+  const sisa = belum.reduce((s, b) => {
+    const i = iuranAnggota(u.id, b);
+    return { rp: s.rp + Math.max(0, Number(a.iuranRp || 0) - i.rp), egp: s.egp + Math.max(0, Number(a.iuranEgp || 0) - i.egp) };
+  }, { rp: 0, egp: 0 });
+  return { bulan: belum, ...sisa };
+}
+
+/** Catat penerimaan iuran. `jumlahBulan` lebih dari satu mencatat
+    beberapa bulan berturut-turut — tiap bulan satu transaksi bernomor
+    sendiri, supaya tiap bulan dapat dibatalkan atau dilacak terpisah. */
+function terimaIuran(user, { userId, bulan, rp, egp, akunId, tanggal, ket, jumlahBulan = 1 }) {
   const u = getUser(userId);
   if (!u) throw new Error('Anggota tidak ditemukan.');
   if (!/^\d{4}-\d{2}$/.test(bulan || '')) throw new Error('Bulan iuran belum dipilih.');
-  simpanTransaksi(user, {
-    jenis: 'masuk', arus: 'internal', kategori: 'Iuran Anggota',
-    sumber: u.nama, userId: u.id, bulanIuran: bulan,
-    rp, egp, akunId: akunId || 'ak1', tanggal: tanggal || hariIni(), ket: ket || `Iuran ${bulan}`,
-  });
+  const n = Math.min(24, Math.max(1, Math.round(Number(jumlahBulan) || 1)));
+  let [y, m] = bulan.split('-').map(Number);
+  const hasil = [];
+  for (let i = 0; i < n; i++) {
+    const b = `${y}-${String(m).padStart(2, '0')}`;
+    hasil.push(simpanTransaksi(user, {
+      jenis: 'masuk', arus: 'internal', kategori: 'Iuran Anggota',
+      sumber: u.nama, userId: u.id, bulanIuran: b,
+      rp, egp, akunId: akunId || 'ak1', tanggal: tanggal || hariIni(), ket: ket || `Iuran ${b}`,
+    }));
+    if (++m > 12) { m = 1; y++; }
+  }
+  return hasil;
 }
 
 const nominalGabung = (t) => [
@@ -2356,7 +2408,7 @@ window.Store = {
   bulanTertutup, penutupan, tutupBuku, bukaBuku, akhirBulan: tanggalAkhirBulan,
   kasSah, kasSahkah, perluSetuju, simpanTransfer, batalkanTransaksi, putuskanKas, aturBatasSetuju, aturPeriode, dicatatHariIni, kodePeriode,
   simpanAkunKas, hapusAkunKas, simpanKategoriKas, hapusKategoriKas, transaksiKategori,
-  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
