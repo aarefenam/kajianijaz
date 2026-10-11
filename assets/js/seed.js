@@ -967,63 +967,19 @@ SEED.buku = [
    ========================================================== */
 const STATUS_KONTEN = ['draft', 'editing', 'dijadwalkan', 'siap', 'terbit'];
 
-SEED.event = [
-  { id:'ev1', judul:'Kajian Rutin Al-I\'jaz',            tanggal:'2025-07-04', jam:'19:30', lokasi:'Aula IKPM Kairo',        status:'terbit',      ket:'Kajian pekanan terbuka untuk umum.' },
-  { id:'ev2', judul:'Seminar Ulumul Quran',              tanggal:'2025-07-12', jam:'09:00', lokasi:'Aula IKPM Kairo',        status:'dijadwalkan', ket:'Seminar tahunan bersama pemateri undangan.' },
-  { id:'ev3', judul:'Bedah Buku Peta Intelektual Mufassir', tanggal:'2025-08-02', jam:'16:00', lokasi:'Sekretariat IKPM Kairo', status:'draft',    ket:'Menunggu kepastian tanggal terbit buku.' },
-  { id:'ev4', judul:'Halaqah Ilmiah Bersama',            tanggal:'2025-06-21', jam:'20:00', lokasi:'Wisma Nusantara',        status:'terbit',      ket:'Kolaborasi dengan Forum Studi Islam Kairo.' },
-  { id:'ev5', judul:'Peringatan Nuzulul Quran',          tanggal:'2025-06-14', jam:'19:00', lokasi:'Masjid Indonesia Kairo',  status:'terbit',      ket:'Kajian tematik dan tadarus bersama.' },
-];
+/* Agenda, posting, video, galeri, desain, dan tugas dimulai kosong —
+   diisi PJ Media & Website dari ERP, bukan dengan data contoh. */
+SEED.event = [];
 
-SEED.sosmed = [
-  { id:'sm1', judul:'Quote Ulama Tafsir',        platform:'Instagram', tanggal:'2025-07-02', status:'dijadwalkan', interaksi:0,   isi:'Kutipan Imam az-Zarkasyi tentang adab menafsirkan al-Quran.', gambar: ph('QUOTE ULAMA','#1E4D2B','#0E2E1C','اقتباس') },
-  { id:'sm2', judul:'Poster Seminar Ulumul Quran',platform:'Instagram', tanggal:'2025-06-25', status:'terbit',      interaksi:486, isi:'Pengumuman seminar beserta tautan pendaftaran.', gambar: ph('POSTER SEMINAR','#123C22','#265E33','ندوة') },
-  { id:'sm3', judul:'Cuplikan Kajian Sabtu',      platform:'Instagram', tanggal:'2025-06-22', status:'terbit',      interaksi:392, isi:'Potongan satu menit pembahasan kaidah asbabun nuzul.', gambar: ph('CUPLIKAN KAJIAN','#26402C','#16281B','مقطع') },
-  { id:'sm4', judul:'Utas Metodologi Tafsir',     platform:'Twitter',   tanggal:'2025-07-08', status:'draft',       interaksi:0,   isi:'Utas tujuh bagian tentang tafsir bil-ma\'tsur dan bir-ra\'yi.', gambar:'' },
-  { id:'sm5', judul:'Pengumuman Buku Baru',       platform:'Facebook',  tanggal:'2025-07-15', status:'dijadwalkan', interaksi:0,   isi:'Kabar terbitnya buku ketiga beserta cara pemesanan.', gambar:'' },
-];
+SEED.sosmed = [];
 
-SEED.video = [
-  { id:'vd1', judul:'Highlight Kajian Sabtu',            platform:'YouTube',  tanggal:'2025-07-05', durasi:'08:24', status:'editing',     tautan:'', thumb: ph('HIGHLIGHT KAJIAN','#1A4A2E','#0E2E1C','فيديو') },
-  { id:'vd2', judul:'Kajian Sabtu: Metode Tafsir',       platform:'YouTube',  tanggal:'2025-06-22', durasi:'46:10', status:'terbit',      tautan:'https://youtube.com/@kajianalijaz', thumb: ph('METODE TAFSIR','#14361F','#0A2314','منهج') },
-  { id:'vd3', judul:'Podcast: Mengenal Ulumul Quran',    platform:'Spotify',  tanggal:'2025-07-18', durasi:'32:00', status:'dijadwalkan', tautan:'', thumb:'' },
-  { id:'vd4', judul:'Dokumentasi Seminar Tahun Lalu',    platform:'YouTube',  tanggal:'2025-05-30', durasi:'12:38', status:'terbit',      tautan:'https://youtube.com/@kajianalijaz', thumb:'' },
-];
+SEED.video = [];
 
-SEED.media = [
-  { id:'md1', nama:'Kajian Sabtu',        jenis:'Foto',   tanggal:'2025-06-25', berkas: ph('KAJIAN SABTU','#1E4D2B','#0E2E1C','السبت') },
-  { id:'md2', nama:'Quote Tafsir',        jenis:'Grafis', tanggal:'2025-06-25', berkas: ph('QUOTE TAFSIR','#1D1D20','#0E0E11','تفسير') },
-  { id:'md3', nama:'Poster Event',        jenis:'Grafis', tanggal:'2025-06-24', berkas: ph('POSTER EVENT','#123C22','#265E33','فعالية') },
-  { id:'md4', nama:'Banner Website',      jenis:'Grafis', tanggal:'2025-06-23', berkas: ph('BANNER WEBSITE','#26402C','#16281B','بانر') },
-  { id:'md5', nama:'Dokumentasi Kajian',  jenis:'Foto',   tanggal:'2025-06-22', berkas: ph('DOKUMENTASI','#1A4A2E','#0E2E1C','توثيق') },
-  { id:'md6', nama:'Cover Artikel',       jenis:'Grafis', tanggal:'2025-06-22', berkas: ph('COVER ARTIKEL','#14361F','#0A2314','غلاف') },
+SEED.media = [];
 
-  /* Dokumentasi kegiatan — inilah yang tampil di galeri halaman
-     Tentang. Sengaja lebih banyak daripada grafis: satu galeri berisi
-     dua foto terbaca seperti fiturnya belum jadi. */
-  { id:'md7',  nama:'Halaqah Ilmiah Bersama',    jenis:'Foto', tanggal:'2025-06-21', berkas: ph('HALAQAH ILMIAH','#1B5E20','#0E2E1C','حلقة') },
-  { id:'md8',  nama:'Presentasi Makalah Level 2',jenis:'Foto', tanggal:'2025-06-14', berkas: ph('PRESENTASI MAKALAH','#22532C','#102D19','بحث') },
-  { id:'md9',  nama:'Pembekalan Tatsqif',        jenis:'Foto', tanggal:'2025-06-07', berkas: ph('PEMBEKALAN TATSQIF','#17462A','#0B2415','تثقيف') },
-  { id:'md10', nama:'Diskusi Selepas Kajian',    jenis:'Foto', tanggal:'2025-05-31', berkas: ph('DISKUSI KAJIAN','#1E4D2B','#0E2E1C','نقاش') },
-  { id:'md11', nama:'Kunjungan ke Al-Azhar',     jenis:'Foto', tanggal:'2025-05-24', berkas: ph('KUNJUNGAN AL-AZHAR','#205630','#0F2C1B','الأزهر') },
-  { id:'md12', nama:'Peringatan Nuzulul Quran',  jenis:'Foto', tanggal:'2025-05-17', berkas: ph('NUZULUL QURAN','#1A4A2E','#0E2E1C','نزول') },
-];
+SEED.desain = [];
 
-SEED.desain = [
-  { id:'dg1', nama:'Sampul Buku Ketiga',       jenis:'Cover',   tanggal:'2025-06-20', status:'selesai', berkas: ph('SAMPUL BUKU','#1E4D2B','#0E2E1C','غلاف') },
-  { id:'dg2', nama:'Template Feed Instagram',  jenis:'Template',tanggal:'2025-06-18', status:'selesai', berkas: ph('TEMPLATE FEED','#26402C','#16281B','قالب') },
-  { id:'dg3', nama:'Banner Seminar Juli',      jenis:'Banner',  tanggal:'2025-07-03', status:'proses',  berkas:'' },
-  { id:'dg4', nama:'Kop Surat & Sertifikat',   jenis:'Cetak',   tanggal:'2025-05-28', status:'selesai', berkas:'' },
-];
-
-SEED.tugas = [
-  { id:'tg1', userId:'u5', judul:'Update halaman beranda website',  prioritas:'tinggi', tenggat:'2025-06-30', selesai:false },
-  { id:'tg2', userId:'u5', judul:'Upload video highlight kajian',   prioritas:'sedang', tenggat:'2025-07-02', selesai:false },
-  { id:'tg3', userId:'u6', judul:'Desain banner event Juli',        prioritas:'sedang', tenggat:'2025-07-03', selesai:false },
-  { id:'tg4', userId:'u5', judul:'Optimasi SEO artikel terbaru',    prioritas:'rendah', tenggat:'2025-07-05', selesai:false },
-  { id:'tg5', userId:'u6', judul:'Backup database & keamanan',      prioritas:'rendah', tenggat:'2025-07-07', selesai:false },
-  { id:'tg6', userId:'u5', judul:'Pasang favicon baru',             prioritas:'rendah', tenggat:'2025-06-18', selesai:true  },
-];
+SEED.tugas = [];
 
 SEED.seo = {
   /* Alamat situs disimpan sebagai data supaya pindah domain cukup

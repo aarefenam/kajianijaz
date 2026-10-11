@@ -54,7 +54,7 @@ if (!$u) {
        'editing' atau 'dijadwalkan' belum tentu layak dilihat. */
     'video' => [
       ['id', 'judul', 'platform', 'tanggal', 'durasi', 'tautan', 'thumb'],
-      fn($x) => ($x['status'] ?? '') === 'terbit',
+      fn($x) => tayangKah($x),
     ],
     /* Buku: judul dan ringkasannya saja. Modal, honor, timeline, dan
        daftar penanggung jawab tiap tahap tidak ikut. */
@@ -66,7 +66,7 @@ if (!$u) {
     ],
     'event' => [
       ['id', 'judul', 'tanggal', 'jam', 'lokasi', 'ket'],
-      fn($x) => ($x['status'] ?? '') === 'terbit',
+      fn($x) => tayangKah($x),
     ],
     /* Galeri kegiatan di halaman Tentang. Hanya berkas yang benar-benar
        ada — baris tanpa gambar akan tampil sebagai bingkai kosong. */

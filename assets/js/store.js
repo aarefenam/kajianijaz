@@ -800,6 +800,7 @@ async function muat() {
        koleksi yang tak boleh ditulisnya memang tak pernah terkirim. */
     bersihkanPenugasanContoh(db);
     migrasiBuku(db);
+    bersihkanContohMedia(db);
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -3219,6 +3220,59 @@ const KOLEKSI_MW = {
 };
 Object.assign(KOLEKSI, KOLEKSI_MW);
 
+/* --- publikasi: agenda & video ---
+   Keduanya langsung tampil di website — tanpa persetujuan Ketua — jadi
+   aturannya dijaga di sini dan di server:
+     terbit       tampil sekarang;
+     dijadwalkan  tampil sendiri begitu `tayangPada` tiba;
+     selain itu   belum tampil. */
+const tayangKah = (x) => x.status === 'terbit'
+  || (x.status === 'dijadwalkan' && !!x.tayangPada && x.tayangPada <= hariIni());
+
+/** Simpan baris ruang kerja Media & Website, dengan pemeriksaan per koleksi. */
+function simpanMW(user, koleksi, data) {
+  RBAC.assertCan(user, 'mediaweb.manage');
+  const lama = data.id ? (db[koleksi] || []).find((x) => x.id === data.id) : null;
+  const x = { ...(lama || {}), ...data };
+  if (koleksi === 'event' || koleksi === 'video') {
+    if (x.status === 'dijadwalkan' && !/^\d{4}-\d{2}-\d{2}$/.test(x.tayangPada || ''))
+      throw new Error('Isi "Mulai Tampil" — tanggal kapan ia muncul sendiri di website.');
+    if (x.status !== 'dijadwalkan') data = { ...data, tayangPada: '' };
+  }
+  if (koleksi === 'event') {
+    if (x.jam && !/^\d{1,2}[:.]\d{2}/.test(x.jam)) throw new Error('Waktu ditulis seperti 19:30.');
+  }
+  if (koleksi === 'video') {
+    const t = String(x.tautan || '').trim();
+    if (!tautanSah(t)) throw new Error('Tautan harus alamat lengkap yang diawali http:// atau https://');
+    if ((x.status === 'terbit' || x.status === 'dijadwalkan') && !t) throw new Error('Video yang tayang harus punya tautan.');
+    data = { ...data, tautan: t };
+  }
+  if (koleksi === 'sosmed' || koleksi === 'tugas') {
+    if (data.userId !== undefined && data.userId && !getUser(data.userId)) throw new Error('Penanggung jawab tidak ditemukan.');
+  }
+  return simpanKoleksi(user, koleksi, data);
+}
+/** Yang sedang tampil di website ditarik dulu (jadikan draf), baru dihapus. */
+function hapusMW(user, koleksi, id) {
+  RBAC.assertCan(user, 'mediaweb.manage');
+  const x = (db[koleksi] || []).find((y) => y.id === id);
+  if (x && (koleksi === 'event' || koleksi === 'video') && tayangKah(x))
+    throw new Error(`"${x.judul}" sedang tampil di website — jadikan draf lebih dulu, baru hapus.`);
+  return hapusKoleksi(user, koleksi, id);
+}
+
+/** Migrasi sekali: data contoh ruang kerja Media & Website dibuang.
+    Penandanya di `seo` — koleksi objek yang ditulis peran yang sama. */
+function bersihkanContohMedia(tersimpan) {
+  if (!tersimpan.seo || tersimpan.seo.contohMediaBersih) return;
+  const pola = { event: /^ev\d+$/, sosmed: /^sm\d+$/, video: /^vd\d+$/, media: /^md\d+$/, desain: /^dg\d+$/, tugas: /^tg\d+$/ };
+  Object.entries(pola).forEach(([nama, re]) => {
+    if (Array.isArray(tersimpan[nama])) tersimpan[nama] = tersimpan[nama].filter((x) => !re.test(x?.id || ''));
+  });
+  tersimpan.seo.contohMediaBersih = 1;
+}
+
 /** Dipanggil halaman publik pada tiap pemuatan. Dicatat di server, jadi
     yang terhitung kini pengunjung sungguhan — bukan sekadar berapa kali
     satu peramban membuka halamannya sendiri. */
@@ -3402,6 +3456,7 @@ window.Store = {
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
   pindahArtikel, ALUR_ARTIKEL, naskahTugas, dikirimPada, progresTugas, wajibMenulis, capaianBulan,
   simpanPenugasan, tulisDariTugas, usulkanJudul, usulMenunggu, putuskanUsul,
+  simpanMW, hapusMW, tayangKah,
   catatKunjungan, catatBaca, centangTugas, simpanSeo,
   KUNJUNG_SESI, KUNJUNG_BARU,
   kirimPesan, tandaiDibaca, berlanggananNewsletter,

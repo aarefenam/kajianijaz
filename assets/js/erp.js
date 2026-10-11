@@ -6670,7 +6670,16 @@ const lampau = (ts) => {
 
 /* ---------------- modul yang memakai mesin generik ---------------- */
 const modulMW = (nama, spec) => ({ ruang: 'mediaweb', izin: 'mediaweb.manage', koleksi: nama,
+  simpan: (d) => Store.simpanMW(U, nama, d), hapus: (x) => Store.hapusMW(U, nama, x.id),
   pratinjau: { awal: 3, akhir: 1 }, ...spec });
+
+/** Lencana agenda/video: status, ditambah apakah ia sedang tampil di website. */
+const lencanaTayang = (x) => (x.status === 'dijadwalkan'
+  ? (Store.tayangKah(x) ? '<span class="lencana l-hijau">Tampil</span> <span class="sub-sel">terjadwal</span>'
+    : `<span class="lencana l-kuning">Dijadwalkan</span> <span class="sub-sel">tampil ${x.tayangPada ? tgl(x.tayangPada) : '—'}</span>`)
+  : x.status === 'terbit' ? '<span class="lencana l-hijau">Tampil</span>' : lencanaMW(x.status));
+const medanTayang = { k: 'tayangPada', l: 'Mulai Tampil di Website', jenis: 'tanggal',
+  bantu: 'Hanya untuk status Dijadwalkan: pada tanggal ini ia tampil sendiri, tanpa perlu diubah lagi.' };
 
 Object.assign(MODUL, {
   'agenda-event': modulMW('event', {
@@ -6681,14 +6690,16 @@ Object.assign(MODUL, {
       { l: 'Nama Event', isi: (x) => `<b>${esc(x.judul)}</b><br><span style="color:var(--e-abu);font-size:11.8px">${esc(x.ket || '')}</span>` },
       { l: 'Tanggal', kelas: 'utuh', isi: (x) => `${tgl(x.tanggal)}<br><span style="color:var(--e-abu);font-size:11.8px">${esc(x.jam || '')}</span>` },
       { l: 'Lokasi', isi: (x) => esc(x.lokasi) },
-      { l: 'Status', isi: (x) => lencanaMW(x.status) },
+      { l: 'Status', isi: (x) => lencanaTayang(x) },
     ],
     form: [
       { k: 'judul', l: 'Nama Event', wajib: true, ph: 'Seminar Ulumul Quran' },
       { k: 'tanggal', l: 'Tanggal', jenis: 'tanggal', wajib: true },
       { k: 'jam', l: 'Waktu', ph: '19:30' },
       { k: 'lokasi', l: 'Lokasi', wajib: true, ph: 'Aula IKPM Kairo' },
-      { k: 'status', l: 'Status', jenis: 'pilih', bawaan: 'draft', pilihan: pilihanStatusMW(['draft', 'dijadwalkan', 'terbit']) },
+      { k: 'status', l: 'Status', jenis: 'pilih', bawaan: 'draft', pilihan: pilihanStatusMW(['draft', 'dijadwalkan', 'terbit']),
+        bantu: 'Terbit langsung tampil di website. Agenda tidak melewati persetujuan Ketua.' },
+      medanTayang,
       { k: 'ket', l: 'Keterangan', jenis: 'area', ph: 'Ringkasan acara untuk diumumkan di website.' },
     ],
   }),
@@ -6767,7 +6778,8 @@ Object.assign(MODUL, {
       { l: 'Platform', isi: (x) => `<span class="lencana l-abu">${esc(x.platform)}</span>` },
       { l: 'Durasi', kelas: 'utuh', isi: (x) => esc(x.durasi || '—') },
       { l: 'Tanggal', kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
-      { l: 'Status', isi: (x) => lencanaMW(x.status) },
+      { l: 'Status', isi: (x) => lencanaTayang(x) },
+      { l: 'Tautan', isi: (x) => tautLuar(x.tautan, 'Buka') || '<span style="color:var(--e-abu)">—</span>' },
       { l: 'Sampul', isi: () => '', pasang: selGambar('thumb', 'judul') },
     ],
     form: [
@@ -6777,7 +6789,8 @@ Object.assign(MODUL, {
       { k: 'tanggal', l: 'Tanggal Tayang', jenis: 'tanggal', wajib: true },
       { k: 'durasi', l: 'Durasi', ph: '08:24' },
       { k: 'status', l: 'Status', jenis: 'pilih', bawaan: 'editing', pilihan: pilihanStatusMW(['draft', 'editing', 'dijadwalkan', 'terbit']) },
-      { k: 'tautan', l: 'Tautan', ph: 'https://youtube.com/…' },
+      medanTayang,
+      { k: 'tautan', l: 'Tautan', ph: 'https://youtube.com/…', bantu: 'Wajib bagi video yang tampil. Harus diawali http:// atau https://' },
       { k: 'thumb', l: 'Sampul', jenis: 'gambar' },
     ],
   }),

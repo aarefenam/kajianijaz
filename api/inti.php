@@ -298,6 +298,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   if ($nama === 'kajian') jagaKajian($user, $isiBaru);
   if ($nama === 'artikel') susunArtikel($user, $isiBaru);
   if ($nama === 'buku') jagaBuku($isiBaru);
+  if ($nama === 'video') jagaTautan($isiBaru, 'tautan', 'Tautan video');
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
@@ -456,6 +457,28 @@ function jagaHapusPengguna(array $user, $isiBaru): void {
   }
 }
 
+/** Tautan yang tampil di website publik harus http(s): `javascript:`
+    dan sejenisnya akan menjadi pranala yang menjalankan skrip di
+    peramban pengunjung. */
+function jagaTautan($isiBaru, string $kunci, string $label): void {
+  if (!is_array($isiBaru)) return;
+  foreach ($isiBaru as $x) {
+    $t = is_array($x) ? trim((string) ($x[$kunci] ?? '')) : '';
+    if ($t !== '' && !preg_match('#^https?://[^\s<>"\']+$#i', $t)) {
+      galat("$label harus alamat lengkap yang diawali http:// atau https://");
+    }
+  }
+}
+
+/** Tampilkah sebuah agenda atau video di website sekarang? Sama dengan
+    tayangKah() di store.js. */
+function tayangKah(array $x): bool {
+  $st = $x['status'] ?? '';
+  if ($st === 'terbit') return true;
+  /* Selisih zona waktu: sehari lebih awal lebih baik daripada terlambat. */
+  return $st === 'dijadwalkan' && ($x['tayangPada'] ?? '') !== '' && $x['tayangPada'] <= gmdate('Y-m-d', time() + 86400);
+}
+
 /**
  * Penjaga baris `buku`. Proyek yang sudah memuat naskah, dokumen,
  * kegiatan produksi, penjualan, atau transaksi Buku Kas tidak dapat
@@ -533,9 +556,9 @@ function saringBaca(array $user, array $isi): array {
   /* Agenda, video, galeri: di luar pengelolanya, yang terlihat sama
      dengan yang tampil di website. */
   if (!bolehSalahSatu($user, ['mediaweb.manage', 'user.manage'])) {
-    foreach (['event' => 'terbit', 'video' => 'terbit'] as $nama => $status) {
+    foreach (['event', 'video'] as $nama) {
       if (isset($isi[$nama]) && is_array($isi[$nama])) {
-        $isi[$nama] = array_values(array_filter($isi[$nama], fn($x) => is_array($x) && ($x['status'] ?? '') === $status));
+        $isi[$nama] = array_values(array_filter($isi[$nama], fn($x) => is_array($x) && tayangKah($x)));
       }
     }
   }

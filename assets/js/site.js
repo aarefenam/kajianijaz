@@ -436,7 +436,7 @@ const SUMBER = {
     ambil: () => [...(Store.db.video || [])].sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || '')),
     cari : (x) => [x.judul, x.platform],
     kartu: (x) => `<article class="kk kk-video">
-      <a class="kk-gambar" ${x.tautan ? `href="${esc(x.tautan)}" target="_blank" rel="noopener"` : ''}>
+      <a class="kk-gambar" ${/^https?:\/\//i.test(x.tautan || '') ? `href="${esc(x.tautan)}" target="_blank" rel="noopener noreferrer"` : ''}>
         <img src="${x.thumb}" alt="" loading="lazy">
         <span class="kk-main">${OR.main}</span>
         ${x.durasi ? `<span class="kk-durasi">${esc(x.durasi)}</span>` : ''}
