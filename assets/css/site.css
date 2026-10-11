@@ -637,7 +637,10 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* --------- organisasi --------- */
-.grid-org { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 18px; }
+/* Kartu berjajar di tengah: baris terakhir yang tak penuh tidak
+   menggantung di kiri. */
+.grid-org { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; }
+.grid-org .kartu-org { flex: 0 1 172px; }
 .kartu-org {
   background: var(--putih); border: 1px solid var(--garis); border-radius: 17px;
   padding: 26px 16px; text-align: center; box-shadow: var(--bayang); transition: .22s;

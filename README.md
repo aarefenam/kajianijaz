@@ -396,7 +396,8 @@ transaksi pengunci — dulu dua kunjungan bersamaan saling menimpa. Alamat
 pengirim hanya disimpan sebagai sidik.
 
 **Kartu Struktur Organisasi dapat berfoto.** Tiap jabatan punya medan `foto`
-yang diunggah dari Editor Halaman; tanpa foto, kartunya memakai ikon jabatan.
+yang diunggah dari Editor Halaman. Kartunya selalu berfoto, tak lagi berikon:
+tanpa unggahan ia memakai foto profil anggota bernama sama, lalu inisial namanya.
 Editor mengenali medan gambar dari isinya, sehingga foto yang masih kosong
 dulu tampil sebagai kotak teks — `KUNCI_GAMBAR` membuat medan bernama `foto`
 selalu berupa kotak unggah, lengkap dengan tombol hapus. Seperti perubahan CMS

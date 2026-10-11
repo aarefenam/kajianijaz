@@ -1339,7 +1339,7 @@ const BANTU = {
   logo      : 'Tampil di header & footer website, serta sidebar dan layar masuk ERP. Gunakan SVG atau PNG berlatar transparan — logo berlatar putih akan tampak sebagai kotak di atas header hijau.',
   favicon   : 'Ikon kecil di tab peramban untuk website publik. Bentuk persegi, minimal 64×64.',
   faviconErp: 'Ikon tab untuk ERP. Sengaja dibedakan dari ikon website agar tab admin mudah dikenali.',
-  foto      : 'Foto pengurus pada kartu Struktur Organisasi. Paling pas potret persegi dengan wajah di tengah; tampil sebagai lingkaran. Tanpa foto, kartunya memakai ikon jabatan.',
+  foto      : 'Foto pengurus pada kartu Struktur Organisasi. Paling pas potret persegi dengan wajah di tengah; tampil sebagai lingkaran. Tanpa foto, kartunya memakai foto profil anggota bernama sama, atau inisial namanya.',
   masjid    : 'Sosok yang berdiri di tengah hero, di depan judul raksasa — kepalanya sengaja menutupi sebagian baris bawah judul. Paling pas berupa POTRET tegak berlatar transparan (PNG atau WebP) dengan objek rata bawah. Gambar yang melebar akan dikecilkan sendiri agar tidak menutupi kolom pencarian. Gunakan PNG atau SVG berlatar transparan dengan objek rata bawah — bagian bawahnya sengaja terpotong gelombang. Kosongkan bila tidak ingin menampilkannya.',
 };
 
@@ -1385,7 +1385,7 @@ function medan(kunci, nilai, path, bisaEdit, bisaGambar) {
         ${foto && nilai && bisaGambar ? `<button class="btn btn-garis btn-kecil" data-kosongkan style="margin-left:6px">${I.hapus} Hapus Foto</button>` : ''}
       </div>
     </div>`);
-    /* Foto boleh dikosongkan lagi: kartunya kembali memakai ikon jabatan. */
+    /* Foto boleh dikosongkan lagi: kartunya kembali memakai inisial nama. */
     p.querySelector('[data-kosongkan]')?.addEventListener('click', () => {
       try { RBAC.assertCan(U, 'cms.media.upload'); simpan('', 'cms.media.upload'); toast('Foto dihapus dari draft.'); gambar(); }
       catch (e) { toast(e.message, true); }

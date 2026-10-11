@@ -994,11 +994,26 @@ const RENDER = {
 
 
   organisasi(d) {
-    /* Foto diunggah dari ERP (Editor Halaman → Struktur Organisasi). Tanpa
-       foto, kartunya memakai ikon jabatan seperti semula. */
-    const kartu = d.jabatan.map((j) => `<div class="kartu-org${j.foto ? ' berfoto' : ''}">
-      ${j.foto ? `<div class="org-foto"><img src="${esc(j.foto)}" alt="Foto ${esc(j.nama)}" loading="lazy"></div>`
-        : `<div class="org-ikon">${ikonOrg(j.ikon)}</div>`}
+    /* Tiap kartu SELALU berfoto, tak lagi berikon. Urutannya:
+         1. foto yang diunggah dari ERP (Editor Halaman → Struktur Organisasi);
+         2. foto profil anggota bernama sama, bila ia sudah mengunggahnya;
+         3. inisial namanya dalam lingkaran — supaya kartu yang belum
+            berfoto tetap tampak selesai, bukan kosong. */
+    const gelar = /^(ust|ustz|ustzh|ustadz|ustadzah|dr|prof|h|hj|kh|m)\.?$/i;
+    const polos = (nama) => String(nama || '').split(/\s+/).filter((w) => w && !gelar.test(w)).join(' ').toLowerCase();
+    const inisial = (nama) => {
+      const kata = String(nama || '').split(/\s+/).filter((w) => w && !gelar.test(w));
+      return ((kata[0]?.[0] || '') + (kata.length > 1 ? kata[kata.length - 1][0] : '')).toUpperCase() || '?';
+    };
+    const fotoInisial = (nama) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E4D2B"/><stop offset="1" stop-color="#0E2E1C"/></linearGradient></defs><rect width="240" height="240" fill="url(#g)"/><text x="120" y="124" text-anchor="middle" dominant-baseline="central" font-family="Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#8CC63F">${inisial(nama)}</text></svg>`);
+    const unggahan = (u) => (/^(\/?berkas\/|https?:\/\/)/i.test(u?.foto || '') ? u.foto : '');
+    const fotoPengurus = (j) => j.foto
+      || unggahan((Store.db.users || []).find((u) => polos(u.nama) && polos(u.nama) === polos(j.nama)))
+      || fotoInisial(j.nama);
+
+    const kartu = d.jabatan.map((j) => `<div class="kartu-org">
+      <div class="org-foto"><img src="${esc(fotoPengurus(j))}" alt="Foto ${esc(j.nama)}" loading="lazy"></div>
       <div class="org-jabatan">${esc(RBAC.roleLabel(j.role))}</div>
       <div class="org-nama">${esc(j.nama)}</div>
     </div>`).join('');
