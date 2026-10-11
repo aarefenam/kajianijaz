@@ -1218,18 +1218,158 @@ function hapusArtikel(user, id) {
 /* ============================================================
    KAJIAN / ANGGOTA / KEUANGAN / PESAN
    ============================================================ */
+/* --- keadaan kajian ---
+   Yang disimpan hanya tiga: terjadwal, ditunda, dibatalkan. "Selesai",
+   "siap", dan sejenisnya diturunkan dari tanggal dan kelengkapannya di
+   lapisan tampilan — nilai lama 'selesai' karena itu dibaca terjadwal. */
+const keadaanKajian = (k) => (k?.status === 'ditunda' || k?.status === 'dibatalkan' ? k.status : 'terjadwal');
+const kajianJalan = (k) => keadaanKajian(k) === 'terjadwal';
+/** Sudah memuat catatan yang tak boleh hilang: presensi atau notulen. */
+const kajianBerisi = (k) => (k?.presensi || []).length > 0 || !!String(k?.notulensi || '').trim();
+
+/** Angkatan yang masih berkajian: punya anggota aktif yang belum alumni. */
+const angkatanPeserta = () => [...new Set(db.users
+  .filter((u) => u.status === 'aktif' && u.angkatan && !['Alumni', '-', ''].includes(u.level || ''))
+  .map((u) => u.angkatan))];
+/** Peserta sebuah angkatan: anggota aktifnya. */
+const pesertaAngkatan = (angkatan) => db.users.filter((u) => u.status === 'aktif' && u.angkatan === angkatan);
+
+const PERAN_KAJIAN = { pemakalahId: 'Pemakalah', moderatorId: 'Moderator', notulenId: 'Notulen' };
+const tglKajian = (t) => new Date(`${t}T00:00`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/** Kajian lain yang masih berjalan pada angkatan dan tanggal yang sama. */
+function bentrokKajian(k) {
+  return db.kajian.find((x) => x.id !== k.id && kajianJalan(x)
+    && x.angkatan === k.angkatan && x.tanggal === k.tanggal);
+}
+
+/** Aturan sebuah kajian. `lama` kajian sebelum diubah (null bila baru):
+    yang sudah tersimpan tidak digugat ulang, hanya yang berubah — supaya
+    kajian lama yang pemakalahnya dari angkatan lain tetap dapat dicentang
+    PPT-nya tanpa dipaksa mengganti orangnya. */
+function periksaKajian(k, lama) {
+  const berubah = (kunci) => !lama || lama[kunci] !== k[kunci];
+  if (!String(k.judul || '').trim()) throw new Error('Judul kajian wajib diisi.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(k.tanggal || '')) throw new Error('Tanggal kajian wajib diisi.');
+  if (!/^\d{2}:\d{2}$/.test(k.jam || '')) throw new Error('Jam mulai wajib diisi.');
+  if (!k.angkatan) throw new Error('Angkatan wajib dipilih.');
+  if (berubah('angkatan') && !pesertaAngkatan(k.angkatan).length)
+    throw new Error(`${k.angkatan} tidak punya anggota aktif.`);
+
+  if (lama && berubah('tanggal') && (lama.presensi || []).length)
+    throw new Error('Kajian ini sudah berpresensi — tanggalnya tidak dapat diubah.');
+  if (lama && berubah('angkatan') && (lama.presensi || []).length)
+    throw new Error('Kajian ini sudah berpresensi — angkatannya tidak dapat diubah.');
+
+  Object.keys(PERAN_KAJIAN).forEach((kunci) => {
+    if (!k[kunci] || !(berubah(kunci) || berubah('angkatan'))) return;
+    const u = db.users.find((x) => x.id === k[kunci]);
+    if (!u) throw new Error(`${PERAN_KAJIAN[kunci]} tidak ditemukan.`);
+    if (u.status !== 'aktif') throw new Error(`${u.nama} tidak berstatus aktif.`);
+    if (u.angkatan !== k.angkatan)
+      throw new Error(`${PERAN_KAJIAN[kunci]} harus dari ${k.angkatan} — ${u.nama} tercatat di ${u.angkatan || 'angkatan lain'}.`);
+  });
+  if (Object.keys(PERAN_KAJIAN).some(berubah)) {
+    const terisi = Object.keys(PERAN_KAJIAN).filter((kunci) => k[kunci]);
+    terisi.forEach((a, i) => terisi.slice(i + 1).forEach((b) => {
+      if (k[a] === k[b]) throw new Error(`${namaUser(k[a])} tidak dapat menjadi ${PERAN_KAJIAN[a]} sekaligus ${PERAN_KAJIAN[b]}.`);
+    }));
+  }
+
+  if (kajianJalan(k) && (berubah('tanggal') || berubah('angkatan'))) {
+    const lain = bentrokKajian(k);
+    if (lain) throw new Error(`${k.angkatan} sudah punya kajian pada ${tglKajian(k.tanggal)}: "${lain.judul}".`);
+  }
+}
+
 function simpanKajian(user, data) {
   RBAC.assertCan(user, 'kajian.manage');
-  if (data.id) {
-    const k = db.kajian.find((x) => x.id === data.id);
-    Object.assign(k, data);
+  /* Keadaan hanya berubah lewat tunda, batalkan, dan pulihkan — yang
+     masing-masing menuntut alasan. */
+  const { status: _tanpaStatus, ...isi } = data;
+  if (isi.id) {
+    const k = db.kajian.find((x) => x.id === isi.id);
+    if (!k) throw new Error('Kajian tidak ditemukan.');
+    periksaKajian({ ...k, ...isi }, k);
+    Object.assign(k, isi);
     catat(user, 'kajian.ubah', k.id, `Mengubah jadwal "${k.judul}"`);
   } else {
     const baru = { id: uid('k'), status: 'terjadwal', presensi: [], notulensi: '',
-      angkatan: 'Angkatan X', notulenId: '', ppt: false, revisi: false, ...data };
+      notulenId: '', pemakalahId: '', moderatorId: '', ppt: false, revisi: false, ...isi };
+    periksaKajian(baru, null);
     db.kajian.push(baru);
     catat(user, 'kajian.buat', baru.id, `Menjadwalkan kajian "${baru.judul}"`);
   }
+  simpan();
+}
+
+const ambilKajian = (id) => {
+  const k = db.kajian.find((x) => x.id === id);
+  if (!k) throw new Error('Kajian tidak ditemukan.');
+  return k;
+};
+const jejakKajian = (user, k, jenis, rinci) => {
+  k.riwayat = k.riwayat || [];
+  k.riwayat.push({ jenis, ...rinci, oleh: user.id, pada: new Date().toISOString() });
+};
+
+/** Tunda kajian. Dengan tanggal baru ia langsung terjadwal ulang; tanpa
+    tanggal ia berstatus ditunda sampai dijadwalkan lagi. Kajian yang
+    sudah berpresensi telah terlaksana, jadi tak dapat ditunda. */
+function tundaKajian(user, id, { alasan, tanggal, jam } = {}) {
+  RBAC.assertCan(user, 'kajian.manage');
+  const k = ambilKajian(id);
+  if ((k.presensi || []).length) throw new Error('Kajian ini sudah berpresensi — tidak dapat ditunda.');
+  alasan = String(alasan || '').trim();
+  if (!alasan) throw new Error('Alasan penundaan wajib diisi.');
+  const dari = k.tanggal;
+  if (tanggal) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) throw new Error('Tanggal baru tidak sah.');
+    if (tanggal < hariIni()) throw new Error('Tanggal baru tidak boleh sudah lewat.');
+    if (tanggal === dari && kajianJalan(k)) throw new Error('Tanggal baru sama dengan tanggal semula.');
+    const calon = { ...k, tanggal, jam: jam || k.jam, status: 'terjadwal' };
+    const lain = bentrokKajian(calon);
+    if (lain) throw new Error(`${k.angkatan} sudah punya kajian pada ${tglKajian(tanggal)}: "${lain.judul}".`);
+    Object.assign(k, { tanggal, jam: calon.jam, status: 'terjadwal' });
+    jejakKajian(user, k, 'tunda', { dari, ke: tanggal, alasan });
+    catat(user, 'kajian.tunda', id, `Menunda "${k.judul}" dari ${tglKajian(dari)} ke ${tglKajian(tanggal)} — ${alasan}`);
+  } else {
+    if (keadaanKajian(k) === 'ditunda') throw new Error('Kajian ini sudah ditunda. Isi tanggal baru untuk menjadwalkannya ulang.');
+    k.status = 'ditunda';
+    jejakKajian(user, k, 'tunda', { dari, ke: '', alasan });
+    catat(user, 'kajian.tunda', id, `Menunda "${k.judul}" (${tglKajian(dari)}) tanpa tanggal pengganti — ${alasan}`);
+  }
+  simpan();
+}
+
+/** Batalkan kajian. Barisnya tetap ada beserta alasannya; ia hanya tak
+    lagi dihitung dalam kehadiran, rekap, dan antrean. */
+function batalkanKajian(user, id, alasan) {
+  RBAC.assertCan(user, 'kajian.manage');
+  const k = ambilKajian(id);
+  if (keadaanKajian(k) === 'dibatalkan') throw new Error('Kajian ini sudah dibatalkan.');
+  alasan = String(alasan || '').trim();
+  if (!alasan) throw new Error('Alasan pembatalan wajib diisi.');
+  k.statusSebelumBatal = keadaanKajian(k);
+  k.status = 'dibatalkan';
+  jejakKajian(user, k, 'batal', { alasan });
+  catat(user, 'kajian.batal', id, `Membatalkan "${k.judul}" (${tglKajian(k.tanggal)}) — ${alasan}`);
+  simpan();
+}
+
+function pulihkanKajian(user, id) {
+  RBAC.assertCan(user, 'kajian.manage');
+  const k = ambilKajian(id);
+  if (keadaanKajian(k) !== 'dibatalkan') throw new Error('Hanya kajian yang dibatalkan yang dapat dipulihkan.');
+  const kembali = k.statusSebelumBatal === 'ditunda' ? 'ditunda' : 'terjadwal';
+  if (kembali === 'terjadwal') {
+    const lain = bentrokKajian({ ...k, status: 'terjadwal' });
+    if (lain) throw new Error(`${k.angkatan} sudah punya kajian pada ${tglKajian(k.tanggal)}: "${lain.judul}".`);
+  }
+  k.status = kembali;
+  delete k.statusSebelumBatal;
+  jejakKajian(user, k, 'pulih', {});
+  catat(user, 'kajian.pulih', id, `Memulihkan "${k.judul}"`);
   simpan();
 }
 
@@ -1263,6 +1403,7 @@ function setPresensi(user, idKajian, userId, status, jam) {
   if (!STATUS_PRESENSI.includes(status)) throw new Error('Status presensi tidak dikenal.');
   const k = db.kajian.find((x) => x.id === idKajian);
   if (!k) throw new Error('Kajian tidak ditemukan.');
+  if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat diisi.`);
   k.presensi = k.presensi || [];
   const ada = k.presensi.find((p) => p.userId === userId);
   const waktu = jam !== undefined ? jam
@@ -1323,6 +1464,7 @@ function tutupPresensi(user, idKajian) {
   RBAC.assertCan(user, 'kajian.attendance');
   const k = db.kajian.find((x) => x.id === idKajian);
   if (!k) throw new Error('Kajian tidak ditemukan.');
+  if (!kajianJalan(k)) throw new Error(`Kajian ini ${keadaanKajian(k)} — presensinya tidak dapat ditutup.`);
   k.presensi = k.presensi || [];
   const sudah = new Set(k.presensi.map((p) => p.userId));
   const absen = db.users.filter((u) => u.status === 'aktif'
@@ -1351,13 +1493,17 @@ function setNotulensi(user, idKajian, teks) {
   RBAC.assertCan(user, 'kajian.notulensi');
   const k = db.kajian.find((x) => x.id === idKajian);
   k.notulensi = teks;
-  if (teks.trim() && k.status === 'terjadwal') k.status = 'selesai';
   catat(user, 'kajian.notulensi', idKajian, `Notulensi "${k.judul}" diperbarui`);
   simpan();
 }
 
 function hapusKajian(user, id) {
   RBAC.assertCan(user, 'kajian.manage');
+  /* Presensi dan notulen adalah catatan yang sudah terjadi. Kajian yang
+     memuatnya dibatalkan beserta alasannya, bukan dihapus. */
+  const k = db.kajian.find((x) => x.id === id);
+  if (k && kajianBerisi(k))
+    throw new Error(`"${k.judul}" sudah memuat presensi atau notulen — batalkan, jangan dihapus.`);
   db.kajian = db.kajian.filter((x) => x.id !== id);
   catat(user, 'kajian.hapus', id, 'Menghapus jadwal kajian');
   simpan();
@@ -2427,6 +2573,7 @@ window.Store = {
   ringkasPerubahan, adaPerubahan, ajukan, setujui, tolak, rollback,
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
+  tundaKajian, batalkanKajian, pulihkanKajian, keadaanKajian, kajianJalan, kajianBerisi, angkatanPeserta, pesertaAngkatan,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
   bulanTertutup, penutupan, tutupBuku, bukaBuku, akhirBulan: tanggalAkhirBulan,
   kasSah, kasSahkah, perluSetuju, simpanTransfer, batalkanTransaksi, putuskanKas, aturBatasSetuju, aturPeriode, dicatatHariIni, kodePeriode,

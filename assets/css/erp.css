@@ -1764,3 +1764,7 @@ b.perlu { color: var(--e-merah); }
   body.cetak-khusus .lk { box-shadow: none !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
   body.cetak-khusus .lk th, body.cetak-khusus .lk tfoot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Kajian yang dibatalkan: tetap terbaca, jelas tak berlaku. */
+.t-org tr.baris-batal td { color: var(--e-abu); }
+.t-org tr.baris-batal td b { text-decoration: line-through; font-weight: 600; }

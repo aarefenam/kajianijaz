@@ -279,6 +279,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   if ($izin === ['*']) return;                 // cukup sudah masuk
   if ($nama === 'users') { jagaHapusPengguna($user, $isiBaru); jagaUbahPengguna($user, $isiBaru); }
   if ($nama === 'keuangan' || $nama === 'aturKas' || $nama === 'tutupBuku') jagaKas($user, $nama, $isiBaru);
+  if ($nama === 'kajian') jagaKajian($user, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
@@ -434,6 +435,36 @@ function jagaHapusPengguna(array $user, $isiBaru): void {
     if (bolehkah($u, 'user.manage') && !bolehkah($user, 'user.manage')) {
       galat('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.', 403);
     }
+  }
+}
+
+/**
+ * Penjaga baris `kajian`. Koleksi ini ditulis empat izin — menjadwalkan,
+ * presensi, notulen, materi — tetapi menambah dan membuang kajian hanya
+ * urusan penjadwal. Kajian yang sudah memuat presensi atau notulen tidak
+ * dapat dibuang siapa pun: ia dibatalkan beserta alasannya, sehingga
+ * catatan yang sudah terjadi tak hilang oleh satu kiriman.
+ */
+function jagaKajian(array $user, $isiBaru): void {
+  if (!is_array($isiBaru)) return;
+  $baru = [];
+  foreach ($isiBaru as $k) {
+    if (is_array($k) && ($k['id'] ?? '') !== '') $baru[$k['id']] = true;
+  }
+  $lama = [];
+  foreach (bacaKoleksi('kajian')['isi'] ?? [] as $k) {
+    $id = $k['id'] ?? '';
+    if ($id === '') continue;
+    $lama[$id] = true;
+    if (isset($baru[$id])) continue;
+
+    if (!bolehkah($user, 'kajian.manage')) galat('Anda tidak berwenang menghapus jadwal kajian.', 403);
+    if (!empty($k['presensi']) || trim((string) ($k['notulensi'] ?? '')) !== '') {
+      galat('Kajian "' . ($k['judul'] ?? $id) . '" sudah memuat presensi atau notulen — batalkan, jangan dihapus.', 403);
+    }
+  }
+  if (!bolehkah($user, 'kajian.manage') && array_diff_key($baru, $lama)) {
+    galat('Anda tidak berwenang menambah jadwal kajian.', 403);
   }
 }
 

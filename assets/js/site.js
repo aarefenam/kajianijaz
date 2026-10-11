@@ -307,6 +307,16 @@ function panelBungkus(d, isi, kelasTambahan = '', polos = false) {
    presensi, notulensi, modal buku — tak akan pernah bisa bocor lewat
    sini, sebab ia memang tidak pernah sampai ke peramban.
    ============================================================ */
+/* Keadaan diturunkan dari tanggalnya, bukan dari kolom status — kolom itu
+   kini hanya membedakan terjadwal, ditunda, dan dibatalkan. */
+const pilKajian = (x) => {
+  const d = new Date();
+  const kini = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const [kelas, teks] = x.status === 'ditunda' ? ['', 'Ditunda']
+    : (x.tanggal || '') >= kini ? ['pil-akan', 'Akan datang'] : ['', 'Selesai'];
+  return `<span class="kk-pil ${kelas}">${teks}</span>`;
+};
+
 const SUMBER = {
   kajian: {
     label: 'Kajian',
@@ -314,7 +324,7 @@ const SUMBER = {
     cari : (x) => [x.judul, x.materi, x.tempat, x.angkatan],
     kartu: (x) => `<article class="kk kk-kajian">
       <div class="kk-atas">
-        <span class="kk-pil ${x.status === 'terjadwal' ? 'pil-akan' : ''}">${x.status === 'terjadwal' ? 'Akan datang' : 'Selesai'}</span>
+        ${pilKajian(x)}
         <span class="kk-tgl">${IK.kalender} ${tglPendek(x.tanggal)}</span>
       </div>
       <h3 class="kk-judul">${esc(x.judul)}</h3>

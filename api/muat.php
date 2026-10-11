@@ -47,7 +47,8 @@ if (!$u) {
     'kajian' => [
       ['id', 'judul', 'jenis', 'angkatan', 'level', 'tanggal', 'jam',
        'tempat', 'pemakalahId', 'moderatorId', 'status', 'materi'],
-      null,
+      /* Kajian yang dibatalkan bukan lagi jadwal — tak perlu tampil. */
+      fn($x) => ($x['status'] ?? '') !== 'dibatalkan',
     ],
     /* Hanya video yang benar-benar sudah tayang. Yang berstatus
        'editing' atau 'dijadwalkan' belum tentu layak dilihat. */

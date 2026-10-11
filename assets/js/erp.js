@@ -382,7 +382,7 @@ const MENU = [
     /* PJ Kajian memegang izin yang sama, tetapi punya halaman Presensi dan
        Notulennya sendiri — tanpa ini sidebarnya memuat dua pintu serupa. */
     tersembunyiBila: () => !ruangSekretaris(),
-    lonceng: () => Store.db.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi).length },
+    lonceng: () => Store.db.kajian.filter((k) => statusKajian(k) === 'selesai' && !k.notulensi).length },
 
   /* --- ruang kerja Sekretaris --- */
   { grup: 'Pengelolaan Surat', izin: ['sekretariat.manage'] },
@@ -1941,7 +1941,7 @@ HAL.kajian = () => {
           <span class="ket">${esc(k.jam)} WK · ${esc(k.tempat)} · Pemakalah: ${esc(Store.namaUser(k.pemakalahId))}</span>
         </div>
         <span class="lencana ${k.jenis === 'tatsqif' ? 'l-kuning' : 'l-biru'}">${esc(k.level)}</span>
-        <span class="lencana ${k.status === 'selesai' ? 'l-hijau' : 'l-abu'}">${k.status === 'selesai' ? 'Selesai' : 'Terjadwal'}</span>
+        ${lencanaKajian(k)}
         <div class="kanan" data-aksi></div>
       </div>
       <div class="panel-isi" style="padding-top:15px;padding-bottom:15px">
@@ -1977,29 +1977,35 @@ HAL.kajian = () => {
 HAL.kajian.judul = () => ['Jadwal Kajian', 'Perencanaan kajian, penugasan pemakalah, absensi, dan notulensi.'];
 
 function formKajian(k) {
-  const anggota = Store.db.users.filter((u) => u.status === 'aktif');
-  const opt = (sel) => anggota.map((u) => `<option value="${u.id}" ${sel === u.id ? 'selected' : ''}>${esc(u.nama)}</option>`).join('');
+  /* Angkatan menentukan siapa yang boleh ditugasi: pemakalah, moderator,
+     dan notulen diambil dari peserta angkatan kajian itu sendiri. */
+  const angkatan = [...new Set([...(k?.angkatan ? [k.angkatan] : []), ...Store.angkatanPeserta()])]
+    .sort((a, b) => urutAngkatan(a) - urutAngkatan(b));
+  const awal = k?.angkatan || (angkatan.includes(angkatanAktif()) ? angkatanAktif() : angkatan[0]) || '';
+  const jenjang = ['Tatsqif', 'Level 1', 'Level 2', 'Level 3'];
   const isi = el(`<div>
     <div class="grup"><label>Judul / Tema Kajian</label><input id="j" value="${esc(k?.judul || '')}" placeholder="Contoh: Nuzul al-Quran & Tahapan Penurunannya"></div>
-    <div class="grid-form">
-      <div class="grup"><label>Jenis Kajian</label><select id="jn">
-        <option value="tatsqif" ${k?.jenis === 'tatsqif' ? 'selected' : ''}>Pembekalan Intensif (Tatsqif)</option>
-        <option value="reguler" ${k?.jenis === 'reguler' ? 'selected' : ''}>Kajian Reguler (Makalah)</option></select></div>
+    <div class="grid-form-3">
+      <div class="grup"><label>Angkatan</label><select id="ak">
+        ${angkatan.map((a) => `<option ${a === awal ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></div>
       <div class="grup"><label>Jenjang</label><select id="lv">
-        ${['Tatsqif', 'Level 1', 'Level 2', 'Level 3'].map((x) => `<option ${k?.level === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        ${jenjang.map((x) => `<option ${(k?.level || (awal === angkatanAktif() ? levelAktif() : jenjangAngkatan(awal))) === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="grup"><label>Jenis Kajian</label><select id="jn">
+        <option value="reguler" ${k?.jenis !== 'tatsqif' ? 'selected' : ''}>Kajian Reguler (Makalah)</option>
+        <option value="tatsqif" ${k?.jenis === 'tatsqif' ? 'selected' : ''}>Pembekalan Intensif (Tatsqif)</option></select></div>
     </div>
     <div class="grid-form-3">
       <div class="grup"><label>Tanggal</label><input type="date" id="tg" value="${k?.tanggal || ''}"></div>
-      <div class="grup"><label>Waktu</label><input type="time" id="jm" value="${k?.jam || '19:30'}"></div>
+      <div class="grup"><label>Jam Mulai</label><input type="time" id="jm" value="${k?.jam || '19:30'}"></div>
       <div class="grup"><label>Tempat</label><input id="tp" value="${esc(k?.tempat || 'Sekretariat IKPM Kairo')}"></div>
     </div>
     <div class="grid-form-3">
-      <div class="grup"><label>Pemakalah</label><select id="pm">${opt(k?.pemakalahId)}</select></div>
-      <div class="grup"><label>Moderator</label><select id="md">${opt(k?.moderatorId)}</select></div>
-      <div class="grup"><label>Notulen</label><select id="nt"><option value="">—</option>${opt(k?.notulenId)}</select></div>
+      <div class="grup"><label>Pemakalah</label><select id="pm"></select></div>
+      <div class="grup"><label>Moderator</label><select id="md"></select></div>
+      <div class="grup"><label>Notulen</label><select id="nt"></select></div>
     </div>
-    <div class="grid-form-3">
-      <div class="grup"><label>Angkatan</label><input id="ak" value="${esc(k?.angkatan || (typeof angkatanAktif === 'function' ? angkatanAktif() : 'Angkatan X'))}"></div>
+    <div class="bantu" data-ket-petugas style="margin:-6px 0 14px"></div>
+    <div class="grid-form">
       <div class="grup"><label>Batas Terlambat (menit)</label>
         <input type="number" id="tl" min="0" max="180" step="1" value="${Store.toleransiKajian(k)}">
         <div class="bantu">Sesudah jam mulai. Lewat batas ini, yang memindai tetap masuk tetapi tercatat terlambat. Isi 0 bila tak ada kelonggaran.</div></div>
@@ -2013,29 +2019,94 @@ function formKajian(k) {
     </div>
     <div class="grup"><label>Materi / Rujukan</label><textarea id="mt" style="min-height:80px">${esc(k?.materi || '')}</textarea></div>
   </div>`);
+  const g = (id) => isi.querySelector('#' + id).value;
+
+  /* Daftar petugas mengikuti angkatan. Petugas lama dari angkatan lain
+     tetap ditampilkan, bertanda — tidak diam-diam dibuang dari kajiannya. */
+  const petugas = { pm: 'pemakalahId', md: 'moderatorId', nt: 'notulenId' };
+  const isiPetugas = (pertahankan) => {
+    const peserta = Store.pesertaAngkatan(g('ak')).sort((a, b) => a.nama.localeCompare(b.nama));
+    Object.entries(petugas).forEach(([id, kunci]) => {
+      const sel = isi.querySelector('#' + id);
+      const kini = pertahankan ? sel.value : (k?.[kunci] || '');
+      const asing = kini && !peserta.some((u) => u.id === kini) ? Store.getUser(kini) : null;
+      sel.innerHTML = `<option value="">— belum ditentukan —</option>`
+        + (asing ? `<option value="${asing.id}">${esc(asing.nama)} (${esc(asing.angkatan || 'angkatan lain')})</option>` : '')
+        + peserta.map((u) => `<option value="${u.id}">${esc(u.nama)}</option>`).join('');
+      sel.value = [...sel.options].some((o) => o.value === kini) ? kini : '';
+    });
+    isi.querySelector('[data-ket-petugas]').textContent = peserta.length
+      ? `Pilihan petugas: ${peserta.length} anggota aktif ${g('ak')}. Satu orang hanya memegang satu tugas.`
+      : `${g('ak')} belum punya anggota aktif.`;
+  };
+  isiPetugas(false);
+  isi.querySelector('#ak').onchange = () => {
+    if (!k) isi.querySelector('#lv').value = jenjangAngkatan(g('ak'));
+    isiPetugas(true);
+  };
+
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan Jadwal</button></div>`);
-  modal({ judul: k ? 'Ubah Jadwal Kajian' : 'Jadwalkan Kajian Baru', isi, kaki, lebar: true });
+  modal({ judul: k ? 'Ubah Jadwal & Tugas' : 'Jadwalkan Kajian Baru', isi, kaki, lebar: true });
   kaki.querySelector('[data-b]').onclick = tutupModal;
   kaki.querySelector('[data-s]').onclick = () => {
-    const g = (id) => isi.querySelector('#' + id).value;
-    if (!g('j').trim() || !g('tg')) return toast('Judul dan tanggal wajib diisi.', true);
-    aman(() => {
-      Store.simpanKajian(U, {
-        id: k?.id, judul: g('j').trim(), jenis: g('jn'), level: g('lv'), tanggal: g('tg'),
-        jam: g('jm'), tempat: g('tp'), pemakalahId: g('pm'), moderatorId: g('md'), materi: g('mt'),
-        notulenId: g('nt'), angkatan: g('ak').trim(),
-        toleransi: Math.max(0, Math.round(Number(g('tl')) || 0)),
-        ppt: isi.querySelector('#pp').checked, revisi: isi.querySelector('#rv').checked,
-      });
-      tutupModal(); toast('Jadwal kajian tersimpan.'); gambar();
-    });
+    if (aman(() => Store.simpanKajian(U, {
+      id: k?.id, judul: g('j').trim(), jenis: g('jn'), level: g('lv'), tanggal: g('tg'),
+      jam: g('jm'), tempat: g('tp').trim(), pemakalahId: g('pm'), moderatorId: g('md'), materi: g('mt'),
+      notulenId: g('nt'), angkatan: g('ak'),
+      toleransi: Math.max(0, Math.round(Number(g('tl')) || 0)),
+      ppt: isi.querySelector('#pp').checked, revisi: isi.querySelector('#rv').checked,
+    }))) { tutupModal(); toast('Jadwal kajian tersimpan.'); gambar(); }
   };
 }
 
-/* Absensi kini bertiga keadaan, jadi satu kotak centang tidak lagi cukup:
-   tiap anggota punya tombol tiga pilihan. Dipakai modul Jadwal Kajian
-   lama maupun ruang kerja PJ Koordinator Kajian. */
+/** Tunda atau jadwalkan ulang. Tanggal baru boleh dikosongkan bila belum
+    diketahui — kajiannya lalu berstatus ditunda. */
+function dialogTundaKajian(k) {
+  const ditunda = Store.keadaanKajian(k) === 'ditunda';
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)} ${esc(k.jam || '')}</p>
+    <div class="grid-form">
+      <div class="grup"><label>Tanggal Baru${ditunda ? '' : ' (boleh kosong)'}</label><input type="date" data-tgl min="${nowTanggal()}"></div>
+      <div class="grup"><label>Jam Mulai</label><input type="time" data-jam value="${esc(k.jam || '19:30')}"></div>
+    </div>
+    <div class="grup" style="margin:0"><label>Alasan</label>
+      <textarea data-alasan style="min-height:70px" placeholder="Contoh: pemakalah berhalangan, bertepatan dengan ujian"></textarea>
+      <div class="bantu">${ditunda ? 'Kajian kembali terjadwal pada tanggal baru.'
+        : 'Tanpa tanggal baru, kajian berstatus Ditunda dan tidak dihitung sampai dijadwalkan ulang.'}</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Tutup</button>
+    <button class="btn btn-lime" data-y>${ditunda ? 'Jadwalkan Ulang' : 'Tunda Kajian'}</button></div>`);
+  modal({ judul: ditunda ? 'Jadwalkan ulang kajian' : 'Tunda kajian', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => {
+    const tanggal = isi.querySelector('[data-tgl]').value;
+    if (aman(() => Store.tundaKajian(U, k.id, { tanggal, jam: isi.querySelector('[data-jam]').value,
+      alasan: isi.querySelector('[data-alasan]').value }))) {
+      tutupModal(); toast(tanggal ? `Kajian dipindah ke ${tgl(tanggal)}.` : 'Kajian ditunda.'); gambar();
+    }
+  };
+}
+
+function dialogBatalKajian(k) {
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(k.judul)}</b> · ${tgl(k.tanggal)}</p>
+    <div class="grup" style="margin:0"><label>Alasan pembatalan</label>
+      <textarea data-alasan style="min-height:76px" placeholder="Contoh: tema digabung ke pertemuan berikutnya, libur bersama"></textarea>
+      <div class="bantu">Kajian yang dibatalkan tetap tercatat beserta alasannya, tetapi tidak dihitung dalam kehadiran, rekap, dan antrean. Ia dapat dipulihkan.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Tutup</button><button class="btn btn-merah" data-y>Batalkan Kajian</button></div>`);
+  modal({ judul: 'Batalkan kajian', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => {
+    if (aman(() => Store.batalkanKajian(U, k.id, isi.querySelector('[data-alasan]').value))) {
+      tutupModal(); toast('Kajian dibatalkan.'); gambar();
+    }
+  };
+}
+
 function dialogAbsensi(k) {
   const peserta = Store.db.users.filter((u) => u.status === 'aktif'
     && (!k.angkatan || u.angkatan === k.angkatan));
@@ -5831,13 +5902,33 @@ function aturLingkup(angkatan, level) {
   try { localStorage.setItem(KUNCI_LINGKUP, JSON.stringify({ angkatan: angkatanPilihan, level: levelPilihan })); } catch (_) {}
 }
 
-const angkatanTersedia = () => [...new Set(Store.db.kajian.map((k) => k.angkatan).filter(Boolean))]
+/* Angkatan yang dapat dibuka: yang sudah punya kajian, ditambah yang masih
+   punya peserta aktif — supaya angkatan baru dapat dijadwalkan sebelum
+   kajian pertamanya ada. */
+const angkatanTersedia = () => [...new Set([...Store.db.kajian.map((k) => k.angkatan), ...Store.angkatanPeserta()].filter(Boolean))]
   .sort((a, b) => urutAngkatan(a) - urutAngkatan(b));
-const levelTersedia = () => [...new Set(Store.db.kajian.map((k) => k.level).filter(Boolean))].sort();
+/** Jenjang yang paling banyak dipegang peserta sebuah angkatan. */
+function jenjangAngkatan(angkatan) {
+  const hitung = {};
+  Store.pesertaAngkatan(angkatan).forEach((u) => { if (u.level && !['Alumni', '-'].includes(u.level)) hitung[u.level] = (hitung[u.level] || 0) + 1; });
+  return Object.keys(hitung).sort((a, b) => hitung[b] - hitung[a])[0] || 'Level 1';
+}
+/* Jenjang mengikuti angkatan yang sedang dibuka: jenjang kajiannya, atau
+   jenjang pesertanya bila kajiannya belum ada. */
+const levelTersedia = () => {
+  const ada = [...new Set(Store.db.kajian.filter((k) => k.angkatan === angkatanAktif()).map((k) => k.level).filter(Boolean))].sort();
+  return ada.length ? ada : [jenjangAngkatan(angkatanAktif())];
+};
 
 function angkatanAktif() {
   const ada = angkatanTersedia();
-  if (!angkatanPilihan || !ada.includes(angkatanPilihan)) angkatanPilihan = ada[0] || 'Angkatan X';
+  if (!angkatanPilihan || !ada.includes(angkatanPilihan)) {
+    /* Bawaan: angkatan yang kajiannya paling dekat dengan hari ini —
+       itulah yang sedang dikerjakan. */
+    const jarak = (k) => Math.abs(new Date(k.tanggal) - new Date(nowTanggal()));
+    const dekat = [...Store.db.kajian].filter((k) => k.angkatan && k.tanggal).sort((a, b) => jarak(a) - jarak(b))[0];
+    angkatanPilihan = dekat?.angkatan || ada[0] || 'Angkatan X';
+  }
   return angkatanPilihan;
 }
 function levelAktif() {
@@ -5846,9 +5937,12 @@ function levelAktif() {
   return levelPilihan;
 }
 
-const kajianAktif = () => Store.db.kajian
+/** Seluruh kajian dalam lingkup, termasuk yang ditunda dan dibatalkan. */
+const kajianLingkup = () => Store.db.kajian
   .filter((k) => k.angkatan === angkatanAktif() && k.level === levelAktif())
   .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
+/** Kajian yang berjalan — yang dihitung dalam presensi, rekap, dan antrean. */
+const kajianAktif = () => kajianLingkup().filter(Store.kajianJalan);
 
 const anggotaAngkatan = () => Store.db.users
   .filter((u) => u.angkatan === angkatanAktif() && u.status === 'aktif');
@@ -5868,11 +5962,14 @@ const STATUS_KAJIAN = {
   persiapan:{ l: 'Persiapan',     c: 'l-kuning' },
   belum   : { l: 'Belum Lengkap', c: 'l-merah'  },
   mendatang:{ l: 'Mendatang',     c: 'l-biru'   },
+  ditunda  : { l: 'Ditunda',      c: 'l-abu'    },
+  dibatalkan:{ l: 'Dibatalkan',   c: 'l-merah'  },
 };
 
 /** Status diturunkan, bukan disimpan — itulah sebabnya ia tak bisa
     berbohong tentang kelengkapan data kajiannya. */
 function statusKajian(k) {
+  if (!Store.kajianJalan(k)) return Store.keadaanKajian(k);
   if (k.tanggal < nowTanggal()) return 'selesai';
   const selisih = Math.round((new Date(k.tanggal) - new Date(nowTanggal())) / 86400000);
   if (selisih > 7) return 'mendatang';
@@ -6381,17 +6478,30 @@ function modePresensi(k) {
 function dialogScan(k) { modePresensi(k); }
 
 /* ---------------- halaman ---------------- */
+const SARING_JADWAL = {
+  semua    : ['Semua', () => true],
+  mendatang: ['Mendatang', (k) => Store.kajianJalan(k) && k.tanggal >= nowTanggal()],
+  lampau   : ['Terlaksana', (k) => statusKajian(k) === 'selesai'],
+  henti    : ['Ditunda & Dibatalkan', (k) => !Store.kajianJalan(k)],
+};
+let saringJadwal = 'semua';
+
 HAL['jadwal-kajian'] = () => {
-  const semua = kajianAktif();
+  const lingkup = kajianLingkup();
+  const semua = lingkup.filter(SARING_JADWAL[saringJadwal][1]);
   const kartu = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Jadwal Kajian</h3><span class="hitung">(${semua.length} Kajian · ${esc(angkatanAktif())} · ${esc(levelAktif())})</span>
-    <div class="kanan"><button class="btn btn-kecil" data-tambah>${I.tambah} Buat Jadwal Kajian</button></div>
+    <h3>Jadwal & Tugas</h3><span class="hitung">(${semua.length} kajian · ${esc(angkatanAktif())} · ${esc(levelAktif())})</span>
+    <div class="kanan">
+      <select class="pilih-saring" data-saring>${Object.entries(SARING_JADWAL).map(([id, [l, f]]) =>
+        `<option value="${id}" ${id === saringJadwal ? 'selected' : ''}>${l} (${lingkup.filter(f).length})</option>`).join('')}</select>
+      <button class="btn btn-kecil" data-tambah>${I.tambah} Buat Jadwal Kajian</button></div>
   </div></div>`);
   kartu.querySelector('[data-tambah]').onclick = () => formKajian(null);
+  kartu.querySelector('[data-saring]').onchange = (e) => { saringJadwal = e.target.value; gambar(); };
 
   if (!semua.length) {
-    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kajian</p>
-      <small>Buat jadwal pertama untuk angkatan ini.</small></div>`));
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>${lingkup.length ? 'Tidak ada kajian pada saringan ini' : 'Belum ada kajian'}</p>
+      <small>${lingkup.length ? 'Ganti saringan di kanan atas.' : 'Buat jadwal pertama untuk angkatan ini.'}</small></div>`));
     return kartu;
   }
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
@@ -6401,10 +6511,16 @@ HAL['jadwal-kajian'] = () => {
   const tb = t.querySelector('tbody');
   semua.forEach((k, i) => {
     const siap = kesiapan(k);
-    const tr = el(`<tr>
+    const keadaan = Store.keadaanKajian(k);
+    const jejak = [...(k.riwayat || [])].reverse().find((r) => r.jenis === (keadaan === 'dibatalkan' ? 'batal' : 'tunda'));
+    const ket = keadaan !== 'terjadwal' && jejak ? jejak.alasan
+      : jejak?.ke ? `Dipindah dari ${tgl(jejak.dari)} — ${jejak.alasan}` : '';
+    const berisi = Store.kajianBerisi(k);
+    const adaPresensi = (k.presensi || []).length > 0;
+    const tr = el(`<tr class="${keadaan === 'dibatalkan' ? 'baris-batal' : ''}">
       <td class="kol-no">${i + 1}</td>
       <td class="utuh">${tgl(k.tanggal)}<br><span style="color:var(--e-abu);font-size:11.6px">${esc(k.jam)}</span></td>
-      <td><b>${esc(k.judul)}</b></td>
+      <td><b>${esc(k.judul)}</b>${ket ? `<br><span style="color:var(--e-abu);font-size:11.6px">${esc(ket)}</span>` : ''}</td>
       <td>${esc(namaPendek(k.pemakalahId))}</td>
       <td>${esc(namaPendek(k.moderatorId))}</td>
       <td>${esc(namaPendek(k.notulenId))}</td>
@@ -6417,14 +6533,23 @@ HAL['jadwal-kajian'] = () => {
       <td>${lencanaKajian(k)}</td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting" title="Sunting jadwal & tugas">${I.sunting}</button>
-        <button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button></div></td></tr>`);
+        ${keadaan === 'dibatalkan' ? `<button class="ikon-aksi" data-pulih title="Pulihkan kajian">${I.putar}</button>` : `
+          ${adaPresensi ? '' : `<button class="ikon-aksi" data-tunda title="${keadaan === 'ditunda' ? 'Jadwalkan ulang' : 'Tunda / pindah tanggal'}">${I.jam}</button>`}
+          <button class="ikon-aksi" data-batal title="Batalkan kajian">${I.tutup}</button>`}
+        ${berisi ? '' : `<button class="ikon-aksi hapus" title="Hapus">${I.hapus}</button>`}</div></td></tr>`);
     tr.querySelector('.sunting').onclick = () => formKajian(k);
-    tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus jadwal kajian',
-      `"${k.judul}" beserta presensinya akan dihapus.`,
-      () => aman(() => { Store.hapusKajian(U, k.id); toast('Jadwal dihapus.'); gambar(); }));
+    tr.querySelector('[data-tunda]')?.addEventListener('click', () => dialogTundaKajian(k));
+    tr.querySelector('[data-batal]')?.addEventListener('click', () => dialogBatalKajian(k));
+    tr.querySelector('[data-pulih]')?.addEventListener('click', () => {
+      if (aman(() => Store.pulihkanKajian(U, k.id))) { toast('Kajian dipulihkan.'); gambar(); }
+    });
+    tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus jadwal kajian',
+      `"${k.judul}" akan dihapus. Kajian ini belum memuat presensi maupun notulen.`,
+      () => { if (aman(() => Store.hapusKajian(U, k.id))) { toast('Jadwal dihapus.'); gambar(); } }));
     tb.appendChild(tr);
   });
-  pasangPilih(t, semua, { satuan: 'jadwal kajian', hapus: (k) => Store.hapusKajian(U, k.id) });
+  /* Yang sudah memuat presensi atau notulen tak dapat dipilih untuk dihapus. */
+  pasangPilih(t, semua, { satuan: 'jadwal kajian', boleh: (k) => !Store.kajianBerisi(k), hapus: (k) => Store.hapusKajian(U, k.id) });
   kartu.appendChild(t);
   return kartu;
 };
@@ -7040,8 +7165,8 @@ HAL['atur-kajian'] = () => {
     <h3>Ringkasan Angkatan</h3></div>
     <div class="tabel-bungkus"><table class="t-org">
       <thead><tr><th>Angkatan</th><th>Level</th><th>Kajian</th><th>Anggota</th><th>Rata-rata Kehadiran</th></tr></thead>
-      <tbody>${angkatanTersedia().flatMap((a) => levelTersedia().map((l) => {
-        const ks = Store.db.kajian.filter((k) => k.angkatan === a && k.level === l);
+      <tbody>${angkatanTersedia().flatMap((a) => [...new Set(Store.db.kajian.filter((k) => k.angkatan === a).map((k) => k.level))].sort().map((l) => {
+        const ks = Store.db.kajian.filter((k) => k.angkatan === a && k.level === l && Store.kajianJalan(k));
         if (!ks.length) return '';
         const ang = Store.db.users.filter((u) => u.angkatan === a && u.status === 'aktif').length;
         const sel = ks.filter((k) => (k.presensi || []).length);

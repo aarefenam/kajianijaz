@@ -421,6 +421,25 @@ mustahil sebuah kajian tertulis "Siap" padahal notulennya belum ada. Antrean
 dasbor diturunkan dengan cara yang sama — bukan koleksi tersendiri yang bisa
 basi.
 
+**Keadaan kajian yang disimpan hanya tiga**: terjadwal, ditunda, dibatalkan.
+"Selesai" diturunkan dari tanggalnya. Menunda dan membatalkan selalu menuntut
+alasan, yang tersimpan di `riwayat` kajiannya; menunda dengan tanggal baru
+langsung menjadwalkan ulang, tanpa tanggal ia berstatus Ditunda. Kajian yang
+ditunda atau dibatalkan tidak dihitung dalam kehadiran, rekap, maupun antrean,
+dan yang dibatalkan tidak dikirim ke website publik.
+
+**Kajian yang sudah memuat presensi atau notulen tidak dapat dihapus** — hanya
+dibatalkan. Aturan ini ditegakkan `Store.hapusKajian()` dan, di server,
+`jagaKajian()`, yang juga memastikan hanya penjadwal (`kajian.manage`) yang
+dapat menambah atau membuang baris kajian; pemegang izin presensi dan notulen
+hanya mengubah isinya.
+
+**Formulir jadwal memeriksa** (`periksaKajian()`): pemakalah, moderator, dan
+notulen harus anggota aktif angkatan kajian itu dan tiga orang yang berbeda —
+ketiganya boleh dikosongkan dulu; satu angkatan tak boleh punya dua kajian pada
+tanggal yang sama; tanggal dan angkatan kajian yang sudah berpresensi terkunci.
+Yang diperiksa hanya yang berubah, sehingga kajian lama tetap dapat disunting.
+
 **Presensi punya tiga keadaan** — hadir, terlambat, tidak hadir — beserta jam
 datangnya. Bentuk lama yang hanya berupa daftar nama dipetakan menjadi "hadir",
 bukan dibuang.
