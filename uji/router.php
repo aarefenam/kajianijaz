@@ -23,6 +23,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !preg_match('#^/(api|berkas|uji)#', 
   header('Location: ' . ($m[1] === 'index' ? '/' : '/' . $m[1]) . $ekor, true, 301);
   return true;
 }
+/* Halaman publik, robots.txt, dan sitemap.xml lewat halaman.php — sama
+   dengan bagian 7(b) .htaccess. */
+$peta = ['/' => 'index', '' => 'index', '/robots.txt' => 'robots', '/sitemap.xml' => 'sitemap'];
+foreach (['tentang', 'artikel', 'kontak', 'daftar'] as $h) $peta["/$h"] = $h;
+if (isset($peta[$jalur])) { $_GET['h'] = $peta[$jalur]; chdir($akar); require $akar . '/halaman.php'; return true; }
+if ($jalur === '/halaman.php') { http_response_code(404); echo 'Tidak ditemukan.'; return true; }
 if (is_file($akar . $jalur)) return false;                  // berkas nyata: biarkan server melayaninya
 if ($jalur === '/' || $jalur === '') { readfile($akar . '/index.html'); return true; }
 if (!preg_match('#^/(api|berkas)/#', $jalur) && is_file($akar . $jalur . '.html')) {

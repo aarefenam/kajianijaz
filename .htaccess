@@ -117,7 +117,21 @@ AddDefaultCharset UTF-8
   RewriteCond %{THE_REQUEST} \s/+([^?\s]+)\.html[?\s] [NC]
   RewriteRule ^ /%1 [R=301,L]
 
-  # (b) /tentang  ->  tentang.html (di dalam, tanpa mengubah alamat).
+  # (b) Halaman publik disajikan halaman.php, yang memasang judul,
+  #     deskripsi, dan tag bagikan dari pengaturan SEO di ERP ke <head>.
+  #     Berkas yang sama membuat robots.txt dan sitemap.xml. Bila basis
+  #     data tak terjangkau, ia menyajikan berkas .html apa adanya.
+  #     `h` sengaja ditaruh PALING AKHIR: PHP memakai nilai terakhir, jadi
+  #     pengunjung tak dapat menimpanya lewat ?h=… di alamat.
+  RewriteRule ^$ halaman.php?%{QUERY_STRING}&h=index [L]
+  RewriteRule ^(tentang|artikel|kontak|daftar)$ halaman.php?%{QUERY_STRING}&h=$1 [L]
+  RewriteRule ^robots\.txt$ halaman.php?h=robots [L]
+  RewriteRule ^sitemap\.xml$ halaman.php?h=sitemap [L]
+  # halaman.php sendiri bukan alamat untuk pengunjung.
+  RewriteCond %{THE_REQUEST} \s/+halaman\.php[?\s] [NC]
+  RewriteRule ^ - [R=404,L]
+
+  # (c) Halaman lain tanpa .html — /erp -> erp.html (di dalam, tanpa mengubah alamat).
   # Jangan menyentuh /api/ dan /berkas/: yang di sana bukan halaman, dan
   # 404 yang jujur di situ jauh lebih mudah ditelusuri daripada HTML.
   RewriteCond %{REQUEST_URI} !^/(api|berkas)/

@@ -7001,7 +7001,16 @@ HAL.seo = () => {
     <b>Metadata yang dibaca mesin pencari</b>
     Judul dan deskripsi di bawah inilah yang muncul pada hasil pencarian dan saat tautan
     dibagikan ke media sosial. Ringkas, jelas, dan memuat kata yang benar-benar dicari orang.
-  </div></div></div>`);
+    Server memasangnya ke tiap halaman begitu disimpan; artikel yang dibagikan memakai judul,
+    ringkasan, dan sampulnya sendiri. Periksa hasilnya:
+    <a href="robots.txt" target="_blank" style="font-weight:700">robots.txt</a> ·
+    <a href="sitemap.xml" target="_blank" style="font-weight:700">sitemap.xml</a>
+  </div></div>
+  ${String(s.ogGambar || '').startsWith('data:') ? `<div class="notis notis-kuning">${I.peringatan}<div>
+    <b>Gambar bagikan belum terpasang</b>
+    Yang tersimpan sekarang gambar contoh bawaan, dan tidak dapat dipakai di luar website.
+    Unggah gambar sungguhan (1200×630) agar tautan yang dibagikan ke WhatsApp atau Telegram bergambar.
+  </div></div>` : ''}</div>`);
 
   let ogGambar = s.ogGambar;
   const kartu = el(`<div class="kartu"><div class="kartu-kepala"><h3>Metadata Halaman</h3>

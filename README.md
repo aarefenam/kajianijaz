@@ -364,6 +364,22 @@ serta keuangan. Ketua membacanya dari tab *Buku* di Pantau Divisi.
 
 ### Ruang kerja PJ Media & Website
 
+**SEO dipasang server, bukan JavaScript.** Isi website dirender di peramban,
+sehingga mesin pencari dan pratinjau tautan (WhatsApp, Telegram) dulu hanya
+melihat judul statis tiap berkas — dan halaman SEO di ERP tidak dibaca apa pun.
+Kini halaman publik disajikan `halaman.php`: berkas `.html`-nya dibaca apa
+adanya, lalu `<title>`, deskripsi, kata kunci, robots, alamat kanonik, dan tag
+Open Graph di `<head>`-nya diganti dengan yang diatur di ERP. Artikel yang
+dibuka langsung (`/artikel?buka=ID`) memakai judul, ringkasan, dan sampulnya
+sendiri; naskah yang belum terbit tidak pernah bocor ke sana. Berkas yang sama
+membuat `/robots.txt` dan `/sitemap.xml` (halaman + seluruh artikel terbit).
+Bila basis data tak terjangkau, halaman tetap tersaji dengan `<head>` aslinya.
+
+**Agenda dan video langsung tampil, tanpa persetujuan Ketua** — isinya rutin —
+tetapi aturannya dijaga: tautan video wajib http(s), yang sedang tampil harus
+dijadikan draf sebelum dihapus, dan status *Dijadwalkan* membuatnya tampil
+sendiri pada tanggal *Mulai Tampil* (`tayangKah()` di peramban dan server).
+
 **Kartu Struktur Organisasi dapat berfoto.** Tiap jabatan punya medan `foto`
 yang diunggah dari Editor Halaman; tanpa foto, kartunya memakai ikon jabatan.
 Editor mengenali medan gambar dari isinya, sehingga foto yang masih kosong
