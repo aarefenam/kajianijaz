@@ -229,6 +229,27 @@ pada kategori yang sudah tidak ada.
 **Export Excel** menghasilkan `.csv` ber-BOM UTF-8 — terbuka langsung di Excel
 dengan dobel-klik, tanpa pustaka apa pun, tetap jalan luring.
 
+**Siapa boleh berbuat apa pada sebuah naskah ditegakkan server.**
+`artikel` boleh ditulis setiap anggota, tetapi izin koleksi saja berarti siapa
+pun dapat menerbitkan tulisannya ke website publik, mengubah tulisan orang,
+atau menghapus semuanya dengan satu kiriman ke `api/simpan.php`.
+`susunArtikel()` di `api/inti.php` membandingkan tiap baris:
+
+- penulis biasa hanya menyentuh naskahnya sendiri, selagi draf atau perlu
+  revisi; ia mengirimnya untuk ditinjau atau menariknya kembali, tak lebih;
+- menerbitkan dan menarik hanya oleh pemegang `artikel.publish` — dan
+  **tulisannya sendiri diterbitkan Ketua Umum**, bukan dirinya;
+- artikel terbit tidak dapat dihapus siapa pun; ditarik dulu ke draf.
+
+Naskah yang belum terbit hanya dikirim kepada penulisnya dan pengurus artikel
+(`artikelUntuk()`); karena kiriman penulis biasa lalu tidak utuh, koleksinya
+disusun ulang dari yang tersimpan dan baris orang lain dipertahankan apa adanya.
+
+**Hitungan baca milik server dan tidak memajukan versi.** `api/lihat.php`
+dulu menaikkan versi koleksi tiap kali artikel dibuka pengunjung, sehingga
+penulis yang sedang menyunting ditolak sebagai "diubah orang lain". Kini ia
+menulis tanpa memajukan versi, dan `dilihat` kiriman peramban diabaikan.
+
 ### Ruang kerja PJ Buku
 
 Dasbornya menampung **seluruh tahap satu proyek buku dalam satu layar**, bernomor

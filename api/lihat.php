@@ -10,6 +10,7 @@ $d = bacaJson();
 $id = (string) ($d['id'] ?? '');
 if (!preg_match('/^[A-Za-z0-9_-]{1,24}$/', $id)) galat('Id artikel tidak sah.');
 
+mulaiTulis('artikel');
 $k = bacaKoleksi('artikel');
 $isi = is_array($k['isi']) ? $k['isi'] : [];
 
@@ -26,7 +27,10 @@ foreach ($isi as &$a) {
 unset($a);
 if (!$ketemu) galat('Artikel tidak ditemukan.', 404);
 
-/* Tanpa kunci optimistis, sama seperti kunjung.php: hitungan baca tidak
-   pernah bertentangan, dan menolaknya hanya membuang bacaan. */
-$versi = tulisKoleksi('artikel', $isi, null);
-jawab(['dilihat' => true, 'versi' => ['artikel' => $versi]]);
+/* Versi koleksi TIDAK dimajukan: hitungan baca bukan suntingan. Kalau
+   dimajukan, tiap pengunjung website membuat penyimpanan penulis yang
+   sedang bekerja ditolak sebagai "diubah orang lain". Server pula yang
+   memegang angkanya — susunArtikel() mengabaikan `dilihat` kiriman peramban. */
+tulisTanpaVersi('artikel', $isi);
+selesaiTulis();
+jawab(['dilihat' => true]);

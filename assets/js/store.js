@@ -1163,6 +1163,8 @@ function simpanArtikel(user, data) {
       throw new Error('Anda hanya dapat menyunting artikel tulisan sendiri.');
     if (a.status === 'terbit' && !RBAC.can(user, 'artikel.publish'))
       throw new Error('Artikel sudah terbit. Minta PJ Artikel untuk menariknya kembali ke draft.');
+    if (a.status === 'review' && !RBAC.can(user, 'artikel.review'))
+      throw new Error('Naskah sedang ditinjau. Tarik kembali ke draf untuk mengubahnya.');
     Object.assign(a, data);
     simpul = a;
     catat(user, 'artikel.ubah', a.id, `Menyunting artikel "${a.judul}"`);
@@ -1190,11 +1192,17 @@ function ubahStatusArtikel(user, id, status, catatanReview) {
       throw new Error('Hanya penulis yang dapat mengirim artikelnya untuk ditinjau.');
   } else if (status === 'terbit') {
     RBAC.assertCan(user, 'artikel.publish');
+    /* Tak seorang pun menerbitkan tulisannya sendiri — kecuali Ketua Umum,
+       yang di atasnya memang tak ada peninjau lagi. Ditegakkan pula oleh
+       susunArtikel() di server. */
+    if (a.penulisId === user.id && !RBAC.can(user, 'user.manage'))
+      throw new Error('Tulisan Anda sendiri diterbitkan oleh Ketua Umum.');
   } else if (status === 'revisi') {
     RBAC.assertCan(user, 'artikel.review');
     if (!catatanReview?.trim()) throw new Error('Catatan revisi wajib diisi.');
   } else if (status === 'draft') {
-    if (a.penulisId !== user.id) RBAC.assertCan(user, 'artikel.review');
+    if (a.status === 'terbit') RBAC.assertCan(user, 'artikel.publish');
+    else if (a.penulisId !== user.id) RBAC.assertCan(user, 'artikel.review');
   }
 
   a.status = status;
@@ -1211,6 +1219,9 @@ function hapusArtikel(user, id) {
   const a = db.artikel.find((x) => x.id === id);
   if (!a) return;
   if (a.penulisId !== user.id) RBAC.assertCan(user, 'artikel.review');
+  if (a.status === 'terbit') throw new Error(`"${a.judul}" sudah terbit — tarik dulu ke draf, baru hapus.`);
+  if (a.status === 'review' && !RBAC.can(user, 'artikel.review'))
+    throw new Error('Naskah sedang ditinjau. Tarik kembali ke draf untuk menghapusnya.');
   db.artikel = db.artikel.filter((x) => x.id !== id);
   lepasPenugasan(id);
   catat(user, 'artikel.hapus', id, `Menghapus artikel "${a.judul}"`);

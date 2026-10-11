@@ -24,6 +24,7 @@ $versiBaru = [];
 foreach ($perubahan as $nama => $bagian) {
   $isi = $bagian['isi'];
   if ($nama === 'users') $isi = jagaRahasiaPengguna($isi, $sandiBaru);
+  if ($nama === 'artikel') $isi = susunArtikel($u, $isi);
   /* Jejak audit hanya bertambah, dan SETIAP penyimpanan menyertakannya.
      Kalau ia ikut dikunci versi, dua orang yang bekerja bersamaan akan
      selalu saling menolak — apa pun yang mereka kerjakan. Karena itu

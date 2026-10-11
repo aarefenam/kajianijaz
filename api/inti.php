@@ -296,6 +296,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   if ($nama === 'users') { jagaHapusPengguna($user, $isiBaru); jagaUbahPengguna($user, $isiBaru); }
   if ($nama === 'keuangan' || $nama === 'aturKas' || $nama === 'tutupBuku') jagaKas($user, $nama, $isiBaru);
   if ($nama === 'kajian') jagaKajian($user, $isiBaru);
+  if ($nama === 'artikel') susunArtikel($user, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
@@ -452,6 +453,131 @@ function jagaHapusPengguna(array $user, $isiBaru): void {
       galat('Akun pemegang wewenang tertinggi hanya dapat dihapus oleh Ketua Umum.', 403);
     }
   }
+}
+
+/** Boleh melihat naskah orang lain yang belum terbit? */
+function pengurusArtikel(?array $user): bool {
+  return bolehSalahSatu($user, ['artikel.review', 'artikel.publish', 'artikel.view', 'redaksi.manage']);
+}
+
+/**
+ * Penjaga dan penyusun koleksi `artikel`.
+ *
+ * `artikel` boleh ditulis setiap anggota — mereka memang menulis — tetapi
+ * izin koleksi saja berarti siapa pun dapat menerbitkan tulisannya sendiri
+ * ke website publik, mengubah tulisan orang, atau menghapus semuanya dengan
+ * satu kiriman. Di sini tiap baris dibandingkan dengan yang tersimpan:
+ *
+ *   penulis biasa : hanya naskahnya sendiri, dan hanya selagi draf atau
+ *                   perlu revisi; ia mengirimnya untuk ditinjau atau
+ *                   menariknya kembali, tak lebih.
+ *   peninjau      : menyunting dan mengembalikan naskah siapa pun.
+ *   penerbit      : menerbitkan dan menarik — tetapi tulisannya sendiri
+ *                   diterbitkan Ketua Umum, bukan dirinya.
+ *   siapa pun     : artikel terbit tidak dapat dihapus; tarik dulu.
+ *
+ * Penulis biasa hanya menerima naskahnya sendiri dan yang sudah terbit
+ * (lihat muat.php), jadi kirimannya pun tidak utuh. Karena itu hasilnya
+ * DISUSUN dari yang tersimpan: baris orang lain dipertahankan apa adanya,
+ * apa pun yang dikirim. Hitungan baca selalu milik server.
+ */
+function susunArtikel(array $user, $isiBaru): array {
+  if (!is_array($isiBaru)) galat('Bentuk data artikel tidak sah.');
+  $aku = $user['id'] ?? '';
+  $tinjau = bolehkah($user, 'artikel.review');
+  $terbitkan = bolehkah($user, 'artikel.publish');
+  $penuh = $tinjau || $terbitkan;
+  $sama = fn($a, $b) => json_encode($a) === json_encode($b);
+
+  $lama = [];
+  foreach (bacaKoleksi('artikel')['isi'] ?? [] as $a) {
+    if (is_array($a) && ($a['id'] ?? '') !== '') $lama[$a['id']] = $a;
+  }
+  $cekTerbit = function (array $b) use ($user, $aku, $terbitkan) {
+    if (!$terbitkan) galat('Hanya PJ Artikel atau Ketua Umum yang dapat menerbitkan artikel.', 403);
+    if (($b['penulisId'] ?? '') === $aku && !bolehkah($user, 'user.manage')) {
+      galat('Tulisan Anda sendiri diterbitkan oleh Ketua Umum.', 403);
+    }
+  };
+
+  $baruDulu = [];
+  $ubah = [];
+  foreach ($isiBaru as $b) {
+    if (!is_array($b) || ($b['id'] ?? '') === '') galat('Bentuk data artikel tidak sah.');
+    $id = (string) $b['id'];
+    $st = (string) ($b['status'] ?? 'draft');
+    if (!in_array($st, ['draft', 'review', 'revisi', 'terbit'], true)) galat('Status artikel tidak dikenal.');
+
+    if (!isset($lama[$id])) {
+      $penulis = (string) ($b['penulisId'] ?? '');
+      if ($penulis !== $aku) {
+        /* Naskah atas nama orang lain: hanya sebagai draf, oleh peninjau
+           atau penugas (makalah kajian yang dijadikan draf artikel). */
+        if (!bolehSalahSatu($user, ['artikel.review', 'artikel.assign'])) galat('Anda hanya dapat membuat naskah atas nama sendiri.', 403);
+        if ($st !== 'draft') galat('Naskah atas nama orang lain hanya dapat dibuat sebagai draf.', 403);
+      }
+      if ($st === 'terbit') $cekTerbit($b);
+      if ($st === 'revisi' && !$tinjau) galat('Status itu hanya ditetapkan peninjau.', 403);
+      $b['dilihat'] = 0;
+      $baruDulu[$id] = $b;
+      continue;
+    }
+
+    $a = $lama[$id];
+    $milikku = ($a['penulisId'] ?? '') === $aku;
+    if (!$penuh && !$milikku) continue;            // baris orang lain: kirimannya diabaikan
+    $b['dilihat'] = (int) ($a['dilihat'] ?? 0);
+    if ($sama($a, $b)) { $ubah[$id] = $a; continue; }
+    $stA = (string) ($a['status'] ?? 'draft');
+
+    if (!$tinjau) {
+      if (!$milikku) galat('Anda hanya dapat menyunting artikel tulisan sendiri.', 403);
+      if ($stA === 'terbit') galat('Artikel sudah terbit. Minta PJ Artikel menariknya lebih dulu.', 403);
+      if ($stA === 'review' && $st !== 'draft') galat('Naskah sedang ditinjau. Tarik kembali ke draf untuk mengubahnya.', 403);
+      if (!in_array($st, ['draft', 'review'], true) && $st !== $stA) galat('Status itu hanya ditetapkan peninjau.', 403);
+      if (($b['penulisId'] ?? '') !== ($a['penulisId'] ?? '') || ($b['reviewerId'] ?? '') !== ($a['reviewerId'] ?? '')) {
+        galat('Penulis dan peninjau naskah tidak dapat diubah.', 403);
+      }
+      $catatan = (string) ($b['reviewNote'] ?? '');
+      if ($catatan !== '' && $catatan !== (string) ($a['reviewNote'] ?? '')) galat('Catatan peninjau hanya ditulis peninjau.', 403);
+    } else {
+      if ($st === 'terbit' && $stA !== 'terbit') $cekTerbit($b);
+      if ($stA === 'terbit' && !$terbitkan) galat('Artikel terbit hanya diubah oleh yang berwenang menerbitkan.', 403);
+    }
+    $ubah[$id] = $b;
+  }
+
+  $hasil = array_values($baruDulu);
+  foreach ($lama as $id => $a) {
+    if (isset($ubah[$id])) { $hasil[] = $ubah[$id]; continue; }
+    $milikku = ($a['penulisId'] ?? '') === $aku;
+    if (!$penuh && !$milikku) { $hasil[] = $a; continue; }   // tak terlihat olehnya, jadi tak terkirim
+    /* Baris ini benar-benar dihapus. */
+    $stA = (string) ($a['status'] ?? 'draft');
+    if ($stA === 'terbit') galat('Artikel "' . ($a['judul'] ?? $id) . '" sudah terbit — tarik dulu ke draf, baru hapus.', 403);
+    if (!$tinjau) {
+      if (!$milikku) galat('Anda hanya dapat menghapus artikel tulisan sendiri.', 403);
+      if ($stA === 'review') galat('Naskah sedang ditinjau. Tarik kembali ke draf untuk menghapusnya.', 403);
+    }
+  }
+  return $hasil;
+}
+
+/** Baris artikel yang boleh dilihat pengguna ini: yang terbit, dan — bagi
+    yang bukan pengurus artikel — naskahnya sendiri saja. */
+function artikelUntuk(?array $user, array $isi): array {
+  if (pengurusArtikel($user)) return $isi;
+  $aku = $user['id'] ?? null;
+  return array_values(array_filter($isi, fn($a) => is_array($a)
+    && (($a['status'] ?? '') === 'terbit' || ($a['penulisId'] ?? null) === $aku)));
+}
+
+/** Tulis isi koleksi TANPA memajukan versinya — untuk pencacah yang
+    bukan suntingan (hitungan baca). Memajukan versi di sana berarti tiap
+    pengunjung website membatalkan penyimpanan penulis yang sedang bekerja. */
+function tulisTanpaVersi(string $nama, $isi): void {
+  pdo()->prepare('UPDATE koleksi SET isi = ? WHERE nama = ?')
+    ->execute([json_encode($isi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $nama]);
 }
 
 /**

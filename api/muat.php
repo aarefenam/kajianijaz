@@ -109,6 +109,12 @@ if ($u && !bolehSalahSatu($u, ['anggota.manage', 'user.manage'])) {
   }
 }
 
+/* Naskah yang belum terbit hanya untuk penulisnya dan pengurus artikel —
+   pengunjung yang belum masuk menerima yang terbit saja. */
+if (isset($semua['isi']['artikel']) && is_array($semua['isi']['artikel'])) {
+  $semua['isi']['artikel'] = artikelUntuk($u, $semua['isi']['artikel']);
+}
+
 /* Alasan izin dan sakit hanya untuk pengurus presensi; anggota lain
    menerima miliknya sendiri saja. */
 if ($u && isset($semua['isi']['kajian']) && is_array($semua['isi']['kajian'])) {
