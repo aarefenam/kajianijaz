@@ -1525,6 +1525,15 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
 }
 .ka-kaki span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* --------- kartu saya --------- */
+.ks { display: grid; gap: 18px; max-width: 760px; }
+.ks-panggung { padding: 10px 0; }
+.ks-panggung .ka-kartu { zoom: 1.35; }
+.ks-foto { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.ks-foto > img { width: 92px; height: 117px; object-fit: cover; border-radius: 10px; border: 1px solid var(--e-garis); background: #EEF2EE; flex: none; }
+.ks-saran { margin: 12px 0 0; padding-left: 18px; font-size: 12.6px; color: var(--e-abu); line-height: 1.7; }
+@media (max-width: 520px) { .ks-panggung .ka-kartu { zoom: .95; } }
+
 /* --------- data diri & pendaftaran --------- */
 .fa-diri { border: 1px solid var(--e-garis); border-radius: 12px; padding: 14px; background: #FAFBFA; margin-top: 4px; }
 .fa-diri-kepala { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 13px; color: #2C6091; }
@@ -1668,5 +1677,8 @@ input[type="month"].pilih-saring { min-width: 150px; }
   body.cetak-kartu .topbar, body.cetak-kartu .ka-lembar .kartu-kepala { display: none !important; }
   body.cetak-kartu .ka-lembar { border: 0 !important; background: transparent !important; break-inside: auto !important; overflow: visible !important; }
   body.cetak-kartu .ka-lembar .panel-isi { padding: 0 !important; }
+  body.cetak-kartu .ks > :not(.ka-lembar) { display: none !important; }
+  body.cetak-kartu .ks-panggung .ka-kartu { zoom: 1 !important; }
+  body.cetak-kartu .ks { max-width: none !important; }
   .layar-pindai { display: none !important; }
 }

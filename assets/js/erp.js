@@ -356,6 +356,7 @@ const MENU = [
   { grup: 'Menu Utama', izin: ['mediaweb.manage', 'koordinator.manage'] },
   { id: 'dasbor',    label: () => ruangKetua() ? 'Dashboard Ketua Umum' : ruangBuku() ? 'Dashboard' : 'Dasbor',
     ikon: () => ruangKetua() ? I.rumah : I.dasbor, izin: null },
+  { id: 'kartu-saya', label: 'Kartu Saya', ikon: I.qr, izin: null },
 
   /* --- ruang kerja Ketua Umum --- */
   { id: 'pengurus',    label: 'Data Pengurus',                ikon: I.grup,    izin: ['organisasi.manage'] },
@@ -371,6 +372,9 @@ const MENU = [
   { id: 'pantau-surat',  label: 'Arsip Surat',  ikon: I.arsip,    izin: ['organisasi.manage'], tersembunyi: true },
   /* Tabel kajian yang sama, sebagai halaman kerja Sekretaris. */
   { id: 'notulen-presensi', label: 'Notulen & Presensi', ikon: I.kalender, izin: ['kajian.notulensi', 'kajian.attendance'],
+    /* PJ Kajian memegang izin yang sama, tetapi punya halaman Presensi dan
+       Notulennya sendiri — tanpa ini sidebarnya memuat dua pintu serupa. */
+    tersembunyiBila: () => !ruangSekretaris(),
     lonceng: () => Store.db.kajian.filter((k) => k.tanggal < nowTanggal() && !k.notulensi).length },
 
   /* --- ruang kerja Sekretaris --- */
@@ -526,6 +530,7 @@ const bolehMenu = (m) => {
    ============================================================ */
 const MENU_KETUA = [
   { id: 'dasbor' },
+  { id: 'kartu-saya' },
   { grup: 'Putuskan' },
   { id: 'pengajuan', label: 'Persetujuan Website' },
   { id: 'artikel',   label: 'Tinjau Artikel' },
@@ -570,6 +575,7 @@ const ALIAS_KETUA = { kajian: 'pantau-kajian', keuangan: 'pantau-kas', surat: 'p
    ============================================================ */
 const MENU_SEKRETARIS = [
   { id: 'dasbor' },
+  { id: 'kartu-saya' },
   { grup: 'Tindak Lanjuti' },
   { id: 'pesan' },
   { id: 'surat-masuk' },
@@ -6431,24 +6437,80 @@ HAL['kartu-anggota'] = () => {
   kartu.querySelector('[data-status]').onchange = (e) => { saringKartu.status = e.target.value; gambar(); };
   /* Lembar cetaknya hanya kartu: delapan per A4, tanpa judul halaman.
      Aturan kertasnya dipasang hanya selama mencetak, seperti pada surat. */
-  kartu.querySelector('[data-cetak]').onclick = () => {
-    document.body.classList.add('cetak-kartu');
-    const kertas = document.head.appendChild(Object.assign(document.createElement('style'),
-      { textContent: '@page { size: A4; margin: 10mm; }' }));
-    const usai = () => {
-      document.body.classList.remove('cetak-kartu');
-      kertas.remove();
-      window.removeEventListener('afterprint', usai);
-    };
-    window.addEventListener('afterprint', usai);
-    window.print();
-  };
+  kartu.querySelector('[data-cetak]').onclick = cetakKartu;
   const kisi = kartu.querySelector('.ka-kisi');
   if (!data.length) kisi.replaceWith(el(`<div class="kosong-erp">${I.kotak}<p>Tidak ada anggota pada saringan ini</p></div>`));
   data.forEach((u) => kisi.appendChild(kartuAnggota(u)));
   box.appendChild(kartu);
   return box;
 };
+
+function cetakKartu() {
+  document.body.classList.add('cetak-kartu');
+  const kertas = document.head.appendChild(Object.assign(document.createElement('style'),
+    { textContent: '@page { size: A4; margin: 10mm; }' }));
+  const usai = () => {
+    document.body.classList.remove('cetak-kartu');
+    kertas.remove();
+    window.removeEventListener('afterprint', usai);
+  };
+  window.addEventListener('afterprint', usai);
+  window.print();
+}
+
+/* Kartu Saya — tiap anggota melihat kartunya sendiri dan memasang pas
+   fotonya tanpa menunggu Sekretaris. Fotonya langsung berlaku: kartu di
+   halaman ini, dan kartu yang dicetak Sekretaris, berubah saat itu juga. */
+HAL['kartu-saya'] = () => {
+  const diri = Store.dataDiri(U.id);
+  const box = el(`<div class="ks">
+    <div class="kartu ka-lembar ks-kartu"><div class="kartu-kepala">
+      <h3>Kartu Anggota Saya</h3><span class="hitung">${U.nia ? esc(U.nia) : 'nomor induk belum terbit'}</span>
+      <div class="kanan"><button class="btn btn-garis btn-kecil" data-cetak>${I.unduh} Cetak / Simpan PDF</button></div></div>
+      <div class="panel-isi"><div class="ka-kisi ks-panggung" data-panggung></div></div></div>
+    <div class="kartu"><div class="kartu-kepala"><h3>Pas Foto</h3>
+      <span class="hitung">${diri.foto ? 'sudah terpasang' : 'belum ada — kartu memakai foto profil'}</span></div>
+      <div class="panel-isi">
+        <div class="ks-foto"><img data-pv src="${esc(diri.foto || U.foto || window.__avatar(U.nama || 'Anggota', '#5B7C5F'))}" alt="">
+          <div>
+            <label class="btn btn-lime" style="cursor:pointer;margin:0">${I.gambar} <span data-label>${diri.foto ? 'Ganti Pas Foto' : 'Unggah Pas Foto'}</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" hidden data-berkas></label>
+            <ul class="ks-saran">
+              <li>Wajah menghadap depan, terlihat jelas, tanpa kacamata hitam.</li>
+              <li>Latar polos. Foto tegak (potret) paling pas di kartu.</li>
+              <li>Foto langsung terpasang di kartu begitu selesai diunggah.</li>
+            </ul>
+          </div></div>
+        <div class="bantu">Pas foto hanya untuk kartu anggota. Ia tidak tampil di website dan hanya terlihat oleh Anda,
+          Sekretaris, dan Ketua Umum.</div>
+      </div></div>
+    <div class="notis notis-info">${I.info}<div><b>Bawa kartu ini ke setiap kajian</b>
+      QR-nya dipindai petugas saat presensi dan oleh Bendahara saat Anda membayar iuran. Cukup tunjukkan dari layar
+      ponsel, atau cetak dan simpan di dompet.${U.nia ? '' : ' Nomor induk Anda terbit setelah Sekretaris membuka ERP; QR sementara ini tetap terbaca.'}</div></div>
+  </div>`);
+  const panggung = box.querySelector('[data-panggung]');
+  const gambarKartu = () => panggung.replaceChildren(kartuAnggota(U));
+  gambarKartu();
+  box.querySelector('[data-cetak]').onclick = cetakKartu;
+
+  const masukan = box.querySelector('[data-berkas]');
+  const label = box.querySelector('[data-label]');
+  masukan.onchange = async () => {
+    const berkas = masukan.files[0]; if (!berkas) return;
+    const asal = label.textContent;
+    label.textContent = 'Mengunggah…';
+    try {
+      const url = await Store.unggahFotoKartu(berkas);
+      box.querySelector('[data-pv]').src = url;
+      gambarKartu();
+      label.textContent = 'Ganti Pas Foto';
+      toast('Pas foto terpasang di kartu Anda.');
+    } catch (e) { toast(e.message, true); label.textContent = asal; }
+    masukan.value = '';
+  };
+  return box;
+};
+HAL['kartu-saya'].judul = () => ['Kartu Saya', 'Kartu anggota Anda beserta pas fotonya.'];
 
 /* Satu kartu anggota, seukuran kartu pelajar (85,6 × 54 mm). Yang
    dicetak hanya yang perlu dilihat petugas: foto, nama, nomor induk,

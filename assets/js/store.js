@@ -1437,6 +1437,27 @@ function hapusPendaftaran(user, id) {
   simpan();
 }
 
+/** Anggota memasang pas foto kartunya sendiri. Lewat endpoint tersendiri,
+    sebab `dataDiri` tak boleh ditulisnya — lihat api/foto-kartu.php.
+    Salinan di peramban disesuaikan supaya kartunya langsung berubah. */
+async function unggahFotoKartu(berkas) {
+  const data = await kecilkanGambar(berkas, 480, 0.82);
+  if (String(data).startsWith('data:image/svg')) throw new Error('Pas foto harus JPG, PNG, atau WebP.');
+  const d = await panggil('foto-kartu.php', { method: 'POST', body: JSON.stringify({ data }) });
+  const aku = userAktif();
+  db.dataDiri = db.dataDiri || [];
+  /* Bayangan hanya ikut digeser bila koleksinya sedang bersih; kalau ada
+     perubahan lain yang belum terkirim, ia dibiarkan menyusul sendiri. */
+  const bersih = JSON.stringify(db.dataDiri) === bayangan.dataDiri;
+  let baris = db.dataDiri.find((x) => x.userId === aku.id);
+  if (!baris) { baris = { userId: aku.id }; db.dataDiri.push(baris); }
+  baris.foto = d.url;
+  versiKoleksi.dataDiri = d.versi;
+  if (bersih) bayangan.dataDiri = JSON.stringify(db.dataDiri);
+  beritahu();
+  return d.url;
+}
+
 /** Kirim permohonan dari halaman publik. Pas foto dikecilkan di sini. */
 async function kirimPendaftaran(data, berkasFoto) {
   const foto = berkasFoto ? await kecilkanGambar(berkasFoto, 480, 0.82) : '';
@@ -1964,7 +1985,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
-  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
+  simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
   bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,

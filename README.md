@@ -303,6 +303,12 @@ disimpan di koleksi `dataDiri`, terpisah dari `users` yang tampil di website.
 `anggota.manage`; peran lain menerima baris miliknya sendiri saja, atau tidak
 sama sekali. Tak satu pun data ini tercetak di kartu anggota.
 
+**Kartu Saya** tersedia bagi semua peran: tiap anggota melihat kartunya
+sendiri, mencetaknya, dan **mengunggah pas fotonya tanpa menunggu Sekretaris** —
+fotonya langsung terpasang di kartu. Karena `dataDiri` tak boleh ditulisnya,
+unggahan itu lewat `api/foto-kartu.php`, yang hanya menyentuh satu kolom pada
+satu baris: foto milik yang sedang masuk, dengan id diambil dari sesi.
+
 `api/daftar.php` terbuka tanpa masuk, jadi ia dibatasi: tiga permohonan per jam
 per perangkat, kolom jebakan untuk robot, pas foto diperiksa sebagai gambar
 sungguhan (SVG ditolak), dan jawabannya tidak membedakan surel yang sudah
