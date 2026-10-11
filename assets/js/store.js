@@ -58,6 +58,7 @@ function dbAwal() {
     akunKas         : clone(s.akunKas),
     kategoriKeuangan: clone(s.kategoriKeuangan),
     aturKas         : clone(s.aturKas),
+    tutupBuku       : clone(s.tutupBuku),
     dataDiri        : clone(s.dataDiri),
     pendaftaran     : clone(s.pendaftaran),
     /* Media & Website — ruang kerja PJ Media & Website */
@@ -1570,8 +1571,23 @@ function catatRiwayat(user, t, baru) {
   if (Object.keys(ubah).length) t.riwayat = (t.riwayat || []).concat({ ts: nowISO(), oleh: user.id, ubah });
   return ubah;
 }
+/* --- tutup buku ---
+   Menutup buku sebuah bulan mengunci seluruh transaksinya: tak ada yang
+   boleh masuk, berubah nilai, atau dibatalkan di sana. Saldo akhirnya
+   dibekukan beserta hasil hitung uang yang benar-benar ada, sehingga
+   selisih buku dan fisik tercatat pada saat ditutup — bukan dicari-cari
+   kemudian. Membukanya kembali hak Ketua Umum. */
+const penutupan = (bulan) => (db.tutupBuku || []).find((x) => x.bulan === bulan && !x.dibuka);
+const bulanTertutup = (bulan) => !!penutupan(bulan);
+function tolakBilaTertutup(...tanggal) {
+  tanggal.filter(Boolean).forEach((t) => {
+    const b = String(t).slice(0, 7);
+    if (bulanTertutup(b)) throw new Error(`Buku bulan ${b} sudah ditutup. Minta Ketua Umum membukanya kembali bila perlu diubah.`);
+  });
+}
 function tolakBilaTerkunci(t) {
   if (t.status === 'batal') throw new Error('Transaksi yang sudah dibatalkan tidak dapat diubah.');
+  tolakBilaTertutup(t.tanggal);
 }
 
 function simpanTransaksi(user, data) {
@@ -1589,6 +1605,7 @@ function simpanTransaksi(user, data) {
     rapi.kategoriId = k ? k.id : '';
     if (!lama && k?.nonaktif) throw new Error(`Kategori "${k.nama}" sudah dinonaktifkan. Pilih kategori lain.`);
   }
+  tolakBilaTertutup(rapi.tanggal || lama?.tanggal);
   const akun = db.akunKas.find((a) => a.id === (rapi.akunId || lama?.akunId || 'ak1'));
   if (!akun) throw new Error('Akun tujuan tidak ditemukan. Pilih akun yang tersedia.');
   if (!lama && akun.nonaktif) throw new Error(`Akun "${akun.nama}" sudah dinonaktifkan. Pilih akun lain.`);
@@ -1641,6 +1658,7 @@ function simpanTransfer(user, data) {
   const tukar = d.rp !== d.rpTujuan || d.egp !== d.egpTujuan;
   if (asal.id === tujuan.id && !tukar) throw new Error('Akun asal dan tujuan sama. Pilih akun lain, atau catat sebagai penukaran mata uang.');
   if (!d.tanggal) throw new Error('Tanggal wajib diisi.');
+  tolakBilaTertutup(d.tanggal);
   d.sumber = tukar ? `Tukar ${asal.nama}${asal.id === tujuan.id ? '' : ` → ${tujuan.nama}`}` : `${asal.nama} → ${tujuan.nama}`;
 
   if (d.id) {
@@ -1669,6 +1687,7 @@ function batalkanTransaksi(user, id, alasan) {
   const t = db.keuangan.find((x) => x.id === id);
   if (!t) throw new Error('Transaksi tidak ditemukan.');
   if (t.status === 'batal') throw new Error('Transaksi ini sudah dibatalkan.');
+  tolakBilaTertutup(t.tanggal);
   const sebab = String(alasan || '').trim();
   if (sebab.length < 4) throw new Error('Tulis alasan pembatalannya.');
   t.statusSebelumBatal = t.status || 'sah';
@@ -1684,6 +1703,7 @@ function putuskanKas(user, id, setuju, alasan) {
   const t = db.keuangan.find((x) => x.id === id);
   if (!t) throw new Error('Transaksi tidak ditemukan.');
   if (t.status !== 'menunggu') throw new Error('Pengeluaran ini tidak sedang menunggu keputusan.');
+  tolakBilaTertutup(t.tanggal);
   const sebab = String(alasan || '').trim();
   if (!setuju && sebab.length < 4) throw new Error('Tulis alasan penolakannya.');
   t.status = setuju ? 'sah' : 'ditolak';
@@ -1848,13 +1868,14 @@ function hapusKategoriKas(user, id) {
 }
 
 /** Saldo sebuah akun, dua mata uang sekaligus — tidak pernah dijumlahkan. */
-function saldoAkun(idAkun) {
+function saldoAkun(idAkun, sampai = '') {
   const a = db.akunKas.find((x) => x.id === idAkun);
   if (!a) return { rp: 0, egp: 0 };
   let rp = a.saldoAwalRp || 0, egp = a.saldoAwalEgp || 0;
   /* Hanya transaksi sah. Transfer mengurangi akun asalnya sebesar yang
      keluar dan menambah akun tujuannya sebesar yang tiba. */
   kasSah().forEach((t) => {
+    if (sampai && t.tanggal > sampai) return;       // saldo per akhir suatu tanggal
     if (t.jenis === 'transfer') {
       if (t.akunId === idAkun) { rp -= Number(t.rp || 0); egp -= Number(t.egp || 0); }
       if (t.akunTujuanId === idAkun) { rp += Number(t.rpTujuan || 0); egp += Number(t.egpTujuan || 0); }
@@ -1866,6 +1887,45 @@ function saldoAkun(idAkun) {
     egp += tanda * Number(t.egp || 0);
   });
   return { rp, egp };
+}
+
+const tanggalAkhirBulan = (bulan) => `${bulan}-${String(new Date(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)), 0).getDate()).padStart(2, '0')}`;
+
+/** Tutup buku sebuah bulan. `fisik` hasil hitung uang yang benar-benar
+    ada, per akun: { ak1: { rp, egp } }. Selisihnya terhadap buku wajib
+    dijelaskan — itulah gunanya rekonsiliasi. */
+function tutupBuku(user, bulan, fisik, catatan) {
+  RBAC.assertCan(user, 'keuangan.manage');
+  if (!/^\d{4}-\d{2}$/.test(bulan || '')) throw new Error('Bulan tidak sah.');
+  if (bulan >= hariIni().slice(0, 7)) throw new Error('Bulan yang masih berjalan belum dapat ditutup.');
+  if (bulanTertutup(bulan)) throw new Error(`Buku ${bulan} sudah ditutup.`);
+  const tunggu = db.keuangan.filter((t) => t.status === 'menunggu' && String(t.tanggal).startsWith(bulan));
+  if (tunggu.length) throw new Error(`Masih ada ${tunggu.length} pengeluaran bulan itu yang menunggu persetujuan Ketua.`);
+
+  const sampai = tanggalAkhirBulan(bulan);
+  const saldo = {}, hitung = {};
+  let selisih = false;
+  db.akunKas.forEach((a) => {
+    const b = saldoAkun(a.id, sampai);
+    const f = { rp: Number(fisik?.[a.id]?.rp ?? b.rp), egp: Number(fisik?.[a.id]?.egp ?? b.egp) };
+    saldo[a.id] = b; hitung[a.id] = f;
+    if (f.rp !== b.rp || f.egp !== b.egp) selisih = true;
+  });
+  const ket = String(catatan || '').trim();
+  if (selisih && ket.length < 4) throw new Error('Uang yang dihitung berbeda dengan buku. Jelaskan selisihnya pada catatan.');
+  db.tutupBuku = (db.tutupBuku || []).concat({ id: uid('tb'), bulan, ditutup: nowISO(), oleh: user.id, saldo, fisik: hitung, selisih, catatan: ket });
+  catat(user, 'keuangan.tutup', bulan, `Menutup buku ${bulan}${selisih ? ' dengan selisih — ' + ket : ''}`);
+  simpan();
+}
+function bukaBuku(user, bulan, alasan) {
+  RBAC.assertCan(user, 'keuangan.approve');
+  const x = penutupan(bulan);
+  if (!x) throw new Error('Buku bulan itu tidak sedang ditutup.');
+  const sebab = String(alasan || '').trim();
+  if (sebab.length < 4) throw new Error('Tulis alasan membuka kembali buku ini.');
+  x.dibuka = { oleh: user.id, ts: nowISO(), alasan: sebab };
+  catat(user, 'keuangan.buka', bulan, `Membuka kembali buku ${bulan} — ${sebab}`);
+  simpan();
 }
 
 /** Dicatat hari ini? Hanya itu yang boleh dihapus permanen — untuk salah
@@ -1880,6 +1940,7 @@ function hapusTransaksi(user, id) {
   const t = db.keuangan.find((x) => x.id === id);
   if (!t) return;
   if (!dicatatHariIni(t)) throw new Error('Transaksi ini tidak dicatat hari ini, jadi tidak dihapus. Batalkan dengan alasan.');
+  tolakBilaTertutup(t.tanggal);
   db.keuangan = db.keuangan.filter((x) => x.id !== id);
   catat(user, 'keuangan.hapus', id, `Menghapus ${t.nomor || 'transaksi'} ${nominalGabung(t)} yang dicatat hari ini`);
   simpan();
@@ -2292,6 +2353,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
+  bulanTertutup, penutupan, tutupBuku, bukaBuku, akhirBulan: tanggalAkhirBulan,
   kasSah, kasSahkah, perluSetuju, simpanTransfer, batalkanTransaksi, putuskanKas, aturBatasSetuju, aturPeriode, dicatatHariIni, kodePeriode,
   simpanAkunKas, hapusAkunKas, simpanKategoriKas, hapusKategoriKas, transaksiKategori,
   simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,

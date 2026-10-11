@@ -475,6 +475,7 @@ const MENU = [
   { id: 'pengeluaran',     label: 'Pengeluaran',         ikon: I.keluarKas,  izin: ['bendahara.manage'],
     lonceng: () => Store.db.keuangan.filter((t) => t.status === 'ditolak').length },
   { id: 'transfer-kas',    label: 'Transfer & Tukar',    ikon: I.timbang,    izin: ['bendahara.manage'] },
+  { id: 'tutup-buku',      label: 'Tutup Buku',          ikon: I.gembok,     izin: ['bendahara.manage'] },
   { id: 'saldo',           label: 'Saldo Keseluruhan',   ikon: I.timbang,    izin: ['bendahara.manage'] },
   { id: 'laporan-kas',     label: 'Laporan Keuangan',    ikon: I.dok,        izin: ['keuangan.report'], tersembunyiBila: () => !ruangBendahara() },
   { grup: 'Pengaturan', izin: ['bendahara.manage'] },
@@ -631,6 +632,7 @@ const MENU_BENDAHARA = [
   { id: 'transfer-kas' },
   { grup: 'Periksa' },
   { id: 'saldo', label: 'Saldo & Akun' },
+  { id: 'tutup-buku' },
   { grup: 'Laporkan' },
   { id: 'laporan-kas' },
   { grup: 'Pengaturan' },
@@ -7064,6 +7066,7 @@ function antreanBendahara() {
   const keluar = Store.db.keuangan.filter((t) => t.jenis === 'keluar');
   const ditolak = keluar.filter((t) => t.status === 'ditolak');
   const tunggu = keluar.filter((t) => t.status === 'menunggu');
+  const belumTutup = bulanBuku().filter((b) => b < bulan && !Store.bulanTertutup(b));
   const tanpaBukti = keluar.filter((t) => (t.status === 'menunggu' || Store.kasSahkah(t)) && !t.bukti && Store.dicatatHariIni(t) === false && t.dibuat);
   return kartuAntrean('Perlu Ditindak', [
     { rute: 'pengeluaran', ikon: I.peringatan, judul: 'Ditolak Ketua', n: ditolak.length,
@@ -7072,6 +7075,9 @@ function antreanBendahara() {
     { rute: 'pengeluaran', ikon: I.dokCek, judul: 'Menunggu Persetujuan', n: tunggu.length,
       satuan: 'pengeluaran belum diputuskan Ketua', kosong: 'Tidak ada pengeluaran yang menunggu',
       rinci: tunggu[0] && `${tunggu[0].sumber} — ${Store.nominalGabung(tunggu[0])}` },
+    { rute: 'tutup-buku', ikon: I.gembok, judul: 'Tutup Buku', n: belumTutup.length,
+      satuan: 'bulan lampau belum ditutup', kosong: 'Semua bulan lampau sudah ditutup',
+      rinci: belumTutup[0] && namaBulan(belumTutup[0]) },
     { rute: 'pengeluaran', ikon: I.gambar, judul: 'Pengeluaran Tanpa Bukti', n: tanpaBukti.length,
       satuan: 'pengeluaran belum berfoto bukti', kosong: 'Semua pengeluaran berbukti',
       rinci: tanpaBukti[0] && `${tanpaBukti[0].nomor} · ${tanpaBukti[0].sumber}` },
@@ -7776,6 +7782,112 @@ HAL['iuran-anggota'] = () => {
 HAL['iuran-anggota'].judul = () => ['Iuran per Anggota', 'Siapa sudah membayar, siapa belum, dan nominal iuran bulanan.'];
 
 /* ------------------------------------------------------------
+   TUTUP BUKU & REKONSILIASI
+   ------------------------------------------------------------
+   Tiap bulan lampau ditutup sekali: Bendahara menghitung uang yang
+   benar-benar ada di tiap akun, sistem membandingkannya dengan buku,
+   dan selisihnya — bila ada — dijelaskan saat itu juga. Sesudah itu
+   transaksi bulan tersebut terkunci.
+   ------------------------------------------------------------ */
+/** Bulan yang punya transaksi, terlama lebih dulu. */
+const bulanBuku = () => [...new Set(Store.db.keuangan.map((t) => String(t.tanggal).slice(0, 7)).filter(Boolean))].sort();
+
+function dialogTutupBuku(bulan) {
+  const sampai = Store.akhirBulan(bulan);
+  const akun = Store.db.akunKas.filter((a) => !a.nonaktif || Store.saldoAkun(a.id, sampai).rp || Store.saldoAkun(a.id, sampai).egp);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.4px;color:#44534A">Hitung uang yang benar-benar ada di tiap akun per
+      <b>${tgl(sampai)}</b>, lalu isikan di kolom "Uang yang ada". Angkanya sudah diisi menurut buku — ubah hanya yang berbeda.</p>
+    <div class="tabel-bungkus"><table class="t-org t-rapat tb-rekon">
+      <thead><tr><th>Akun</th><th>Menurut Buku</th><th>Uang yang Ada (Rp)</th><th>Uang yang Ada (EGP)</th><th>Selisih</th></tr></thead>
+      <tbody>${akun.map((a) => { const b = Store.saldoAkun(a.id, sampai); return `<tr data-akun="${esc(a.id)}" data-rp="${b.rp}" data-egp="${b.egp}">
+        <td><b>${esc(a.nama)}</b></td><td class="utuh">${rpFmt(b.rp)}<br>${egpFmt(b.egp)}</td>
+        <td><input type="number" step="any" data-f-rp value="${b.rp}"></td>
+        <td><input type="number" step="any" data-f-egp value="${b.egp}"></td>
+        <td class="utuh" data-selisih>—</td></tr>`; }).join('')}</tbody></table></div>
+    <div class="grup" style="margin:14px 0 0"><label>Catatan</label>
+      <textarea data-catatan style="min-height:66px" placeholder="Wajib bila ada selisih: sebab dan tindak lanjutnya"></textarea></div>
+    <div class="notis notis-kuning" style="margin:14px 0 0">${I.gembok}<div><b>Sesudah ditutup, ${esc(namaBulan(bulan))} terkunci</b>
+      Transaksi bulan itu tidak dapat ditambah, diubah, atau dibatalkan. Membukanya kembali hanya dapat dilakukan Ketua Umum.</div></div>
+  </div>`);
+  const hitung = () => {
+    isi.querySelectorAll('tbody tr').forEach((tr) => {
+      const drp = Number(tr.querySelector('[data-f-rp]').value || 0) - Number(tr.dataset.rp);
+      const degp = Number(tr.querySelector('[data-f-egp]').value || 0) - Number(tr.dataset.egp);
+      const sel = tr.querySelector('[data-selisih]');
+      sel.innerHTML = drp || degp ? [drp ? rpFmt(drp) : '', degp ? egpFmt(degp) : ''].filter(Boolean).join('<br>') : 'cocok';
+      sel.style.color = drp || degp ? '#B23E37' : '#4A7A1E';
+      sel.style.fontWeight = '700';
+    });
+  };
+  isi.querySelectorAll('input').forEach((x) => { x.oninput = hitung; });
+  hitung();
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-y>${I.gembok} Tutup Buku ${esc(namaBulan(bulan))}</button></div>`);
+  modal({ judul: `Tutup Buku ${namaBulan(bulan)}`, isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => {
+    const fisik = {};
+    isi.querySelectorAll('tbody tr').forEach((tr) => {
+      fisik[tr.dataset.akun] = { rp: Number(tr.querySelector('[data-f-rp]').value || 0), egp: Number(tr.querySelector('[data-f-egp]').value || 0) };
+    });
+    if (aman(() => Store.tutupBuku(U, bulan, fisik, isi.querySelector('[data-catatan]').value))) {
+      tutupModal(); toast(`Buku ${namaBulan(bulan)} ditutup.`); gambar();
+    }
+  };
+}
+
+/** Tabel bulan-bulan buku kas beserta status tutupnya. */
+function tabelTutupBuku(aksi) {
+  const kini = bulanIni();
+  const bulan = bulanBuku().reverse();
+  if (!bulan.length) return el(`<div class="kosong-erp">${I.kotak}<p>Belum ada transaksi</p></div>`);
+  const t = el(`<div class="tabel-bungkus"><table class="t-org">
+    <thead><tr><th class="kol-no">No.</th><th>Bulan</th><th>Transaksi</th><th>Pemasukan</th><th>Pengeluaran</th><th>Saldo Akhir</th>
+      <th>Status</th><th class="kol-aksi lebar">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+  const tb = t.querySelector('tbody');
+  bulan.forEach((b, i) => {
+    const d = kasBulan(b), tutup = Store.penutupan(b);
+    const lama = (Store.db.tutupBuku || []).filter((x) => x.bulan === b && x.dibuka).slice(-1)[0];
+    const akhir = Store.db.akunKas.reduce((s, a) => { const x = Store.saldoAkun(a.id, Store.akhirBulan(b)); return { rp: s.rp + x.rp, egp: s.egp + x.egp }; }, { rp: 0, egp: 0 });
+    const tunggu = Store.db.keuangan.filter((x) => x.status === 'menunggu' && String(x.tanggal).startsWith(b)).length;
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh"><b>${esc(namaBulan(b))}</b></td>
+      <td class="utuh">${d.length}${tunggu ? `<br><span class="sub-sel perlu">${tunggu} menunggu persetujuan</span>` : ''}</td>
+      <td class="utuh">${uangDua(jumlahKas(d.filter((x) => x.jenis === 'masuk'), 'rp'), jumlahKas(d.filter((x) => x.jenis === 'masuk'), 'egp'))}</td>
+      <td class="utuh">${uangDua(jumlahKas(d.filter((x) => x.jenis === 'keluar'), 'rp'), jumlahKas(d.filter((x) => x.jenis === 'keluar'), 'egp'))}</td>
+      <td class="utuh">${rpFmt(akhir.rp)}<br>${egpFmt(akhir.egp)}</td>
+      <td>${tutup ? `<span class="lencana l-hijau">Ditutup</span><br><span class="sub-sel">${tgl(tutup.ditutup)} · ${esc(namaPendek(tutup.oleh))}${
+          tutup.selisih ? ` · <span class="perlu">ada selisih</span>` : ''}</span>${tutup.catatan ? `<br><span class="sub-sel">${esc(tutup.catatan)}</span>` : ''}`
+        : b >= kini ? '<span class="lencana l-biru">Berjalan</span>'
+          : `<span class="lencana l-kuning">Belum ditutup</span>${lama ? `<br><span class="sub-sel">dibuka kembali: ${esc(lama.dibuka.alasan)}</span>` : ''}`}</td>
+      <td class="kol-aksi lebar" data-aksi></td></tr>`);
+    aksi(tr.querySelector('[data-aksi]'), b, tutup, kini);
+    tb.appendChild(tr);
+  });
+  return t;
+}
+
+HAL['tutup-buku'] = () => {
+  const box = el(`<div><div class="notis notis-info">${I.info}<div>
+    <b>Tutup buku sekali tiap bulan</b>
+    Setelah bulan berganti, hitung uang yang benar-benar ada, cocokkan dengan buku, lalu tutup. Bulan yang ditutup
+    terkunci — angkanya tak dapat lagi bergeser — dan saldo akhirnya menjadi pegangan laporan. Bila ternyata ada yang
+    harus diperbaiki, Ketua Umum dapat membukanya kembali.
+  </div></div></div>`);
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala"><h3>Tutup Buku</h3>
+    <span class="hitung">(${(Store.db.tutupBuku || []).filter((x) => !x.dibuka).length} bulan ditutup)</span></div></div>`);
+  kartu.appendChild(tabelTutupBuku((sel, b, tutup, kini) => {
+    if (tutup || b >= kini) return;
+    const tbl = el(`<button class="btn btn-kecil">${I.gembok} Tutup</button>`);
+    tbl.onclick = () => dialogTutupBuku(b);
+    sel.appendChild(tbl);
+  }));
+  box.appendChild(kartu);
+  return box;
+};
+HAL['tutup-buku'].judul = () => ['Tutup Buku', 'Cocokkan uang yang ada dengan buku, lalu kunci bulannya.'];
+
+/* ------------------------------------------------------------
    TRANSFER & TUKAR — uang berpindah, bukan bertambah atau berkurang
    ------------------------------------------------------------ */
 const uangDua = (rp, egp) => [Number(rp) ? rpFmt(rp) : '', Number(egp) ? egpFmt(egp) : ''].filter(Boolean).join(' + ') || '—';
@@ -7950,6 +8062,28 @@ HAL['persetujuan-kas'] = () => {
     kartu.appendChild(t);
   }
   box.appendChild(kartu);
+
+  /* Buku yang ditutup Bendahara. Membukanya kembali hanya dari sini. */
+  const kb = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala"><h3>Buku Kas per Bulan</h3>
+    <span class="hitung">membuka kembali buku yang ditutup adalah wewenang Anda</span></div></div>`);
+  kb.appendChild(tabelTutupBuku((sel, b, tutup) => {
+    if (!tutup) return;
+    const tbl = el('<button class="btn btn-garis btn-kecil">Buka Kembali</button>');
+    tbl.onclick = () => {
+      const f = el(`<div class="grup" style="margin:0"><label>Alasan membuka kembali</label>
+        <textarea data-alasan style="min-height:76px" placeholder="Apa yang perlu diperbaiki pada bulan ini"></textarea>
+        <div class="bantu">Transaksi ${esc(namaBulan(b))} kembali dapat diubah sampai Bendahara menutupnya lagi.</div></div>`);
+      const k = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+        <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-y>Buka Kembali</button></div>`);
+      modal({ judul: `Buka kembali buku ${namaBulan(b)}`, isi: f, kaki: k });
+      k.querySelector('[data-b]').onclick = tutupModal;
+      k.querySelector('[data-y]').onclick = () => {
+        if (aman(() => Store.bukaBuku(U, b, f.querySelector('[data-alasan]').value))) { tutupModal(); toast(`Buku ${namaBulan(b)} dibuka kembali.`); gambar(); }
+      };
+    };
+    sel.appendChild(tbl);
+  }));
+  box.appendChild(kb);
 
   if (putus.length) {
     const r = el(`<div class="kartu"><div class="kartu-kepala"><h3>Keputusan Terakhir</h3><span class="hitung">(${putus.length} terbaru)</span></div>

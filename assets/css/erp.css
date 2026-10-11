@@ -1571,6 +1571,9 @@ input[type="month"].pilih-saring { min-width: 150px; }
 .tf-judul { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--e-abu); margin-bottom: 10px; }
 .tf-kotak .bantu { margin: -6px 0 12px; font-weight: 700; color: #2C6091; }
 
+.tb-rekon input { min-width: 120px; padding: 7px 10px; font-size: 13px; }
+.sub-sel .perlu, span.perlu { color: var(--e-merah); }
+
 /* --------- layar pindai --------- */
 .layar-pindai {
   position: fixed; inset: 0; z-index: 120; background: #0B1F14; color: #fff;

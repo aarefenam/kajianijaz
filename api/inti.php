@@ -278,7 +278,7 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   }
   if ($izin === ['*']) return;                 // cukup sudah masuk
   if ($nama === 'users') jagaHapusPengguna($user, $isiBaru);
-  if ($nama === 'keuangan' || $nama === 'aturKas') jagaKas($user, $nama, $isiBaru);
+  if ($nama === 'keuangan' || $nama === 'aturKas' || $nama === 'tutupBuku') jagaKas($user, $nama, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
@@ -302,7 +302,39 @@ function perluSetujuKas(array $t, array $atur): bool {
 }
 function kasSah(array $t): bool { $s = $t['status'] ?? 'sah'; return $s === 'sah' || $s === ''; }
 
+/** Bulan ("2026-09") yang bukunya sedang tertutup. */
+function bulanTertutup(): array {
+  $t = bacaKoleksi('tutupBuku')['isi'];
+  $hasil = [];
+  foreach ((is_array($t) ? $t : []) as $x) {
+    if (!empty($x['bulan']) && empty($x['dibuka'])) $hasil[$x['bulan']] = true;
+  }
+  return $hasil;
+}
+
 function jagaKas(array $user, string $nama, $isiBaru): void {
+  /* Tutup buku: Bendahara hanya boleh MENAMBAH penutupan; yang sudah ada
+     tak boleh ia ubah atau buang. Membuka kembali adalah hak Ketua, dan
+     Ketua pun hanya boleh mengisi `dibuka` — tak menutup bulan sendiri. */
+  if ($nama === 'tutupBuku') {
+    $lama = bacaKoleksi('tutupBuku')['isi'];
+    $lama = is_array($lama) ? $lama : [];
+    $baru = is_array($isiBaru) ? $isiBaru : [];
+    $petaBaru = [];
+    foreach ($baru as $x) { if (!empty($x['id'])) $petaBaru[$x['id']] = $x; }
+    $bolehBuka = bolehkah($user, 'keuangan.approve');
+    $bolehTutup = bolehkah($user, 'keuangan.manage');
+    foreach ($lama as $x) {
+      $b = $petaBaru[$x['id'] ?? ''] ?? null;
+      if ($b === null) galat('Catatan tutup buku tidak dapat dihapus.', 403);
+      if ($b == $x) continue;
+      $a2 = $x; $b2 = $b; unset($a2['dibuka'], $b2['dibuka']);
+      if ($a2 != $b2 || !$bolehBuka) galat('Buku yang sudah ditutup hanya dapat dibuka kembali oleh Ketua Umum.', 403);
+    }
+    if (count($baru) > count($lama) && !$bolehTutup) galat('Menutup buku adalah tugas Bendahara.', 403);
+    return;
+  }
+
   $bolehCatat   = bolehSalahSatu($user, $nama === 'keuangan' ? ['keuangan.manage'] : ['keuangan.akun']);
   $bolehSetuju  = bolehkah($user, 'keuangan.approve');
   $lama = bacaKoleksi($nama)['isi'];
@@ -320,6 +352,29 @@ function jagaKas(array $user, string $nama, $isiBaru): void {
   if (!is_array($isiBaru)) return;
   $petaLama = [];
   foreach ((is_array($lama) ? $lama : []) as $t) { if (isset($t['id'])) $petaLama[$t['id']] = $t; }
+
+  /* Bulan yang bukunya ditutup terkunci bagi siapa pun: tak ada transaksi
+     yang boleh masuk, keluar, atau berubah nilainya di sana. Yang
+     dibandingkan hanya kolom yang menentukan uang — mengganti nama
+     kategori, misalnya, tetap boleh merambat ke transaksi lama. */
+  $tutup = bulanTertutup();
+  if ($tutup) {
+    $uang = ['jenis', 'rp', 'egp', 'akunId', 'akunTujuanId', 'rpTujuan', 'egpTujuan', 'tanggal', 'status'];
+    $inti = fn(array $t) => array_map(fn($k) => (string) ($t[$k] ?? ''), $uang);
+    $bulan = fn(array $t) => substr((string) ($t['tanggal'] ?? ''), 0, 7);
+    $terlihat = [];
+    foreach ($isiBaru as $t) {
+      if (!is_array($t)) continue;
+      $id = $t['id'] ?? ''; $terlihat[$id] = true;
+      $a = $petaLama[$id] ?? null;
+      if ($a !== null && $inti($a) === $inti($t)) continue;
+      if (isset($tutup[$bulan($t)]) || ($a !== null && isset($tutup[$bulan($a)])))
+        galat('Buku bulan ' . ($a !== null && isset($tutup[$bulan($a)]) ? $bulan($a) : $bulan($t)) . ' sudah ditutup. Minta Ketua Umum membukanya kembali.', 403);
+    }
+    foreach ($petaLama as $id => $a) {
+      if (!isset($terlihat[$id]) && isset($tutup[$bulan($a)])) galat('Buku bulan ' . $bulan($a) . ' sudah ditutup.', 403);
+    }
+  }
 
   /* Yang hanya berwenang menyetujui (Ketua) tak boleh menambah, membuang,
      atau mengubah transaksi — selain memutuskan yang sedang menunggu. */

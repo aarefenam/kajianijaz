@@ -229,6 +229,7 @@ const IZIN_KOLEKSI = {
   akunKas         : ['keuangan.akun'],
   kategoriKeuangan: ['keuangan.akun'],
   aturKas         : ['keuangan.akun', 'keuangan.approve'],
+  tutupBuku       : ['keuangan.manage', 'keuangan.approve'],
   pesan           : ['pesan.read'],
   surat           : ['surat.manage'],
   sertifikat      : ['sertifikat.manage'],
