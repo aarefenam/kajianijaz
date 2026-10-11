@@ -463,6 +463,8 @@ const MENU = [
   { id: 'atur-web',     label: 'Pengaturan Website', ikon: I.gerigi,   izin: ['mediaweb.manage'] },
   { id: 'akun-web',     label: 'Manajemen User',     ikon: I.orang,    izin: ['user.view'] },
   { id: 'kalender',     label: 'Kalender Konten',    ikon: I.kalender, izin: ['mediaweb.manage'], tersembunyi: true },
+  { id: 'tugas-web',    label: 'Tugas Tim',          ikon: I.cekBulat, izin: ['mediaweb.manage'], tersembunyiBila: () => !tugas(),
+    lonceng: () => perluMedia().tugasLewat.length },
 
   /* --- ruang kerja PJ Koordinator Kajian --- */
   { id: 'jadwal-kajian', label: 'Jadwal Kajian',   ikon: I.kalender,  izin: ['koordinator.manage'] },
@@ -771,6 +773,7 @@ const MENU_MEDIAWEB = [
   { id: 'sosmed', label: 'Rencana Posting' },
   { id: 'desain-web' },
   { id: 'kalender', tersembunyi: false },
+  { id: 'tugas-web' },
   { grup: 'Pantau' },
   { id: 'pengunjung' },
   { id: 'komentar', label: 'Kotak Masuk' },
@@ -6503,6 +6506,9 @@ function antreanMedia() {
     { rute: 'video', ikon: I.videoIk, judul: 'Video Terlewat', n: p.videoLewat.length,
       satuan: 'video lewat tanggal tayangnya', kosong: 'Tidak ada video yang terlewat',
       rinci: p.videoLewat[0] && `${p.videoLewat[0].judul} · ${tgl(p.videoLewat[0].tanggal)}` },
+    { rute: 'tugas-web', ikon: I.cekBulat, judul: 'Tugas Lewat Tenggat', n: p.tugasLewat.length,
+      satuan: 'tugas tim belum selesai', kosong: 'Tidak ada tugas yang terlambat',
+      rinci: p.tugasLewat[0] && `${p.tugasLewat[0].judul}${p.tugasLewat[0].userId ? ` — ${Store.namaUser(p.tugasLewat[0].userId)}` : ''}` },
     { rute: 'sosmed', ikon: I.simpul, judul: 'Posting Terlewat', n: p.postingLewat.length,
       satuan: 'posting lewat tanggalnya, belum ditandai terbit', kosong: 'Tidak ada posting yang terlewat',
       rinci: p.postingLewat[0] && `${p.postingLewat[0].judul} · ${p.postingLewat[0].platform}` },
@@ -6583,7 +6589,7 @@ function dasborMediaWeb() {
   /* --- baris 2: tugas · media · pintasan --- */
   const baris2 = el('<div class="mw-baris"></div>');
 
-  const tug = panelMW('Tugas Saya', I.cekBulat, null, null);
+  const tug = panelMW('Tugas Saya', I.cekBulat, 'Lihat Semua', () => bukaModul('tugas-web'));
   const tugasSaya = d.tugas.filter((t) => t.userId === U.id || !t.userId);
   const daftarTugas = (tugasSaya.length ? tugasSaya : d.tugas).slice(0, 5);
   if (!daftarTugas.length) tug.isi.appendChild(el(`<div class="kosong-erp" style="padding:26px">${I.kotak}<p>Tidak ada tugas</p></div>`));
@@ -6711,7 +6717,8 @@ Object.assign(MODUL, {
     kolom: [
       { l: 'Judul Posting', isi: (x) => `<b>${esc(x.judul)}</b>` },
       { l: 'Platform', isi: (x) => `<span class="lencana l-abu">${esc(x.platform)}</span>` },
-      { l: 'Tanggal', kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
+      { l: 'Penanggung Jawab', isi: (x) => esc(x.userId ? namaPendek(x.userId) : '—') },
+      { l: 'Tanggal', kelas: 'utuh', isi: (x) => `${tgl(x.tanggal)}${x.status !== 'terbit' && x.tanggal && x.tanggal < nowTanggal() ? ' <span class="lencana l-merah">terlewat</span>' : ''}` },
       { l: 'Interaksi', kelas: 'utuh', isi: (x) => Number(x.interaksi || 0).toLocaleString('id-ID') },
       { l: 'Status', isi: (x) => lencanaMW(x.status) },
       { l: 'Materi', isi: () => '', pasang: selGambar('gambar', 'judul') },
@@ -6721,7 +6728,9 @@ Object.assign(MODUL, {
       { k: 'platform', l: 'Platform', jenis: 'pilih', bawaan: 'Instagram',
         pilihan: ['Instagram', 'Facebook', 'Twitter', 'TikTok', 'Telegram'].map((v) => ({ v, l: v })) },
       { k: 'tanggal', l: 'Tanggal Tayang', jenis: 'tanggal', wajib: true },
-      { k: 'status', l: 'Status', jenis: 'pilih', bawaan: 'draft', pilihan: pilihanStatusMW(['draft', 'dijadwalkan', 'terbit']) },
+      { k: 'userId', l: 'Penanggung Jawab', jenis: 'pilih', pilihan: () => [{ v: '', l: '— belum ditentukan —' }, ...pilihAnggota()] },
+      { k: 'status', l: 'Status', jenis: 'pilih', bawaan: 'draft', pilihan: pilihanStatusMW(['draft', 'dijadwalkan', 'terbit']),
+        bantu: 'Papan rencana: mengunggahnya tetap dilakukan di platformnya. Tandai Terbit sesudah benar-benar diunggah.' },
       { k: 'interaksi', l: 'Jumlah Interaksi', jenis: 'angka', ph: '0',
         bantu: 'Disalin dari statistik platformnya — prototipe ini tidak tersambung ke API media sosial.' },
       { k: 'isi', l: 'Naskah Unggahan', jenis: 'area', ph: 'Teks yang akan diunggah.' },
@@ -6745,6 +6754,29 @@ Object.assign(MODUL, {
         pilihan: ['Foto', 'Grafis', 'Ilustrasi', 'Logo'].map((v) => ({ v, l: v })) },
       { k: 'tanggal', l: 'Tanggal', jenis: 'tanggal', wajib: true },
       { k: 'berkas', l: 'Berkas', jenis: 'gambar', bantu: 'Dikecilkan otomatis agar penyimpanan tetap lapang.' },
+    ],
+  }),
+
+  'tugas-web': modulMW('tugas', {
+    judul: 'Tugas Tim', satuan: 'Tugas',
+    sub: 'Pekerjaan tim media & website beserta penanggung jawab dan tenggatnya.',
+    sumber: () => [...Store.db.tugas].sort((a, b) => Number(a.selesai) - Number(b.selesai) || String(a.tenggat).localeCompare(String(b.tenggat))),
+    cari: (x) => `${x.judul} ${Store.namaUser(x.userId)}`, tajuk: (x) => x.judul,
+    bawaanBaru: () => ({ selesai: false }),
+    kelasBaris: (x) => (x.selesai ? 'baris-rampung' : ''),
+    kolom: [
+      { l: 'Tugas', isi: (x) => `<b>${esc(x.judul)}</b>` },
+      { l: 'Penanggung Jawab', isi: (x) => (x.userId ? selAnggota(Store.getUser(x.userId)) : '<span class="lencana l-merah">belum ditunjuk</span>') },
+      { l: 'Prioritas', isi: (x) => `<span class="lencana ${PRIORITAS[x.prioritas]?.c || 'l-abu'}">${esc(PRIORITAS[x.prioritas]?.l || x.prioritas || '—')}</span>` },
+      { l: 'Tenggat', kelas: 'utuh', isi: (x) => `${x.tenggat ? tgl(x.tenggat) : '—'}${!x.selesai && x.tenggat && x.tenggat < nowTanggal() ? ' <span class="lencana l-merah">terlewat</span>' : ''}` },
+      { l: 'Status', isi: (x) => (x.selesai ? '<span class="lencana l-hijau">Selesai</span>' : '<span class="lencana l-kuning">Berjalan</span>') },
+    ],
+    aksiLain: [{ ikon: I.cek, judul: 'Tandai selesai / belum', klik: (x) => { if (aman(() => Store.centangTugas(U, x.id, !x.selesai))) gambar(); } }],
+    form: [
+      { k: 'judul', l: 'Tugas', wajib: true, ph: 'Unggah dokumentasi kajian pekan ini' },
+      { k: 'userId', l: 'Penanggung Jawab', jenis: 'pilih', pilihan: () => [{ v: '', l: '— belum ditentukan —' }, ...pilihAnggota()] },
+      { k: 'prioritas', l: 'Prioritas', jenis: 'pilih', bawaan: 'sedang', pilihan: Object.entries(PRIORITAS).map(([v, x]) => ({ v, l: x.l })) },
+      { k: 'tenggat', l: 'Tenggat', jenis: 'tanggal', wajib: true },
     ],
   }),
 
@@ -6799,7 +6831,7 @@ Object.assign(MODUL, {
 /* ---------------- halaman ----------------
    Modul di atas didaftarkan setelah gelung pendaftaran HAL berjalan,
    jadi rutenya harus dipasang sendiri di sini. */
-['agenda-event', 'sosmed', 'galeri', 'desain-web', 'video'].forEach((nama) => {
+['agenda-event', 'sosmed', 'galeri', 'desain-web', 'video', 'tugas-web'].forEach((nama) => {
   HAL[nama] = () => halamanOrg(nama);
   HAL[nama].judul = () => [MODUL[nama].judul, MODUL[nama].sub];
 });

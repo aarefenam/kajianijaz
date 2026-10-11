@@ -364,6 +364,15 @@ serta keuangan. Ketua membacanya dari tab *Buku* di Pantau Divisi.
 
 ### Ruang kerja PJ Media & Website
 
+Sidebarnya disusun dari menyunting sampai memantau: **Website** (Konten
+Halaman, Tema & Identitas, Pengajuan Saya), **Publikasi** (Agenda, Video,
+Galeri, Artikel Terbit), **Media Sosial** (Rencana Posting, Desain, Kalender
+Konten, Tugas Tim), dan **Pantau** (Pengunjung, Kotak Masuk, SEO). Dasbor
+dibuka dengan antrean: pengajuan yang ditolak beserta alasannya, perubahan
+draft yang belum diajukan, pesan belum dibaca, serta agenda, video, posting,
+dan tugas yang terlewat. **Tugas Tim** punya halamannya sendiri — penanggung
+jawab, prioritas, tenggat — dan tiap rencana posting berpenanggung jawab.
+
 **SEO dipasang server, bukan JavaScript.** Isi website dirender di peramban,
 sehingga mesin pencari dan pratinjau tautan (WhatsApp, Telegram) dulu hanya
 melihat judul statis tiap berkas — dan halaman SEO di ERP tidak dibaca apa pun.

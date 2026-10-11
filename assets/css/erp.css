@@ -1852,3 +1852,6 @@ b.perlu { color: var(--e-merah); }
 .t-org tr.baris-dibuka td { background: rgba(140,198,63,.07); }
 
 .bk-saya-judul { padding: 12px 20px 6px; font-size: 12.6px; font-weight: 700; color: var(--e-abu); border-top: 1px solid var(--e-garis); }
+
+.t-org tr.baris-rampung td { color: var(--e-abu); }
+.t-org tr.baris-rampung td b { text-decoration: line-through; font-weight: 600; }
