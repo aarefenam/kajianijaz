@@ -371,6 +371,8 @@ const MENU = [
   { id: 'evaluasi',    label: 'Evaluasi & Tindak Lanjut',     ikon: I.obrolan, izin: ['organisasi.manage'] },
   { id: 'laporan',     label: 'Laporan & Ringkasan',          ikon: I.bagan,   izin: ['organisasi.report'] },
   { id: 'pantau-divisi', label: 'Pantau Divisi',              ikon: I.ukur,    izin: ['organisasi.manage'] },
+  { id: 'persetujuan-kas', label: 'Persetujuan Pengeluaran',  ikon: I.uang,    izin: ['keuangan.approve'],
+    lonceng: () => Store.db.keuangan.filter((t) => t.status === 'menunggu').length },
   /* Tab Pantau Divisi — tak pernah tampil sendiri di sidebar. */
   { id: 'pantau-kajian', label: 'Kajian',       ikon: I.kalender, izin: ['organisasi.manage'], tersembunyi: true },
   { id: 'pantau-kas',    label: 'Kas & Saldo',  ikon: I.uang,     izin: ['organisasi.manage'], tersembunyi: true },
@@ -470,7 +472,9 @@ const MENU = [
   { id: 'masuk-internal',  label: 'Pemasukan Internal',  ikon: I.masukKas,   izin: ['bendahara.manage'] },
   { id: 'iuran-anggota',   label: 'Iuran per Anggota',   ikon: I.grup,       izin: ['bendahara.manage'] },
   { id: 'masuk-eksternal', label: 'Pemasukan Eksternal', ikon: I.hadiah,     izin: ['bendahara.manage'] },
-  { id: 'pengeluaran',     label: 'Pengeluaran',         ikon: I.keluarKas,  izin: ['bendahara.manage'] },
+  { id: 'pengeluaran',     label: 'Pengeluaran',         ikon: I.keluarKas,  izin: ['bendahara.manage'],
+    lonceng: () => Store.db.keuangan.filter((t) => t.status === 'ditolak').length },
+  { id: 'transfer-kas',    label: 'Transfer & Tukar',    ikon: I.timbang,    izin: ['bendahara.manage'] },
   { id: 'saldo',           label: 'Saldo Keseluruhan',   ikon: I.timbang,    izin: ['bendahara.manage'] },
   { id: 'laporan-kas',     label: 'Laporan Keuangan',    ikon: I.dok,        izin: ['keuangan.report'], tersembunyiBila: () => !ruangBendahara() },
   { grup: 'Pengaturan', izin: ['bendahara.manage'] },
@@ -538,6 +542,7 @@ const MENU_KETUA = [
   { id: 'kartu-saya' },
   { grup: 'Putuskan' },
   { id: 'pengajuan', label: 'Persetujuan Website' },
+  { id: 'persetujuan-kas' },
   { id: 'artikel',   label: 'Tinjau Artikel' },
   { id: 'pesan' },
   { grup: 'Pantau' },
@@ -623,6 +628,7 @@ const MENU_BENDAHARA = [
   { id: 'masuk-eksternal' },
   { grup: 'Keluarkan' },
   { id: 'pengeluaran' },
+  { id: 'transfer-kas' },
   { grup: 'Periksa' },
   { id: 'saldo', label: 'Saldo & Akun' },
   { grup: 'Laporkan' },
@@ -1067,7 +1073,7 @@ const dasborUmum = () => {
   if (RBAC.can(U, 'pesan.read'))
     stat.push({ ik: I.surat, n: d.pesan.filter((p) => !p.dibaca).length, l: 'Pesan belum dibaca', w: 'rgba(229,83,75,.12)', wc: '#B23E37' });
   if (RBAC.can(U, 'keuangan.report')) {
-    const saldo = d.keuangan.reduce((s, t) => s + (t.jenis === 'masuk' ? 1 : -1) * Number(t.rp || 0), 0);
+    const saldo = Store.kasSah().reduce((s, t) => s + (t.jenis === 'masuk' ? 1 : t.jenis === 'keluar' ? -1 : 0) * Number(t.rp || 0), 0);
     stat.push({ ik: I.uang, n: rp(saldo), l: 'Saldo kas organisasi', w: 'rgba(140,198,63,.16)', wc: '#4A7A1E', kecil: true });
   }
   if (!stat.length)
@@ -2317,7 +2323,7 @@ HAL.surat.judul = () => ['Arsip Surat', 'Administrasi persuratan organisasi.'];
    KEUANGAN
    ============================================================ */
 HAL.keuangan = () => {
-  const d = Store.db.keuangan;
+  const d = Store.kasSah().filter((t) => t.jenis !== 'transfer');
   const masuk = d.filter((t) => t.jenis === 'masuk').reduce((s, t) => s + Number(t.rp || 0), 0);
   const keluar = d.filter((t) => t.jenis === 'keluar').reduce((s, t) => s + Number(t.rp || 0), 0);
   const bisa = RBAC.can(U, 'keuangan.manage');
@@ -2984,6 +2990,7 @@ function bukaModul(nama, lanjut) {
    hidup di satu tempat saja agar keduanya tak pernah menyimpang. */
 function hapusOrg(nama, x) {
   const m = MODUL[nama];
+  if (m.dialogHapus) return m.dialogHapus(x);
   konfirmasi(
     `Hapus data ${m.satuan.toLowerCase()}`,
     `"${m.tajuk(x).slice(0, 70)}" akan dihapus dari daftar.`,
@@ -3079,13 +3086,13 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
       tb.appendChild(tr);
       return;
     }
-    const tr = el(`<tr>
+    const tr = el(`<tr class="${esc(m.kelasBaris?.(b.x) || '')}">
       <td class="kol-no">${b.no}</td>
       ${kolom.map((c) => `<td class="${c.kelas || ''}${c.tengah ? ' kol-tengah' : ''}">${c.isi(b.x)}</td>`).join('')}
       ${aksi ? `<td class="kol-aksi${m.aksiLain ? ' lebar' : ''}"><div class="sel-aksi">
         ${(m.aksiLain || []).map((a, i) => `<button class="ikon-aksi" data-lain="${i}" title="${esc(a.judul)}" ${bisa ? '' : 'disabled'}>${a.ikon}</button>`).join('')}
         <button class="ikon-aksi sunting" title="Sunting" ${bisa ? '' : 'disabled'}>${I.sunting}</button>
-        <button class="ikon-aksi hapus" title="Hapus" ${bisa ? '' : 'disabled'}>${I.hapus}</button>
+        <button class="ikon-aksi hapus" title="${esc(m.judulHapus || 'Hapus')}" ${bisa ? '' : 'disabled'}>${I.hapus}</button>
       </div></td>` : ''}
     </tr>`);
 
@@ -3100,7 +3107,7 @@ function tabelOrg(nama, { pratinjau = false, aksi = true, saring = '' } = {}) {
   /* Hanya di halaman penuh: kartu dasbor menyembunyikan sebagian besar
      barisnya, dan memilih dari daftar yang terpangkas berarti menghapus
      tanpa melihat. */
-  if (!pratinjau && aksi && bisa) {
+  if (!pratinjau && aksi && bisa && !m.tanpaPilih) {
     pasangPilih(bungkus, semua, {
       satuan: `data ${m.satuan.toLowerCase()}`,
       hapus: (x) => (m.hapus ? m.hapus(x) : Store.hapusKoleksi(U, m.koleksi || nama, x.id)),
@@ -3169,7 +3176,11 @@ function antreanKetua() {
   const menunggu = Store.db.pengajuan.filter((p) => p.status === 'menunggu');
   const naskah = Store.db.artikel.filter((a) => a.status === 'review');
   const pesan = Store.db.pesan.filter((p) => !p.dibaca);
+  const kasTunggu = Store.db.keuangan.filter((t) => t.status === 'menunggu');
   return kartuAntrean('Menunggu Keputusan Anda', [
+    { rute: 'persetujuan-kas', ikon: I.uang, judul: 'Persetujuan Pengeluaran', n: kasTunggu.length,
+      satuan: 'pengeluaran menunggu', kosong: 'Tidak ada pengeluaran menunggu',
+      rinci: kasTunggu[0] && `${kasTunggu[0].sumber || kasTunggu[0].kategori} — ${Store.nominalGabung(kasTunggu[0])}` },
     { rute: 'pengajuan', ikon: I.cek, judul: 'Persetujuan Website', n: menunggu.length,
       satuan: 'pengajuan menunggu', kosong: 'Tidak ada pengajuan menunggu',
       rinci: menunggu[0] && `${menunggu[0].jumlahPerubahan} perubahan dari ${menunggu[0].olehNama}` },
@@ -7012,7 +7023,9 @@ const rpFmt = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 const egpFmt = (n) => 'EGP ' + Number(n || 0).toLocaleString('id-ID');
 
 const jumlahKas = (daftar, kunci) => daftar.reduce((s, t) => s + Number(t[kunci] || 0), 0);
-const kasBulan = (b) => Store.db.keuangan.filter((t) => t.tanggal.startsWith(b));
+/* Seluruh hitungan memakai transaksi SAH saja: yang menunggu, ditolak,
+   atau dibatalkan tetap tampil di daftarnya tetapi tak ikut dijumlah. */
+const kasBulan = (b) => Store.kasSah().filter((t) => t.tanggal.startsWith(b));
 const arusKas = (arus) => Store.db.keuangan.filter((t) => t.arus === arus)
   .sort((a, b) => b.tanggal.localeCompare(a.tanggal));
 const kasKeluar = () => Store.db.keuangan.filter((t) => t.jenis === 'keluar')
@@ -7048,7 +7061,20 @@ function antreanBendahara() {
   const menunggak = aktif.filter((u) => Store.iuranAnggota(u.id, bulan).status !== 'lunas');
   const minus = Store.db.akunKas.map((a) => ({ a, s: Store.saldoAkun(a.id) })).filter((x) => x.s.rp < 0 || x.s.egp < 0);
   const tanpaKat = Store.db.keuangan.filter((t) => t.jenis !== 'transfer' && !t.kategoriId);
+  const keluar = Store.db.keuangan.filter((t) => t.jenis === 'keluar');
+  const ditolak = keluar.filter((t) => t.status === 'ditolak');
+  const tunggu = keluar.filter((t) => t.status === 'menunggu');
+  const tanpaBukti = keluar.filter((t) => (t.status === 'menunggu' || Store.kasSahkah(t)) && !t.bukti && Store.dicatatHariIni(t) === false && t.dibuat);
   return kartuAntrean('Perlu Ditindak', [
+    { rute: 'pengeluaran', ikon: I.peringatan, judul: 'Ditolak Ketua', n: ditolak.length,
+      satuan: 'pengeluaran perlu diperbaiki atau dibatalkan', kosong: 'Tidak ada pengeluaran yang ditolak',
+      rinci: ditolak[0] && `${ditolak[0].sumber} — ${ditolak[0].persetujuan?.alasan || ''}` },
+    { rute: 'pengeluaran', ikon: I.dokCek, judul: 'Menunggu Persetujuan', n: tunggu.length,
+      satuan: 'pengeluaran belum diputuskan Ketua', kosong: 'Tidak ada pengeluaran yang menunggu',
+      rinci: tunggu[0] && `${tunggu[0].sumber} — ${Store.nominalGabung(tunggu[0])}` },
+    { rute: 'pengeluaran', ikon: I.gambar, judul: 'Pengeluaran Tanpa Bukti', n: tanpaBukti.length,
+      satuan: 'pengeluaran belum berfoto bukti', kosong: 'Semua pengeluaran berbukti',
+      rinci: tanpaBukti[0] && `${tanpaBukti[0].nomor} · ${tanpaBukti[0].sumber}` },
     { rute: 'iuran-anggota', sebelum: () => { saringIuran = { bulan, angkatan: '', status: 'belum' }; },
       ikon: I.grup, judul: `Iuran ${namaBulan(bulan)}`, n: menunggak.length,
       satuan: `dari ${aktif.length} anggota belum lunas`, kosong: 'Semua anggota aktif sudah lunas',
@@ -7163,18 +7189,66 @@ const modulKas = (nama, spec) => ({
      nominal diperiksa agar satu transaksi tidak tercatat nol-nol. */
   simpan: (d) => Store.simpanTransaksi(U, d),
   hapus: (x) => Store.hapusTransaksi(U, x.id),
+  /* Buku kas tidak dihapus massal, dan tombol hapusnya membatalkan. */
+  tanpaPilih: true, judulHapus: 'Batalkan transaksi',
+  dialogHapus: (x) => batalkanKas(x),
+  kelasBaris: (x) => (x.status === 'batal' || x.status === 'ditolak' ? 'kas-coret' : x.status === 'menunggu' ? 'kas-tunggu' : ''),
   pratinjau: { awal: 3, akhir: 1 },
-  cari: (x) => `${x.sumber} ${x.kategori} ${x.ket}`,
+  cari: (x) => `${x.nomor || ''} ${x.sumber} ${x.kategori} ${x.ket}`,
   tajuk: (x) => x.sumber || x.kategori,
   ...spec,
 });
+
+const STATUS_KAS = {
+  menunggu: { l: 'Menunggu Ketua', c: 'l-kuning' }, ditolak: { l: 'Ditolak', c: 'l-merah' }, batal: { l: 'Dibatalkan', c: 'l-abu' },
+};
+/** Lencana status dan keterangannya — alasan batal atau alasan penolakan. */
+const lencanaKas = (x) => {
+  const st = STATUS_KAS[x.status];
+  if (!st) return '';
+  const sebab = x.status === 'batal' ? x.batal?.alasan : x.status === 'ditolak' ? x.persetujuan?.alasan : '';
+  return ` <span class="lencana ${st.c}">${st.l}</span>${sebab ? `<br><span class="sub-sel">${esc(sebab)}</span>` : ''}`;
+};
+const kolomBukti = { l: 'No. Bukti', kelas: 'utuh', isi: (x) => `<span class="nia">${esc(x.nomor || '—')}</span>` };
+const kolomFotoBukti = { l: 'Bukti', penuh: true, isi: () => '', pasang: selGambar('bukti', 'sumber', (x) => x.nomor || '') };
+const medanBukti = { k: 'bukti', l: 'Foto Bukti', jenis: 'gambar',
+  bantu: 'Foto kuitansi, nota, atau bukti transfer. Dikecilkan otomatis ke lebar 1000px.' };
+
+/* Tombol hapus pada buku kas. Transaksi yang dicatat hari ini boleh
+   dihapus — salah ketik yang langsung ketahuan. Selebihnya dibatalkan
+   dengan alasan, dan tetap tampak di buku, dicoret. */
+function batalkanKas(x) {
+  if (x.status === 'batal') return toast('Transaksi ini sudah dibatalkan.', true);
+  const hariIni = Store.dicatatHariIni(x);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A"><b>${esc(x.nomor || '')}</b> · ${esc(x.sumber || x.kategori)} ·
+      ${esc(Store.nominalGabung(x))}</p>
+    <div class="grup" style="margin:0"><label>Alasan pembatalan</label>
+      <textarea data-alasan style="min-height:76px" placeholder="Contoh: tercatat dua kali, salah akun, kegiatan dibatalkan"></textarea>
+      <div class="bantu">Transaksi yang dibatalkan tetap terlihat di buku kas — dicoret dan tidak dihitung dalam saldo maupun laporan.</div></div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    ${hariIni ? '<button class="btn btn-garis" data-hapus style="margin-right:auto" title="Hanya untuk transaksi yang dicatat hari ini">Hapus Permanen</button>' : ''}
+    <button class="btn btn-garis" data-b>Tutup</button><button class="btn btn-merah" data-y>Batalkan Transaksi</button></div>`);
+  modal({ judul: 'Batalkan transaksi', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-y]').onclick = () => {
+    if (aman(() => Store.batalkanTransaksi(U, x.id, isi.querySelector('[data-alasan]').value))) {
+      tutupModal(); toast('Transaksi dibatalkan.'); gambar();
+    }
+  };
+  kaki.querySelector('[data-hapus]')?.addEventListener('click', () => {
+    if (aman(() => Store.hapusTransaksi(U, x.id))) { tutupModal(); toast('Transaksi dihapus.'); gambar(); }
+  });
+}
 
 const kolomNominal = [
   { l: 'Rp', kelas: 'utuh', isi: (x) => rpFmt(x.rp) },
   { l: 'EGP', kelas: 'utuh', isi: (x) => egpFmt(x.egp) },
   { l: 'Akun', isi: (x) => `<span class="lencana l-abu">${esc(namaAkun(x.akunId))}</span>` },
-  { l: 'Keterangan', isi: (x) => esc(x.ket || '—') },
+  { l: 'Keterangan', penuh: true, isi: (x) => esc(x.ket || '—') },
   { l: 'Tanggal', kelas: 'utuh', isi: (x) => tgl(x.tanggal) },
+  kolomFotoBukti,
 ];
 const medanNominal = [
   { k: 'rp', l: 'Nominal Rupiah (Rp)', jenis: 'angka', ph: '0' },
@@ -7183,6 +7257,7 @@ const medanNominal = [
   { k: 'akunId', l: 'Disimpan di', jenis: 'pilih', pilihan: pilihanAkun },
   { k: 'tanggal', l: 'Tanggal', jenis: 'tanggal', wajib: true },
   { k: 'ket', l: 'Keterangan', ph: 'Iuran anggota' },
+  medanBukti,
 ];
 
 Object.assign(MODUL, {
@@ -7196,7 +7271,7 @@ Object.assign(MODUL, {
       { label: 'Terima Iuran', ikon: I.masukKas, klik: () => dialogIuran() },
     ],
     cari: (x) => `${x.sumber} ${x.kategori} ${x.ket} ${Store.getUser(x.userId)?.nia || ''}`,
-    kolom: [{ l: 'Sumber', isi: (x) => `<b>${esc(x.sumber)}</b>${x.userId ? `<br><span class="sub-sel"><span class="nia">${
+    kolom: [kolomBukti, { l: 'Sumber', isi: (x) => `<b>${esc(x.sumber)}</b>${lencanaKas(x)}${x.userId ? `<br><span class="sub-sel"><span class="nia">${
       esc(Store.getUser(x.userId)?.nia || '—')}</span>${x.bulanIuran ? ` · iuran ${esc(namaBulan(x.bulanIuran))}` : ''}</span>` : ''}` }, ...kolomNominal],
     form: [
       { k: 'sumber', l: 'Sumber', wajib: true, ph: 'Angkatan X' },
@@ -7209,7 +7284,7 @@ Object.assign(MODUL, {
     sub: 'Infaq, donasi, dan pemasukan dari luar organisasi.',
     sumber: () => arusKas('eksternal'),
     bawaanBaru: () => ({ jenis: 'masuk', arus: 'eksternal' }),
-    kolom: [{ l: 'Sumber', isi: (x) => `<b>${esc(x.sumber)}</b>` }, ...kolomNominal],
+    kolom: [kolomBukti, { l: 'Sumber', isi: (x) => `<b>${esc(x.sumber)}</b>${lencanaKas(x)}` }, ...kolomNominal],
     form: [
       { k: 'sumber', l: 'Nama Donatur / Sumber', wajib: true, ph: 'Bu Amel' },
       { k: 'kategori', l: 'Kategori', jenis: 'pilih', bawaan: 'Infaq/Donasi', pilihan: () => kategoriUntuk('masuk') },
@@ -7234,9 +7309,12 @@ Object.assign(MODUL, {
       if (rp >= 0 && egp >= 0) return '';
       return `Saldo "${a.nama}" akan menjadi ${rp < 0 ? rpFmt(rp) : egpFmt(egp)}. Periksa akun dan nominalnya — tekan Simpan sekali lagi bila memang benar.`;
     },
-    kolom: [{ l: 'Jenis Pengeluaran', isi: (x) => `<b>${esc(x.sumber || x.kategori)}</b>` }, ...kolomNominal],
+    kolom: [kolomBukti, { l: 'Uraian', isi: (x) => `<b>${esc(x.sumber || x.kategori)}</b>${lencanaKas(x)}<br><span class="sub-sel">${esc(x.kategori || '')}</span>` }, ...kolomNominal],
+    /* Pengeluaran yang perlu disetujui tidak langsung mengurangi saldo. */
+    sesudahSimpan: (d) => { if (Store.perluSetuju({ ...d, jenis: 'keluar' })) toast('Tercatat dan menunggu persetujuan Ketua Umum. Saldo belum berkurang.'); },
     form: [
-      { k: 'sumber', l: 'Jenis Pengeluaran', wajib: true, ph: 'Sewa Sekretariat' },
+      { k: 'sumber', l: 'Uraian Pengeluaran', wajib: true, ph: 'Sewa sekretariat bulan Oktober',
+        bantu: 'Untuk apa uang ini dikeluarkan. Golongannya dipilih pada Kategori.' },
       { k: 'kategori', l: 'Kategori', jenis: 'pilih', bawaan: 'Sewa Sekretariat', pilihan: () => kategoriUntuk('keluar') },
       ...medanNominal,
     ],
@@ -7303,7 +7381,7 @@ Object.assign(MODUL, {
 HAL.saldo = () => {
   const box = el('<div></div>');
   const s = saldoTotal();
-  const semua = Store.db.keuangan;
+  const semua = Store.kasSah();
 
   box.appendChild(el(`<div class="bd-saldo-besar">
     <div class="sisi"><div class="l">Saldo Rupiah</div><div class="n">${rpFmt(s.rp)}</div>
@@ -7394,7 +7472,7 @@ const LAPORAN_KAS = [
 ];
 
 function barisLaporan({ dari, sampai }) {
-  return Store.db.keuangan.filter((t) => t.tanggal >= dari && t.tanggal <= sampai)
+  return Store.kasSah().filter((t) => t.tanggal >= dari && t.tanggal <= sampai)
     .sort((a, b) => a.tanggal.localeCompare(b.tanggal));
 }
 
@@ -7403,16 +7481,16 @@ function unduhLaporan({ dari, sampai, nama }) {
   if (!data.length) return toast('Tidak ada transaksi pada periode itu.', true);
   const b = [['Laporan Keuangan Kajian ' + Store.cms.situs.nama],
     [`Periode ${tgl(dari)} s.d. ${tgl(sampai)}`], [],
-    ['Tanggal', 'Jenis', 'Arus', 'Sumber', 'Kategori', 'Akun', 'Rp', 'EGP', 'Keterangan']];
-  data.forEach((t) => b.push([t.tanggal, t.jenis, t.arus || '-', t.sumber || '', t.kategori,
+    ['No. Bukti', 'Tanggal', 'Jenis', 'Arus', 'Sumber', 'Kategori', 'Akun', 'Rp', 'EGP', 'Keterangan']];
+  data.forEach((t) => b.push([t.nomor || '', t.tanggal, t.jenis, t.arus || '-', t.sumber || '', t.kategori,
     namaAkun(t.akunId), t.rp, t.egp, t.ket || '']));
   const mr = jumlahKas(data.filter((t) => t.jenis === 'masuk'), 'rp');
   const kr = jumlahKas(data.filter((t) => t.jenis === 'keluar'), 'rp');
   const me = jumlahKas(data.filter((t) => t.jenis === 'masuk'), 'egp');
   const ke = jumlahKas(data.filter((t) => t.jenis === 'keluar'), 'egp');
-  b.push([], ['', '', '', '', '', 'Total Pemasukan', mr, me],
-    ['', '', '', '', '', 'Total Pengeluaran', kr, ke],
-    ['', '', '', '', '', 'Selisih', mr - kr, me - ke]);
+  b.push([], ['', '', '', '', '', '', 'Total Pemasukan', mr, me],
+    ['', '', '', '', '', '', 'Total Pengeluaran', kr, ke],
+    ['', '', '', '', '', '', 'Selisih', mr - kr, me - ke]);
   unduhCsv(`laporan-keuangan-${nama}-${dari}.csv`, b);
 }
 
@@ -7473,7 +7551,7 @@ HAL['laporan-kas'] = () => {
   box.appendChild(kartu);
 
   /* buku besar */
-  const semua = [...Store.db.keuangan].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  const semua = [...Store.kasSah()].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
   const bb = el(`<div class="kartu"><div class="kartu-kepala">
     <h3>Buku Besar</h3><span class="hitung">seluruh transaksi</span>
     <div class="kanan"><input class="cari-org" placeholder="Cari sumber atau kategori…" data-cari></div>
@@ -7618,7 +7696,7 @@ HAL['iuran-anggota'] = () => {
   const semua = Store.db.users.filter((u) => u.status === 'aktif' && (!saringIuran.angkatan || u.angkatan === saringIuran.angkatan))
     .sort((x, y) => String(x.nia || '').localeCompare(String(y.nia || '')))
     .map((u) => ({ u, i: Store.iuranAnggota(u.id, bulan),
-      tahun: Store.db.keuangan.filter((t) => t.userId === u.id && String(t.bulanIuran || '').startsWith(tahun)) }));
+      tahun: Store.kasSah().filter((t) => t.userId === u.id && String(t.bulanIuran || '').startsWith(tahun)) }));
   const data = semua.filter((x) => !saringIuran.status || x.i.status === saringIuran.status);
   const jml = (st) => semua.filter((x) => x.i.status === st).length;
 
@@ -7697,12 +7775,218 @@ HAL['iuran-anggota'] = () => {
 };
 HAL['iuran-anggota'].judul = () => ['Iuran per Anggota', 'Siapa sudah membayar, siapa belum, dan nominal iuran bulanan.'];
 
+/* ------------------------------------------------------------
+   TRANSFER & TUKAR — uang berpindah, bukan bertambah atau berkurang
+   ------------------------------------------------------------ */
+const uangDua = (rp, egp) => [Number(rp) ? rpFmt(rp) : '', Number(egp) ? egpFmt(egp) : ''].filter(Boolean).join(' + ') || '—';
+
+function formTransfer(t) {
+  const akun = pilihanAkun();
+  const opsi = (pilih) => akun.map((o) => `<option value="${esc(o.v)}" ${o.v === pilih ? 'selected' : ''}>${esc(o.l)}</option>`).join('');
+  const tukar = !!t && (Number(t.rp) !== Number(t.rpTujuan) || Number(t.egp) !== Number(t.egpTujuan));
+  const isi = el(`<div>
+    <div class="grup"><label>Jenis</label><select data-jenis>
+      <option value="pindah" ${tukar ? '' : 'selected'}>Pindah antar akun — jumlah dan mata uang tetap</option>
+      <option value="tukar" ${tukar ? 'selected' : ''}>Tukar mata uang — yang keluar dan yang tiba berbeda</option></select></div>
+    <div class="grid-form">
+      <div class="grup"><label>Dari Akun</label><select data-asal>${opsi(t?.akunId)}</select><div class="bantu" data-saldo-asal></div></div>
+      <div class="grup"><label>Ke Akun</label><select data-tujuan>${opsi(t?.akunTujuanId || akun[1]?.v)}</select></div>
+    </div>
+    <div class="tf-kotak"><div class="tf-judul">Yang keluar dari akun asal</div>
+      <div class="grid-form">
+        <div class="grup"><label>Rupiah (Rp)</label><input type="number" min="0" step="any" data-rp value="${t?.rp || ''}" placeholder="0"></div>
+        <div class="grup"><label>Pound (EGP)</label><input type="number" min="0" step="any" data-egp value="${t?.egp || ''}" placeholder="0"></div>
+      </div></div>
+    <div class="tf-kotak" data-kotak-tujuan><div class="tf-judul">Yang tiba di akun tujuan</div>
+      <div class="grid-form">
+        <div class="grup"><label>Rupiah (Rp)</label><input type="number" min="0" step="any" data-rpt value="${t?.rpTujuan || ''}" placeholder="0"></div>
+        <div class="grup"><label>Pound (EGP)</label><input type="number" min="0" step="any" data-egpt value="${t?.egpTujuan || ''}" placeholder="0"></div>
+      </div><div class="bantu" data-kurs></div></div>
+    <div class="grid-form">
+      <div class="grup"><label>Tanggal</label><input type="date" data-tanggal value="${esc(t?.tanggal || nowTanggal())}"></div>
+      <div class="grup"><label>Keterangan</label><input data-ket value="${esc(t?.ket || '')}" placeholder="Setor ke bank, tukar di money changer…"></div>
+    </div></div>`);
+  const q = (x) => isi.querySelector(x);
+  const selaras = () => {
+    const pindah = q('[data-jenis]').value === 'pindah';
+    q('[data-kotak-tujuan]').hidden = pindah;
+    if (pindah) { q('[data-rpt]').value = q('[data-rp]').value; q('[data-egpt]').value = q('[data-egp]').value; }
+    const sa = Store.saldoAkun(q('[data-asal]').value);
+    q('[data-saldo-asal]').textContent = `Saldo sekarang: ${rpFmt(sa.rp)} · ${egpFmt(sa.egp)}`;
+    /* Kurs hanya bermakna bila satu mata uang ditukar dengan yang lain. */
+    const rp = Number(q('[data-rp]').value || 0), egp = Number(q('[data-egp]').value || 0);
+    const rpt = Number(q('[data-rpt]').value || 0), egpt = Number(q('[data-egpt]').value || 0);
+    q('[data-kurs]').textContent = egp && rpt && !rp && !egpt ? `Kurs: 1 EGP = ${rpFmt(Math.round(rpt / egp))}`
+      : rp && egpt && !egp && !rpt ? `Kurs: 1 EGP = ${rpFmt(Math.round(rp / egpt))}` : '';
+  };
+  isi.querySelectorAll('select, input[type=number]').forEach((x) => { x.addEventListener('input', selaras); x.addEventListener('change', selaras); });
+  selaras();
+
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
+  modal({ judul: t ? `Sunting ${t.nomor || 'Transfer'}` : 'Transfer atau Tukar', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    selaras();
+    if (aman(() => Store.simpanTransfer(U, { id: t?.id, akunId: q('[data-asal]').value, akunTujuanId: q('[data-tujuan]').value,
+      rp: q('[data-rp]').value, egp: q('[data-egp]').value, rpTujuan: q('[data-rpt]').value, egpTujuan: q('[data-egpt]').value,
+      tanggal: q('[data-tanggal]').value, ket: q('[data-ket]').value.trim() }))) {
+      tutupModal(); toast('Transfer tercatat.'); gambar();
+    }
+  };
+}
+
+HAL['transfer-kas'] = () => {
+  const data = Store.db.keuangan.filter((t) => t.jenis === 'transfer').sort((a, b) => b.tanggal.localeCompare(a.tanggal));
+  const box = el(`<div><div class="notis notis-info">${I.info}<div>
+    <b>Transfer bukan pemasukan dan bukan pengeluaran</b>
+    Memindahkan uang dari kas tunai ke bank, atau menukar pound menjadi rupiah, tidak membuat organisasi bertambah
+    kaya atau miskin. Karena itu ia dicatat di sini — saldo tiap akun ikut berubah, tetapi total pemasukan dan
+    pengeluaran di laporan tidak.
+  </div></div></div>`);
+  const kartu = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Transfer & Tukar</h3><span class="hitung">(${data.length} Data)</span>
+    <div class="kanan"><button class="btn btn-kecil" data-tambah>${I.tambah} Transfer / Tukar</button></div></div></div>`);
+  kartu.querySelector('[data-tambah]').onclick = () => formTransfer(null);
+  if (!data.length) {
+    kartu.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada transfer</p>
+      <small>Catat di sini saat menyetor kas ke bank atau menukar mata uang.</small></div>`));
+  } else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>No. Bukti</th><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Keluar</th><th>Tiba</th>
+        <th>Keterangan</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    const tb = t.querySelector('tbody');
+    data.forEach((x, i) => {
+      const tr = el(`<tr class="${x.status === 'batal' ? 'kas-coret' : ''}"><td class="kol-no">${i + 1}</td>
+        <td class="utuh"><span class="nia">${esc(x.nomor || '—')}</span></td><td class="utuh">${tgl(x.tanggal)}</td>
+        <td>${esc(namaAkun(x.akunId))}</td><td>${esc(namaAkun(x.akunTujuanId))}</td>
+        <td class="utuh">${uangDua(x.rp, x.egp)}</td><td class="utuh">${uangDua(x.rpTujuan, x.egpTujuan)}</td>
+        <td>${esc(x.ket || '—')}${lencanaKas(x)}</td>
+        <td class="kol-aksi"><div class="sel-aksi">
+          <button class="ikon-aksi sunting" title="Sunting" ${x.status === 'batal' ? 'disabled' : ''}>${I.sunting}</button>
+          <button class="ikon-aksi hapus" title="Batalkan transfer" ${x.status === 'batal' ? 'disabled' : ''}>${I.hapus}</button></div></td></tr>`);
+      tr.querySelector('.sunting').onclick = () => formTransfer(x);
+      tr.querySelector('.hapus').onclick = () => batalkanKas(x);
+      tb.appendChild(tr);
+    });
+    kartu.appendChild(t);
+  }
+  box.appendChild(kartu);
+  return box;
+};
+HAL['transfer-kas'].judul = () => ['Transfer & Tukar', 'Pemindahan antar akun dan penukaran mata uang.'];
+
+/* ------------------------------------------------------------
+   PERSETUJUAN PENGELUARAN — milik Ketua Umum
+   ------------------------------------------------------------
+   Bendahara mencatat; Ketua menyetujui. Pengeluaran yang menunggu
+   belum mengurangi saldo. Batasnya diatur di halaman ini juga: nol
+   berarti setiap pengeluaran perlu disetujui.
+   ------------------------------------------------------------ */
+HAL['persetujuan-kas'] = () => {
+  const a = Store.db.aturKas || {};
+  const semua = Store.db.keuangan.filter((t) => t.jenis === 'keluar');
+  const tunggu = semua.filter((t) => t.status === 'menunggu').sort((x, y) => String(x.dibuat || x.tanggal).localeCompare(String(y.dibuat || y.tanggal)));
+  const putus = semua.filter((t) => t.persetujuan).sort((x, y) => String(y.persetujuan.ts).localeCompare(String(x.persetujuan.ts))).slice(0, 15);
+
+  const box = el(`<div><div class="notis notis-hijau">${I.perisai}<div>
+    <b>Pengeluaran sah setelah Anda menyetujuinya</b>
+    Yang menunggu di bawah ini belum mengurangi saldo dan belum masuk laporan. Menolak mengembalikannya kepada
+    Bendahara beserta alasannya. Setiap keputusan tercatat pada log aktivitas.
+  </div></div></div>`);
+
+  const batas = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Batas Persetujuan</h3><span class="hitung">${Number(a.batasSetujuRp) || Number(a.batasSetujuEgp)
+      ? 'pengeluaran di bawah batas langsung sah' : 'semua pengeluaran perlu disetujui'}</span></div>
+    <div class="panel-isi"><div class="fi-atur">
+      <div class="grup"><label>Mulai dari Rupiah (Rp)</label><input type="number" min="0" step="any" data-rp value="${a.batasSetujuRp || ''}" placeholder="0"></div>
+      <div class="grup"><label>Mulai dari Pound (EGP)</label><input type="number" min="0" step="any" data-egp value="${a.batasSetujuEgp || ''}" placeholder="0"></div>
+      <button class="btn btn-kecil" data-simpan>Simpan Batas</button>
+    </div><div class="bantu">Pengeluaran senilai batas ini atau lebih menunggu persetujuan Anda. Dikosongkan berarti
+      setiap pengeluaran, sekecil apa pun, perlu disetujui.</div></div></div>`);
+  batas.querySelector('[data-simpan]').onclick = () => {
+    if (aman(() => Store.aturBatasSetuju(U, { rp: batas.querySelector('[data-rp]').value, egp: batas.querySelector('[data-egp]').value }))) {
+      toast('Batas persetujuan tersimpan.'); gambar();
+    }
+  };
+  box.appendChild(batas);
+
+  const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Menunggu Keputusan</h3><span class="hitung">(${tunggu.length} pengeluaran)</span></div></div>`);
+  if (!tunggu.length) {
+    kartu.appendChild(el(`<div class="kosong-erp">${I.cekBulat}<p>Tidak ada pengeluaran yang menunggu</p></div>`));
+  } else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>No. Bukti</th><th>Tanggal</th><th>Uraian</th><th>Nominal</th><th>Dari Akun</th>
+        <th>Dicatat</th><th>Bukti</th><th>Keputusan</th></tr></thead><tbody></tbody></table></div>`);
+    const tb = t.querySelector('tbody');
+    tunggu.forEach((x, i) => {
+      const sisa = Store.saldoAkun(x.akunId);
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td>
+        <td class="utuh"><span class="nia">${esc(x.nomor || '—')}</span></td><td class="utuh">${tgl(x.tanggal)}</td>
+        <td><b>${esc(x.sumber || x.kategori)}</b><br><span class="sub-sel">${esc([x.kategori, x.ket].filter(Boolean).join(' · '))}</span></td>
+        <td class="utuh"><b>${esc(Store.nominalGabung(x))}</b></td>
+        <td>${esc(namaAkun(x.akunId))}<br><span class="sub-sel">saldo ${rpFmt(sisa.rp)} · ${egpFmt(sisa.egp)}</span></td>
+        <td>${esc(namaPendek(x.oleh))}</td><td data-bukti></td>
+        <td class="utuh"><button class="btn btn-lime btn-kecil" data-setuju>${I.cek} Setujui</button>
+          <button class="btn btn-merah btn-kecil" data-tolak>Tolak</button></td></tr>`);
+      selGambar('bukti', 'sumber', (y) => y.nomor || '')(tr.querySelector('[data-bukti]'), x);
+      tr.querySelector('[data-setuju]').onclick = () => konfirmasi('Setujui pengeluaran',
+        `${x.sumber || x.kategori} sebesar ${Store.nominalGabung(x)} akan sah dan mengurangi saldo ${namaAkun(x.akunId)}.`,
+        () => { if (aman(() => Store.putuskanKas(U, x.id, true, ''))) toast('Pengeluaran disetujui.'); gambar(); }, 'Setujui', false);
+      tr.querySelector('[data-tolak]').onclick = () => {
+        const f = el(`<div class="grup" style="margin:0"><label>Alasan penolakan</label>
+          <textarea data-alasan style="min-height:76px" placeholder="Disampaikan kepada Bendahara"></textarea></div>`);
+        const k = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+          <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-merah" data-y>Tolak Pengeluaran</button></div>`);
+        modal({ judul: `Tolak ${x.nomor || 'pengeluaran'}`, isi: f, kaki: k });
+        k.querySelector('[data-b]').onclick = tutupModal;
+        k.querySelector('[data-y]').onclick = () => {
+          if (aman(() => Store.putuskanKas(U, x.id, false, f.querySelector('[data-alasan]').value))) { tutupModal(); toast('Pengeluaran ditolak.'); gambar(); }
+        };
+      };
+      tb.appendChild(tr);
+    });
+    kartu.appendChild(t);
+  }
+  box.appendChild(kartu);
+
+  if (putus.length) {
+    const r = el(`<div class="kartu"><div class="kartu-kepala"><h3>Keputusan Terakhir</h3><span class="hitung">(${putus.length} terbaru)</span></div>
+      <div class="tabel-bungkus"><table class="t-org"><thead><tr><th class="kol-no">No.</th><th>No. Bukti</th><th>Uraian</th><th>Nominal</th>
+        <th>Keputusan</th><th>Waktu</th></tr></thead><tbody>${putus.map((x, i) => `<tr><td class="kol-no">${i + 1}</td>
+        <td class="utuh"><span class="nia">${esc(x.nomor || '—')}</span></td><td>${esc(x.sumber || x.kategori)}</td>
+        <td class="utuh">${esc(Store.nominalGabung(x))}</td>
+        <td><span class="lencana ${x.persetujuan.setuju ? 'l-hijau' : 'l-merah'}">${x.persetujuan.setuju ? 'Disetujui' : 'Ditolak'}</span>${
+          x.persetujuan.alasan ? `<br><span class="sub-sel">${esc(x.persetujuan.alasan)}</span>` : ''}</td>
+        <td class="utuh">${tglJam(x.persetujuan.ts)}</td></tr>`).join('')}</tbody></table></div></div>`);
+    box.appendChild(r);
+  }
+  return box;
+};
+HAL['persetujuan-kas'].judul = () => ['Persetujuan Pengeluaran', 'Pengeluaran yang menunggu keputusan Anda.'];
+
 HAL['kategori-akun'] = () => {
   const box = el(`<div><div class="notis notis-info">${I.info}<div>
     <b>Akun adalah tempat uang disimpan, bukan akun pengguna</b>
     Satu akun memegang rupiah dan pound sekaligus, sehingga satu setoran berisi keduanya
     tidak perlu dipecah menjadi dua catatan. Saldonya dapat dicocokkan dengan uang yang nyata.
   </div></div></div>`);
+  const p = (Store.db.aturKas || {}).periode || {};
+  const periode = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Periode Kepengurusan</h3><span class="hitung">${p.mulai ? `${tgl(p.mulai)} – ${tgl(p.selesai)} · kode ${esc(Store.kodePeriode(p.mulai, Store.db.aturKas))}` : 'belum ditetapkan — memakai tahun kalender'}</span></div>
+    <div class="panel-isi"><div class="fi-atur">
+      <div class="grup"><label>Mulai</label><input type="date" data-mulai value="${esc(p.mulai || '')}"></div>
+      <div class="grup"><label>Selesai</label><input type="date" data-selesai value="${esc(p.selesai || '')}"></div>
+      <button class="btn btn-kecil" data-simpan>Simpan Periode</button>
+    </div><div class="bantu">Nomor bukti, anggaran, dan laporan tahunan mengikuti masa kepengurusan ini — bukan tahun kalender.
+      Nomor bukti yang sudah terbit tidak berubah.</div></div></div>`);
+  periode.querySelector('[data-simpan]').onclick = () => {
+    if (aman(() => Store.aturPeriode(U, { mulai: periode.querySelector('[data-mulai]').value, selesai: periode.querySelector('[data-selesai]').value }))) {
+      toast('Periode kepengurusan tersimpan.'); gambar();
+    }
+  };
+  box.appendChild(periode);
   box.appendChild(halamanOrg('akun-kas'));
   box.appendChild(el('<div style="height:20px"></div>'));
   box.appendChild(halamanOrg('kategori-kas'));
@@ -7818,9 +8102,10 @@ HAL.laporan = () => {
 
   /* --- 4. keuangan --- */
   if (bisaKas) {
-    const masuk = d.keuangan.filter((t) => t.jenis === 'masuk'), keluar = d.keuangan.filter((t) => t.jenis === 'keluar');
-    const bulan = [...new Set(d.keuangan.map((t) => t.tanggal.slice(0, 7)))].sort().reverse().slice(0, 6);
-    const ku = bagian('4. Keuangan', `${d.keuangan.length} transaksi · rupiah dan pound dicatat terpisah`,
+    const kas = Store.kasSah();
+    const masuk = kas.filter((t) => t.jenis === 'masuk'), keluar = kas.filter((t) => t.jenis === 'keluar');
+    const bulan = [...new Set(kas.map((t) => t.tanggal.slice(0, 7)))].sort().reverse().slice(0, 6);
+    const ku = bagian('4. Keuangan', `${kas.length} transaksi · rupiah dan pound dicatat terpisah`,
       `<div class="panel-isi lap-saldo">
         <div><span>Saldo Rupiah</span><b>${rpFmt(saldo.rp)}</b>
           <small>Masuk ${rpFmt(jumlahKas(masuk, 'rp'))} · Keluar ${rpFmt(jumlahKas(keluar, 'rp'))}</small></div>

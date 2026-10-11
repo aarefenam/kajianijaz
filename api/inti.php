@@ -278,11 +278,80 @@ function periksaTulis(array $user, string $nama, $isiBaru): void {
   }
   if ($izin === ['*']) return;                 // cukup sudah masuk
   if ($nama === 'users') jagaHapusPengguna($user, $isiBaru);
+  if ($nama === 'keuangan' || $nama === 'aturKas') jagaKas($user, $nama, $isiBaru);
   if (bolehSalahSatu($user, $izin)) return;
 
   if ($nama === 'users' && hanyaProfilSendiri($user, $isiBaru)) return;
 
   galat("Role \"{$user['role']}\" tidak berwenang mengubah $nama.", 403);
+}
+
+/* ---------- kas: persetujuan pengeluaran ----------
+   Aturannya sederhana: Bendahara mencatat, Ketua Umum menyetujui.
+   Karena peramban mengirim seluruh koleksi `keuangan`, aturan itu tak
+   dapat dititipkan pada antarmuka — siapa pun yang dapat memanggil API
+   bisa menandai pengeluarannya sendiri "sah". Karena itu ditegakkan di
+   sini, pada selisih antara yang tersimpan dan yang dikirim. */
+
+/** Pengeluaran ini perlu disetujui? Batas 0 berarti semua nominal perlu. */
+function perluSetujuKas(array $t, array $atur): bool {
+  if (($t['jenis'] ?? '') !== 'keluar') return false;
+  $rp = (float) ($t['rp'] ?? 0); $egp = (float) ($t['egp'] ?? 0);
+  return ($rp > 0 && $rp >= (float) ($atur['batasSetujuRp'] ?? 0))
+      || ($egp > 0 && $egp >= (float) ($atur['batasSetujuEgp'] ?? 0));
+}
+function kasSah(array $t): bool { $s = $t['status'] ?? 'sah'; return $s === 'sah' || $s === ''; }
+
+function jagaKas(array $user, string $nama, $isiBaru): void {
+  $bolehCatat   = bolehSalahSatu($user, $nama === 'keuangan' ? ['keuangan.manage'] : ['keuangan.akun']);
+  $bolehSetuju  = bolehkah($user, 'keuangan.approve');
+  $lama = bacaKoleksi($nama)['isi'];
+
+  if ($nama === 'aturKas') {
+    $a = is_array($lama) ? $lama : []; $b = is_array($isiBaru) ? $isiBaru : [];
+    $beda = fn(array $kunci) => array_filter($kunci, fn($k) => ($a[$k] ?? null) != ($b[$k] ?? null));
+    if (!$bolehSetuju && $beda(['batasSetujuRp', 'batasSetujuEgp']))
+      galat('Batas persetujuan pengeluaran hanya dapat diubah Ketua Umum.', 403);
+    if (!$bolehCatat && $beda(['iuranRp', 'iuranEgp', 'periode']))
+      galat('Nominal iuran dan periode kepengurusan diatur Bendahara.', 403);
+    return;
+  }
+
+  if (!is_array($isiBaru)) return;
+  $petaLama = [];
+  foreach ((is_array($lama) ? $lama : []) as $t) { if (isset($t['id'])) $petaLama[$t['id']] = $t; }
+
+  /* Yang hanya berwenang menyetujui (Ketua) tak boleh menambah, membuang,
+     atau mengubah transaksi — selain memutuskan yang sedang menunggu. */
+  if (!$bolehCatat) {
+    if (count($isiBaru) !== count($petaLama)) galat('Ketua Umum tidak mencatat transaksi; hanya menyetujuinya.', 403);
+    foreach ($isiBaru as $t) {
+      $id = $t['id'] ?? null;
+      if ($id === null || !isset($petaLama[$id])) galat('Ketua Umum tidak mencatat transaksi; hanya menyetujuinya.', 403);
+      $a = $petaLama[$id]; $b = $t;
+      unset($a['status'], $a['persetujuan'], $b['status'], $b['persetujuan']);
+      if ($a != $b) galat('Ketua Umum hanya dapat menyetujui atau menolak pengeluaran, bukan mengubah isinya.', 403);
+      if (($petaLama[$id]['status'] ?? 'sah') !== ($t['status'] ?? 'sah')
+          && ($petaLama[$id]['status'] ?? '') !== 'menunggu')
+        galat('Hanya pengeluaran yang sedang menunggu yang dapat diputuskan.', 403);
+    }
+    return;
+  }
+  if ($bolehSetuju) return;       // memegang keduanya: tak dibatasi
+
+  /* Bendahara: pengeluaran yang perlu persetujuan tak boleh ia sahkan
+     sendiri — baik yang baru, yang sedang menunggu, maupun yang sudah
+     sah lalu dinaikkan nominalnya. */
+  $atur = bacaKoleksi('aturKas')['isi'];
+  $atur = is_array($atur) ? $atur : [];
+  foreach ($isiBaru as $t) {
+    if (!is_array($t) || !kasSah($t) || !perluSetujuKas($t, $atur)) continue;
+    $a = $petaLama[$t['id'] ?? ''] ?? null;
+    $tetap = $a && kasSah($a) && ($a['jenis'] ?? '') === 'keluar'
+      && (float) ($t['rp'] ?? 0) <= (float) ($a['rp'] ?? 0)
+      && (float) ($t['egp'] ?? 0) <= (float) ($a['egp'] ?? 0);
+    if (!$tetap) galat('Pengeluaran ini perlu disetujui Ketua Umum lebih dulu.', 403);
+  }
 }
 
 /**

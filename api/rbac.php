@@ -23,7 +23,7 @@ const ROLES = [
     'kajian.manage', 'kajian.attendance', 'kajian.notulensi',
     'organisasi.manage', 'organisasi.report',
     'anggota.manage', 'surat.manage', 'pesan.read',
-    'keuangan.report',
+    'keuangan.report', 'keuangan.approve',
     'user.manage', 'audit.view',
   ],
   'sekretaris' => [
@@ -101,10 +101,13 @@ const IZIN_KOLEKSI = [
   'pendaftaran'      => ['anggota.manage', 'user.manage'],
   'artikel'          => ['artikel.write', 'artikel.review', 'artikel.publish'],
   'kajian'           => ['kajian.manage', 'kajian.attendance', 'kajian.notulensi', 'kajian.materi'],
-  'keuangan'         => ['keuangan.manage'],
+  /* Ketua ikut menulis `keuangan` dan `aturKas`, tetapi hanya untuk
+     menyetujui pengeluaran dan menetapkan batasnya — dipersempit lagi
+     oleh jagaKas() di inti.php. */
+  'keuangan'         => ['keuangan.manage', 'keuangan.approve'],
   'akunKas'          => ['keuangan.akun'],
   'kategoriKeuangan' => ['keuangan.akun'],
-  'aturKas'          => ['keuangan.akun'],
+  'aturKas'          => ['keuangan.akun', 'keuangan.approve'],
   'pesan'            => ['pesan.read'],
   'surat'            => ['surat.manage'],
   'sertifikat'       => ['sertifikat.manage'],

@@ -163,7 +163,6 @@ function migrasiBentuk(tersimpan) {
   if (tersimpan.seo && !tersimpan.seo.domain) tersimpan.seo.domain = 'alijazqurancenter.com';
 
   tanggaliProgram(tersimpan);
-  tautkanKategori(tersimpan);
   lengkapiEvaluasi(tersimpan);
   hubungkanOrang(tersimpan);
   bubuhiIdAnggota(tersimpan);
@@ -578,6 +577,37 @@ function tautkanKategori(tersimpan) {
   });
 }
 
+/* --- nomor bukti kas ---
+   Tiap transaksi bernomor: BKM (kas masuk), BKK (kas keluar), BTR
+   (transfer), lalu kode periode dan nomor urut — "BKK-2627-0014".
+   Periodenya masa kepengurusan yang ditetapkan Bendahara; transaksi di
+   luar masa itu, atau sebelum masa itu ditetapkan, memakai tahunnya. */
+const AWALAN_BUKTI = { masuk: 'BKM', keluar: 'BKK', transfer: 'BTR' };
+function kodePeriode(tanggal, atur) {
+  const p = atur?.periode;
+  const t = String(tanggal || '');
+  if (p?.mulai && p?.selesai && t >= p.mulai && t <= p.selesai) {
+    const a = p.mulai.slice(2, 4), b = p.selesai.slice(2, 4);
+    return a === b ? p.mulai.slice(0, 4) : a + b;
+  }
+  return t.slice(0, 4) || String(new Date().getFullYear());
+}
+function nomorBukti(daftar, jenis, tanggal, atur) {
+  const awalan = `${AWALAN_BUKTI[jenis] || 'BKM'}-${kodePeriode(tanggal, atur)}-`;
+  const tertinggi = (daftar || []).reduce((maks, t) => {
+    const n = String(t.nomor || '');
+    return n.startsWith(awalan) ? Math.max(maks, Number(n.slice(awalan.length)) || 0) : maks;
+  }, 0);
+  return awalan + String(tertinggi + 1).padStart(4, '0');
+}
+/** Transaksi lama dinomori menurut urutan tanggalnya. */
+function nomoriTransaksi(tersimpan) {
+  const semua = tersimpan.keuangan || [];
+  semua.map((t, i) => ({ t, i })).filter((x) => !x.t.nomor)
+    .sort((a, b) => String(a.t.tanggal).localeCompare(String(b.t.tanggal)) || b.i - a.i)
+    .forEach(({ t }) => { t.nomor = nomorBukti(semua, t.jenis, t.tanggal, tersimpan.aturKas); });
+}
+
 /* Evaluasi dahulu berhenti sebagai catatan. Kini ia berstatus dan
    berpenanggung jawab; catatan lama dianggap masih terbuka, sebab tak
    ada yang pernah mencatat bahwa ia sudah ditindaklanjuti. */
@@ -739,6 +769,10 @@ async function muat() {
        `users` — yang pasti ditolak server, dan gagalnya akan tampak
        sebagai galat simpan yang bukan salah siapa pun. */
     if (RBAC.canAny(userAktif(), ['anggota.manage', 'user.manage'])) nomoriAnggota(db);
+    /* Begitu pula buku kas: tautan kategori dan nomor bukti dibubuhkan
+       hanya oleh pencatatnya. Ketua kini boleh menulis `keuangan` untuk
+       menyetujui pengeluaran, dan server menolak perubahan lain darinya. */
+    if (RBAC.can(userAktif(), 'keuangan.manage')) { tautkanKategori(db); nomoriTransaksi(db); }
     jadwalkanKirim();                 // hanya terkirim bila memang ada bedanya
   } else {
     migrasiBentuk(db);
@@ -1507,6 +1541,39 @@ function simpanProfil(user, data) {
   return u;
 }
 
+/* --- status transaksi ---
+   sah      dihitung dalam saldo dan laporan (transaksi lama tanpa status
+            dianggap sah)
+   menunggu pengeluaran yang belum disetujui Ketua Umum — belum dihitung
+   ditolak  pengeluaran yang ditolak — tidak dihitung
+   batal    dibatalkan dengan alasan — tetap tampak, tidak dihitung */
+const kasSahkah = (t) => !t.status || t.status === 'sah';
+const kasSah = () => db.keuangan.filter(kasSahkah);
+
+/** Pengeluaran ini perlu disetujui Ketua? Batas nol berarti semua
+    nominal perlu. Aturan yang sama ditegakkan server di jagaKas(). */
+function perluSetuju(t) {
+  if (t.jenis !== 'keluar') return false;
+  const a = db.aturKas || {};
+  const rp = Number(t.rp || 0), egp = Number(t.egp || 0);
+  return (rp > 0 && rp >= Number(a.batasSetujuRp || 0)) || (egp > 0 && egp >= Number(a.batasSetujuEgp || 0));
+}
+
+const KOLOM_RIWAYAT = ['rp', 'egp', 'akunId', 'tanggal', 'kategori', 'sumber', 'ket', 'akunTujuanId', 'rpTujuan', 'egpTujuan'];
+function catatRiwayat(user, t, baru) {
+  const ubah = {};
+  KOLOM_RIWAYAT.forEach((k) => {
+    if (baru[k] === undefined) return;
+    const a = t[k] ?? '', b = baru[k] ?? '';
+    if (String(a) !== String(b)) ubah[k] = [a, b];
+  });
+  if (Object.keys(ubah).length) t.riwayat = (t.riwayat || []).concat({ ts: nowISO(), oleh: user.id, ubah });
+  return ubah;
+}
+function tolakBilaTerkunci(t) {
+  if (t.status === 'batal') throw new Error('Transaksi yang sudah dibatalkan tidak dapat diubah.');
+}
+
 function simpanTransaksi(user, data) {
   RBAC.assertCan(user, 'keuangan.manage');
   const rapi = { ...data, rp: Number(data.rp || 0), egp: Number(data.egp || 0) };
@@ -1525,17 +1592,119 @@ function simpanTransaksi(user, data) {
   const akun = db.akunKas.find((a) => a.id === (rapi.akunId || lama?.akunId || 'ak1'));
   if (!akun) throw new Error('Akun tujuan tidak ditemukan. Pilih akun yang tersedia.');
   if (!lama && akun.nonaktif) throw new Error(`Akun "${akun.nama}" sudah dinonaktifkan. Pilih akun lain.`);
+
   if (rapi.id) {
-    const t = db.keuangan.find((x) => x.id === rapi.id);
-    if (!t) throw new Error('Transaksi tidak ditemukan.');
-    Object.assign(t, rapi);
-    catat(user, 'keuangan.ubah', t.id, `Mengubah transaksi "${t.sumber || t.kategori}"`);
-  } else {
-    const baru = { id: uid('f'), oleh: user.id, akunId: 'ak1', arus: null, ...rapi };
-    db.keuangan.unshift(baru);
-    catat(user, 'keuangan.catat', baru.id,
-      `${baru.jenis === 'masuk' ? 'Kas masuk' : 'Kas keluar'} ${nominalGabung(baru)} — ${baru.kategori}`);
+    if (!lama) throw new Error('Transaksi tidak ditemukan.');
+    tolakBilaTerkunci(lama);
+    const naik = rapi.rp > Number(lama.rp || 0) || rapi.egp > Number(lama.egp || 0);
+    const ubah = catatRiwayat(user, lama, rapi);
+    Object.assign(lama, rapi);
+    /* Pengeluaran yang nominalnya dinaikkan, atau yang tadinya ditolak
+       lalu diperbaiki, kembali menunggu persetujuan. */
+    if (lama.jenis === 'keluar' && perluSetuju(lama) && (lama.status === 'ditolak' || (kasSahkah(lama) && naik))) {
+      lama.status = 'menunggu';
+      delete lama.persetujuan;
+    }
+    catat(user, 'keuangan.ubah', lama.id, `Mengubah ${lama.nomor || 'transaksi'} "${lama.sumber || lama.kategori}"${
+      Object.keys(ubah).length ? ` (${Object.keys(ubah).join(', ')})` : ''}`);
+    simpan();
+    return lama;
   }
+  const baru = { id: uid('f'), oleh: user.id, akunId: 'ak1', arus: null, dibuat: nowISO(), ...rapi };
+  baru.nomor = nomorBukti(db.keuangan, baru.jenis, baru.tanggal, db.aturKas);
+  baru.status = perluSetuju(baru) ? 'menunggu' : 'sah';
+  db.keuangan.unshift(baru);
+  catat(user, 'keuangan.catat', baru.id,
+    `${baru.jenis === 'masuk' ? 'Kas masuk' : 'Kas keluar'} ${baru.nomor} ${nominalGabung(baru)} — ${baru.kategori}${
+      baru.status === 'menunggu' ? ' (menunggu persetujuan)' : ''}`);
+  simpan();
+  return baru;
+}
+
+/* Transfer memindahkan uang antar akun, atau menukar mata uangnya.
+   Ia bukan pemasukan dan bukan pengeluaran: organisasi tak bertambah
+   kaya atau miskin karenanya. Dulu harus dicatat sebagai pengeluaran
+   plus pemasukan palsu, dan total keduanya ikut menggelembung.
+
+   `rp`/`egp` adalah yang keluar dari akun asal; `rpTujuan`/`egpTujuan`
+   yang tiba di akun tujuan. Pada pemindahan biasa keduanya sama; pada
+   penukaran, yang satu rupiah dan yang lain pound. */
+function simpanTransfer(user, data) {
+  RBAC.assertCan(user, 'keuangan.manage');
+  const angka = (v) => Math.max(0, Number(v || 0));
+  const d = { ...data, jenis: 'transfer', kategori: 'Transfer', arus: null,
+    rp: angka(data.rp), egp: angka(data.egp), rpTujuan: angka(data.rpTujuan), egpTujuan: angka(data.egpTujuan) };
+  const asal = db.akunKas.find((a) => a.id === d.akunId), tujuan = db.akunKas.find((a) => a.id === d.akunTujuanId);
+  if (!asal || !tujuan) throw new Error('Pilih akun asal dan akun tujuannya.');
+  if (!d.rp && !d.egp) throw new Error('Isi nominal yang dipindahkan.');
+  if (!d.rpTujuan && !d.egpTujuan) throw new Error('Isi nominal yang diterima akun tujuan.');
+  const tukar = d.rp !== d.rpTujuan || d.egp !== d.egpTujuan;
+  if (asal.id === tujuan.id && !tukar) throw new Error('Akun asal dan tujuan sama. Pilih akun lain, atau catat sebagai penukaran mata uang.');
+  if (!d.tanggal) throw new Error('Tanggal wajib diisi.');
+  d.sumber = tukar ? `Tukar ${asal.nama}${asal.id === tujuan.id ? '' : ` → ${tujuan.nama}`}` : `${asal.nama} → ${tujuan.nama}`;
+
+  if (d.id) {
+    const t = db.keuangan.find((x) => x.id === d.id && x.jenis === 'transfer');
+    if (!t) throw new Error('Transfer tidak ditemukan.');
+    tolakBilaTerkunci(t);
+    catatRiwayat(user, t, d);
+    Object.assign(t, d);
+    catat(user, 'keuangan.ubah', t.id, `Mengubah transfer ${t.nomor}`);
+    simpan();
+    return t;
+  }
+  if (asal.nonaktif || tujuan.nonaktif) throw new Error('Akun yang dinonaktifkan tidak dapat dipakai untuk transfer baru.');
+  const baru = { id: uid('f'), oleh: user.id, dibuat: nowISO(), status: 'sah', ...d };
+  baru.nomor = nomorBukti(db.keuangan, 'transfer', baru.tanggal, db.aturKas);
+  db.keuangan.unshift(baru);
+  catat(user, 'keuangan.transfer', baru.id, `Transfer ${baru.nomor}: ${baru.sumber} ${nominalGabung(baru)}`);
+  simpan();
+  return baru;
+}
+
+/** Batalkan dengan alasan. Transaksinya tetap di buku — dicoret, tak
+    dihitung — supaya uang yang pernah tercatat tak bisa lenyap begitu saja. */
+function batalkanTransaksi(user, id, alasan) {
+  RBAC.assertCan(user, 'keuangan.manage');
+  const t = db.keuangan.find((x) => x.id === id);
+  if (!t) throw new Error('Transaksi tidak ditemukan.');
+  if (t.status === 'batal') throw new Error('Transaksi ini sudah dibatalkan.');
+  const sebab = String(alasan || '').trim();
+  if (sebab.length < 4) throw new Error('Tulis alasan pembatalannya.');
+  t.statusSebelumBatal = t.status || 'sah';
+  t.status = 'batal';
+  t.batal = { alasan: sebab, oleh: user.id, ts: nowISO() };
+  catat(user, 'keuangan.batal', t.id, `Membatalkan ${t.nomor || 'transaksi'} ${nominalGabung(t)} — ${sebab}`);
+  simpan();
+}
+
+/** Keputusan Ketua Umum atas pengeluaran yang menunggu. */
+function putuskanKas(user, id, setuju, alasan) {
+  RBAC.assertCan(user, 'keuangan.approve');
+  const t = db.keuangan.find((x) => x.id === id);
+  if (!t) throw new Error('Transaksi tidak ditemukan.');
+  if (t.status !== 'menunggu') throw new Error('Pengeluaran ini tidak sedang menunggu keputusan.');
+  const sebab = String(alasan || '').trim();
+  if (!setuju && sebab.length < 4) throw new Error('Tulis alasan penolakannya.');
+  t.status = setuju ? 'sah' : 'ditolak';
+  t.persetujuan = { oleh: user.id, ts: nowISO(), setuju: !!setuju, alasan: sebab };
+  catat(user, setuju ? 'keuangan.setuju' : 'keuangan.tolak', t.id,
+    `${setuju ? 'Menyetujui' : 'Menolak'} ${t.nomor} ${nominalGabung(t)}${sebab ? ` — ${sebab}` : ''}`);
+  simpan();
+}
+function aturBatasSetuju(user, { rp, egp }) {
+  RBAC.assertCan(user, 'keuangan.approve');
+  const bersih = (n) => Math.max(0, Math.round(Number(n) || 0));
+  db.aturKas = { ...(db.aturKas || {}), batasSetujuRp: bersih(rp), batasSetujuEgp: bersih(egp) };
+  catat(user, 'keuangan.batas', 'aturKas', `Menetapkan batas persetujuan pengeluaran Rp ${db.aturKas.batasSetujuRp.toLocaleString('id-ID')} / EGP ${db.aturKas.batasSetujuEgp.toLocaleString('id-ID')}`);
+  simpan();
+}
+function aturPeriode(user, { mulai, selesai }) {
+  RBAC.assertCan(user, 'keuangan.akun');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(mulai || '') || !/^\d{4}-\d{2}-\d{2}$/.test(selesai || '')) throw new Error('Isi tanggal mulai dan selesai masa kepengurusan.');
+  if (selesai <= mulai) throw new Error('Tanggal selesai harus sesudah tanggal mulai.');
+  db.aturKas = { ...(db.aturKas || {}), periode: { mulai, selesai } };
+  catat(user, 'keuangan.periode', 'aturKas', `Menetapkan periode kepengurusan ${mulai} s.d. ${selesai}`);
   simpan();
 }
 
@@ -1560,7 +1729,7 @@ function aturIuran(user, { rp, egp }) {
     membayar dengan salah satu mata uang, bukan keduanya. Bila nominal
     belum ditetapkan, pembayaran berapa pun dianggap lunas. */
 function iuranAnggota(userId, bulan) {
-  const bayar = db.keuangan.filter((t) => t.jenis === 'masuk' && t.userId === userId && t.bulanIuran === bulan);
+  const bayar = kasSah().filter((t) => t.jenis === 'masuk' && t.userId === userId && t.bulanIuran === bulan);
   const rp = bayar.reduce((j, t) => j + Number(t.rp || 0), 0);
   const egp = bayar.reduce((j, t) => j + Number(t.egp || 0), 0);
   const a = db.aturKas || {};
@@ -1683,7 +1852,15 @@ function saldoAkun(idAkun) {
   const a = db.akunKas.find((x) => x.id === idAkun);
   if (!a) return { rp: 0, egp: 0 };
   let rp = a.saldoAwalRp || 0, egp = a.saldoAwalEgp || 0;
-  db.keuangan.filter((t) => t.akunId === idAkun).forEach((t) => {
+  /* Hanya transaksi sah. Transfer mengurangi akun asalnya sebesar yang
+     keluar dan menambah akun tujuannya sebesar yang tiba. */
+  kasSah().forEach((t) => {
+    if (t.jenis === 'transfer') {
+      if (t.akunId === idAkun) { rp -= Number(t.rp || 0); egp -= Number(t.egp || 0); }
+      if (t.akunTujuanId === idAkun) { rp += Number(t.rpTujuan || 0); egp += Number(t.egpTujuan || 0); }
+      return;
+    }
+    if (t.akunId !== idAkun) return;
     const tanda = t.jenis === 'masuk' ? 1 : -1;
     rp += tanda * Number(t.rp || 0);
     egp += tanda * Number(t.egp || 0);
@@ -1691,10 +1868,20 @@ function saldoAkun(idAkun) {
   return { rp, egp };
 }
 
+/** Dicatat hari ini? Hanya itu yang boleh dihapus permanen — untuk salah
+    ketik yang langsung ketahuan. Selebihnya dibatalkan dengan alasan. */
+function dicatatHariIni(t) {
+  if (!t.dibuat) return false;
+  const d = new Date(t.dibuat);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === hariIni();
+}
 function hapusTransaksi(user, id) {
   RBAC.assertCan(user, 'keuangan.manage');
+  const t = db.keuangan.find((x) => x.id === id);
+  if (!t) return;
+  if (!dicatatHariIni(t)) throw new Error('Transaksi ini tidak dicatat hari ini, jadi tidak dihapus. Batalkan dengan alasan.');
   db.keuangan = db.keuangan.filter((x) => x.id !== id);
-  catat(user, 'keuangan.hapus', id, 'Menghapus transaksi');
+  catat(user, 'keuangan.hapus', id, `Menghapus ${t.nomor || 'transaksi'} ${nominalGabung(t)} yang dicatat hari ini`);
   simpan();
 }
 
@@ -2105,6 +2292,7 @@ window.Store = {
   simpanArtikel, ubahStatusArtikel, hapusArtikel,
   simpanKajian, setPresensi, presensiDariKode, setNotulensi, hapusKajian,
   simpanAnggotaKajian, kodeQr, STATUS_PRESENSI, anggotaDariKode, tutupPresensi, toleransiKajian, hariIni,
+  kasSah, kasSahkah, perluSetuju, simpanTransfer, batalkanTransaksi, putuskanKas, aturBatasSetuju, aturPeriode, dicatatHariIni, kodePeriode,
   simpanAkunKas, hapusAkunKas, simpanKategoriKas, hapusKategoriKas, transaksiKategori,
   simpanAnggota, hapusAnggota, dataDiri, simpanDataDiri, terimaPendaftaran, tolakPendaftaran, hapusPendaftaran, kirimPendaftaran, unggahFotoKartu, simpanTransaksi, aturIuran, iuranAnggota, terimaIuran, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,

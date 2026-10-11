@@ -1561,6 +1561,16 @@ tr.bd-total.merah:hover td { background: rgba(229,83,75,.10); }
 input[type="month"].pilih-saring { min-width: 150px; }
 .lp-form { background: #fff; color: var(--e-teks); border-radius: 18px; padding: 18px; }
 
+/* --------- buku kas: status & transfer --------- */
+.t-org tr.kas-coret td { color: var(--e-abu); }
+.t-org tr.kas-coret td b, .t-org tr.kas-coret .utuh { text-decoration: line-through; text-decoration-color: rgba(120,130,125,.7); }
+.t-org tr.kas-coret .lencana, .t-org tr.kas-coret .sub-sel, .t-org tr.kas-coret .nia { text-decoration: none; display: inline-block; }
+.t-org tr.kas-tunggu { background: rgba(240,149,30,.05); }
+.tf-kotak { border: 1px solid var(--e-garis); border-radius: 12px; padding: 12px 14px 2px; margin-bottom: 15px; background: #FAFBFA; }
+.tf-kotak[hidden] { display: none; }
+.tf-judul { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--e-abu); margin-bottom: 10px; }
+.tf-kotak .bantu { margin: -6px 0 12px; font-weight: 700; color: #2C6091; }
+
 /* --------- layar pindai --------- */
 .layar-pindai {
   position: fixed; inset: 0; z-index: 120; background: #0B1F14; color: #fff;
