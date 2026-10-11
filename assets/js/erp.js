@@ -705,6 +705,33 @@ const MENU_ARTIKEL = [
   { id: 'akun' },
 ];
 
+/* ============================================================
+   SIDEBAR PJ BUKU — mengikuti perjalanan sebuah buku
+   ------------------------------------------------------------
+     Proyek   — buku apa, kapan, dan siapa mengerjakannya?
+     Naskah   — tulis, sunting, tata letak.
+     Terbit   — cetak dan edarkan.
+     Keuangan & Arsip — rencana biaya, realisasi, dan dokumennya.
+   Seluruh halamannya mengerjakan proyek yang dipilih di kanan atas.
+   ============================================================ */
+const MENU_BUKU = [
+  { id: 'dasbor' },
+  { id: 'kartu-saya' },
+  { id: 'kajian-saya' },
+  { grup: 'Proyek' },
+  { id: 'buku-perencanaan', label: 'Proyek & Timeline' },
+  { id: 'buku-tugas', label: 'Tim & Tugas' },
+  { grup: 'Naskah' },
+  { id: 'buku-penulisan' },
+  { id: 'buku-editing' },
+  { id: 'buku-layout', label: 'Layout & Desain' },
+  { grup: 'Terbit' },
+  { id: 'buku-produksi' },
+  { grup: 'Keuangan & Arsip' },
+  { id: 'buku-keuangan', label: 'Anggaran & Realisasi' },
+  { id: 'buku-arsip', label: 'Dokumen' },
+];
+
 /* Peran yang sidebarnya disusun menurut tugas. `menu` susunan
    sidebarnya, `tab` halaman bertab beserta modulnya, `alias` alamat
    modul lama yang digantikan. Peran lain memakai MENU apa adanya. */
@@ -712,11 +739,12 @@ const RUANG_TUGAS = {
   ketua     : { menu: MENU_KETUA,      tab: TAB_KETUA,      alias: ALIAS_KETUA },
   sekretaris: { menu: MENU_SEKRETARIS, tab: TAB_SEKRETARIS, alias: { anggota: 'anggota-angkatan', kajian: 'notulen-presensi' } },
   bendahara : { menu: MENU_BENDAHARA,  tab: {},             alias: { keuangan: 'laporan-kas' } },
+  buku      : { menu: MENU_BUKU,       tab: {},             alias: {} },
   artikel   : { menu: MENU_ARTIKEL,    tab: {},             alias: { artikel: 'daftar-artikel' } },
   kajian    : { menu: MENU_KAJIAN,     tab: {},             alias: { 'tugas-kajian': 'jadwal-kajian', notifikasi: 'dasbor', kajian: 'jadwal-kajian' } },
 };
 const tugas = () => (ruangKetua() ? RUANG_TUGAS.ketua : ruangSekretaris() ? RUANG_TUGAS.sekretaris
-  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : ruangRedaksi() ? RUANG_TUGAS.artikel : null);
+  : ruangBendahara() ? RUANG_TUGAS.bendahara : ruangKoordinator() ? RUANG_TUGAS.kajian : ruangRedaksi() ? RUANG_TUGAS.artikel : ruangBuku() ? RUANG_TUGAS.buku : null);
 
 const idTugas = () => new Set([
   ...tugas().menu.map((m) => m.id).filter(Boolean),
@@ -1015,6 +1043,12 @@ function kerangka() {
                levelTersedia().map((l) => `<option ${l === levelAktif() ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></span>
              <button class="btn btn-lime btn-kecil" data-buat-kajian>${I.tambah} Buat Jadwal Kajian</button>
            </div>`
+      : ruangBuku() && Store.db.buku.length
+        ? `<div class="topbar-aksi">
+             <span class="k-tanggal">${I.kalender} ${esc(tglRingkas())}</span>
+             <span class="bungkus-bulan" title="Proyek buku yang sedang dibuka"><select class="pilih-bulan" data-proyek style="max-width:300px">${
+               Store.db.buku.map((b) => `<option value="${esc(b.id)}" ${b.id === bk()?.id ? 'selected' : ''}>${esc(b.judul)}</option>`).join('')}</select></span>
+           </div>`
       : ruangMediaWeb()
         ? `<div class="topbar-aksi">
              <span class="k-tanggal">${I.kalender} ${esc(tglRingkas())}</span>
@@ -1059,6 +1093,7 @@ function kerangka() {
   n.querySelector('[data-angkatan]')?.addEventListener('change', (e) => { aturLingkup(e.target.value); gambar(); });
   n.querySelector('[data-level]')?.addEventListener('change', (e) => { aturLingkup(undefined, e.target.value); gambar(); });
   n.querySelector('[data-buat-kajian]')?.addEventListener('click', () => formKajian(null));
+  n.querySelector('[data-proyek]')?.addEventListener('change', (e) => { bukaProyek(e.target.value); gambar(); });
 
   const tutupSidebar = () => n.querySelector('#sidebar').classList.remove('buka');
   const kunjungi = (id) => { rute = id; location.hash = id; gambar(); tutupSidebar(); };
@@ -4941,7 +4976,19 @@ const TAHAP_BUKU = {
   selesai: 'Selesai',
 };
 
-const bk = () => Store.bukuAktif();
+/* Proyek yang dibuka diingat per peramban. */
+const KUNCI_BUKU = 'erp.bukuDibuka';
+try { Store.bukaBukuProyek(localStorage.getItem(KUNCI_BUKU) || ''); } catch (_) {}
+const bk = () => {
+  /* Data baru tiba sesudah berkas ini dimuat: pilihan tersimpan dipasang
+     ulang selama proyeknya memang ada. */
+  try { const id = localStorage.getItem(KUNCI_BUKU); if (id && Store.bukuAktif()?.id !== id) Store.bukaBukuProyek(id); } catch (_) {}
+  return Store.bukuAktif();
+};
+function bukaProyek(id) {
+  Store.bukaBukuProyek(id);
+  try { localStorage.setItem(KUNCI_BUKU, id); } catch (_) {}
+}
 const lencanaProg = (v) => `<span class="lencana ${PROG_BUKU[v]?.c || 'l-abu'}">${esc(PROG_BUKU[v]?.l || v)}</span>`;
 const rupiah = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 const pound = (n) => 'EGP ' + Number(n || 0).toLocaleString('id-ID');
@@ -4981,6 +5028,41 @@ function tabelBuku(kepala, baris) {
 
 const cekBaca = (on) => `<span class="cek-baca ${on ? 'on' : ''}">${on ? I.cek : ''}</span>`;
 
+/** Yang menuntut tindakan PJ Buku, dari seluruh proyek yang masih berjalan. */
+function perluBuku() {
+  const kini = nowTanggal();
+  const jalan = Store.db.buku.filter((b) => !['arsip', 'terbit', 'dihentikan'].includes(b.status));
+  const dari = (f) => jalan.flatMap((b) => f(b).map((x) => ({ b, x })));
+  return {
+    telatTulis: dari((b) => (b.naskah || []).filter((n) => n.progressTulis !== 'siap' && n.deadline && n.deadline < kini)),
+    siapEdit: dari((b) => (b.naskah || []).filter((n) => n.progressTulis === 'siap' && n.progressEdit !== 'siap')),
+    siapLayout: dari((b) => (b.naskah || []).filter((n) => n.progressEdit === 'siap' && !n.buktiLayout)),
+    telatTerbit: jalan.filter((b) => b.targetTerbit && b.targetTerbit < kini),
+    tanpaTim: jalan.filter((b) => !b.pjUtamaId || !(b.editorIds || []).length),
+  };
+}
+function antreanBuku() {
+  const p = perluBuku();
+  const ke = (rute, daftar) => ({ rute, sebelum: () => { if (daftar[0]) bukaProyek((daftar[0].b || daftar[0]).id); } });
+  const rinci = (d, teks) => d[0] && `${teks(d[0])} — ${d[0].b.judul}`;
+  return kartuAntrean('Perlu Ditindak', [
+    { ...ke('buku-perencanaan', p.telatTerbit), ikon: I.peringatan, judul: 'Target Terbit Terlewat', n: p.telatTerbit.length,
+      satuan: 'proyek melewati target terbitnya', kosong: 'Tidak ada proyek yang melewati target',
+      rinci: p.telatTerbit[0] && `${p.telatTerbit[0].judul} — target ${tgl(p.telatTerbit[0].targetTerbit)}` },
+    { ...ke('buku-penulisan', p.telatTulis), ikon: I.jam, judul: 'Naskah Lewat Tenggat', n: p.telatTulis.length,
+      satuan: 'sub judul belum selesai ditulis', kosong: 'Tidak ada naskah yang terlambat',
+      rinci: rinci(p.telatTulis, (d) => `${d.x.subJudul} (${Store.namaUser(d.x.userId)})`) },
+    { ...ke('buku-editing', p.siapEdit), ikon: I.dokCek, judul: 'Menunggu Disunting', n: p.siapEdit.length,
+      satuan: 'naskah selesai ditulis, belum selesai disunting', kosong: 'Tidak ada naskah yang menunggu disunting',
+      rinci: rinci(p.siapEdit, (d) => d.x.subJudul) },
+    { ...ke('buku-layout', p.siapLayout), ikon: I.layout, judul: 'Menunggu Tata Letak', n: p.siapLayout.length,
+      satuan: 'naskah selesai disunting, belum berbukti layout', kosong: 'Tidak ada naskah yang menunggu tata letak',
+      rinci: rinci(p.siapLayout, (d) => d.x.subJudul) },
+    ...(p.tanpaTim.length ? [{ ...ke('buku-tugas', p.tanpaTim), ikon: I.grup, judul: 'Tim Belum Lengkap', n: p.tanpaTim.length,
+      satuan: 'proyek tanpa PJ utama atau editor', kosong: '', rinci: p.tanpaTim[0].judul }] : []),
+  ]);
+}
+
 function dasborBuku() {
   const b = bk();
   if (!b) {
@@ -4990,12 +5072,13 @@ function dasborBuku() {
   }
 
   const box = el('<div></div>');
+  box.appendChild(antreanBuku());
   const penulisUnik = new Set(b.naskah.map((n) => n.userId)).size;
 
   /* --- empat kartu ringkasan --- */
   box.appendChild(el(`<div class="bk-stat-grid">
     ${[
-      { ik: I.buku,      w: 'rgba(140,198,63,.16)', wc: '#4A7A1E', l: 'Proyek Buku Aktif', n: Store.db.buku.length, s: 'Total proyek' },
+      { ik: I.buku,      w: 'rgba(140,198,63,.16)', wc: '#4A7A1E', l: 'Proyek Dibuka', n: potongJudul(b.judul, 26), s: `dari ${Store.db.buku.length} proyek`, kecil: true },
       { ik: I.alurKerja, w: 'rgba(240,149,30,.15)', wc: '#B87310', l: 'Tahap Berjalan', n: TAHAP_BUKU[b.tahap] || b.tahap, s: 'Tahap saat ini', kecil: true },
       { ik: I.kalender,  w: 'rgba(62,127,184,.14)', wc: '#2C6091', l: 'Total Penulis', n: penulisUnik, s: 'Orang' },
       { ik: I.simpul,    w: 'rgba(124,92,214,.14)', wc: '#5F45AE', l: 'Target Terbit', n: tgl(b.targetTerbit), s: 'Estimasi selesai', kecil: true },

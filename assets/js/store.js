@@ -2761,8 +2761,17 @@ const BAGIAN_BUKU = {
 
 /** Proyek yang sedang dikerjakan. Bila belum ada yang ditandai aktif,
     ambil yang terbaru — supaya halaman tidak pernah kosong tanpa sebab. */
+let bukuTerpilih = '';
+/** Proyek yang sedang DIBUKA di layar. Membuka sebuah proyek tidak
+    mengubah statusnya — beberapa proyek boleh berjalan bersamaan, dan
+    proyek lama dapat ditengok tanpa mengarsipkan yang lain. */
 function bukuAktif() {
-  return db.buku.find((b) => b.status === 'aktif') || db.buku[0] || null;
+  return db.buku.find((b) => b.id === bukuTerpilih)
+    || db.buku.find((b) => b.status === 'aktif') || db.buku[0] || null;
+}
+function bukaBukuProyek(id) {
+  if (db.buku.some((b) => b.id === id)) bukuTerpilih = id;
+  return bukuAktif();
 }
 
 function cariBuku(id) {
@@ -3047,7 +3056,7 @@ window.Store = {
   aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
-  bukuAktif, simpanBuku, aktifkanBuku, hapusBuku,
+  bukuAktif, bukaBukuProyek, simpanBuku, aktifkanBuku, hapusBuku,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
   pindahArtikel, ALUR_ARTIKEL, naskahTugas, dikirimPada, progresTugas, wajibMenulis, capaianBulan,
   simpanPenugasan, tulisDariTugas, usulkanJudul, usulMenunggu, putuskanUsul,
