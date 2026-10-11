@@ -328,9 +328,26 @@ dan namanya tercatat.
 Bendahara, dan Ketua** (`bukuUntuk()`); penulis dan editor tetap menerima
 naskah, tim, dan timeline proyeknya.
 
-**Keuangan Buku** memuat kasaran modal, yaitu *rencana* biaya penerbitan. Uang yang
-benar-benar keluar tetap dicatat Bendahara di Buku Kas; keduanya sengaja tidak
-dicampur agar rencana yang belum tentu terpakai tidak mengotori pembukuan.
+**Stok diturunkan dari empat daftar**: produksi (kegiatan cetak beserta jumlah
+eksemplarnya, masuk stok saat ditandai selesai), distribusi (titipan per
+wilayah), penjualan (satu baris per pembeli), dan setoran. `Store.stokBuku()`
+menghitung dicetak, dititipkan, terjual, dan sisa — keseluruhan dan per
+wilayah — dan aturannya saling mengunci: titipan tak boleh melebihi cetakan,
+penjualan tak boleh melebihi sisa wilayahnya, dan cetakan tak dapat dibatalkan
+bila sudah dititipkan. Harga 0 berarti dibagikan cuma-cuma.
+
+**Uang penjualan sampai ke Bendahara lewat setoran.** PJ Buku memilih
+penjualan yang uangnya diserahkan lalu *mengajukan setoran*; Bendahara
+*menerima*-nya dari halaman Pemasukan Internal, yang mencatat satu pemasukan di
+Buku Kas dan menautkannya (`setoranId`). Status "diterima" karena itu
+diturunkan dari Buku Kas, bukan ditulis PJ Buku — pusat keuangan tetap satu.
+Penjualan yang sudah masuk setoran terkunci; setoran yang belum diterima dapat
+ditarik.
+
+**Anggaran & Realisasi** memuat kasaran modal (*rencana*), pengeluaran yang
+benar-benar tercatat di Buku Kas, harga jual per eksemplar, uang penjualan
+(tercatat, diterima, diajukan, belum disetor), dan titik impas — tiap mata uang
+dihitung sendiri-sendiri, tanpa kurs yang dikira-kira.
 
 ### Ruang kerja PJ Media & Website
 

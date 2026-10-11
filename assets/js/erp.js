@@ -442,7 +442,8 @@ const MENU = [
   { id: 'buku-penulisan',   label: 'Penulisan',             ikon: I.penaKotak,     izin: ['buku.manage'] },
   { id: 'buku-editing',     label: 'Editing',               ikon: I.dokCek,        izin: ['buku.manage'] },
   { id: 'buku-layout',      label: 'Layouting & Desain',    ikon: I.layout,        izin: ['buku.manage'] },
-  { id: 'buku-produksi',    label: 'Produksi & Distribusi', ikon: I.kotakProduksi, izin: ['buku.manage'] },
+  { id: 'buku-produksi',    label: 'Produksi',              ikon: I.kotakProduksi, izin: ['buku.manage'] },
+  { id: 'buku-distribusi',  label: 'Distribusi & Penjualan',ikon: I.simpul,        izin: ['buku.manage'] },
   { id: 'buku-keuangan',    label: 'Keuangan Buku',         ikon: I.uang,          izin: ['buku.anggaran'] },
   { id: 'buku-arsip',       label: 'Dokumen & Arsip',       ikon: I.map,           izin: ['buku.arsip'] },
 
@@ -736,6 +737,7 @@ const MENU_BUKU = [
   { id: 'buku-layout', label: 'Layout & Desain' },
   { grup: 'Terbit' },
   { id: 'buku-produksi' },
+  { id: 'buku-distribusi', lonceng: () => perluBuku().belumSetor.length },
   { grup: 'Keuangan & Arsip' },
   { id: 'buku-keuangan', label: 'Anggaran & Realisasi' },
   { id: 'buku-arsip', label: 'Dokumen' },
@@ -5052,6 +5054,9 @@ function perluBuku() {
     telatTerbit: jalan.filter((b) => b.targetTerbit && b.targetTerbit < kini),
     telatTimeline: dari((b) => (b.timeline || []).filter((t) => !t.selesai && t.tanggal && t.tanggal < kini)),
     tanpaTim: jalan.filter((b) => !b.pjUtamaId || !(b.editorIds || []).length),
+    /* Uang penjualan yang masih dipegang: dari proyek mana pun, termasuk yang sudah terbit. */
+    belumSetor: Store.db.buku.filter((b) => Store.belumDisetor(b).length).map((b) => ({ id: b.id, b, judul: b.judul })),
+    telatProduksi: dari((b) => (b.produksi || []).filter((x) => !x.selesai && x.tanggal && x.tanggal < kini)),
   };
 }
 function antreanBuku() {
@@ -5082,6 +5087,11 @@ function antreanBuku() {
     { ...ke('buku-layout', p.siapLayout), ikon: I.layout, judul: 'Menunggu Tata Letak', n: p.siapLayout.length,
       satuan: 'naskah selesai disunting, belum berbukti layout', kosong: 'Tidak ada naskah yang menunggu tata letak',
       rinci: rinci(p.siapLayout, (d) => d.x.subJudul) },
+    { ...ke('buku-distribusi', p.belumSetor), ikon: I.uang, judul: 'Uang Penjualan Belum Disetor', n: p.belumSetor.length,
+      satuan: 'proyek punya penjualan yang belum diajukan ke Bendahara', kosong: 'Semua uang penjualan sudah diajukan',
+      rinci: p.belumSetor[0] && `${p.belumSetor[0].judul} — ${uangDua(Store.uangBuku(p.belumSetor[0].b).belumRp, Store.uangBuku(p.belumSetor[0].b).belumEgp)}` },
+    ...(p.telatProduksi.length ? [{ ...ke('buku-produksi', p.telatProduksi), ikon: I.kotakProduksi, judul: 'Produksi Terlewat', n: p.telatProduksi.length,
+      satuan: 'kegiatan produksi lewat rencana tanggalnya', kosong: '', rinci: rinci(p.telatProduksi, (d) => d.x.kegiatan) }] : []),
     ...(p.tanpaTim.length ? [{ ...ke('buku-tugas', p.tanpaTim), ikon: I.grup, judul: 'Tim Belum Lengkap', n: p.tanpaTim.length,
       satuan: 'proyek tanpa PJ utama atau editor', kosong: '', rinci: p.tanpaTim[0].judul }] : []),
   ]);
@@ -5694,108 +5704,306 @@ function formDesain(d) {
 }
 
 /* --- Produksi & Distribusi --- */
+const kosongBuku = () => el(`<div class="kartu"><div class="kosong-erp">${I.kotak}<p>Belum ada proyek buku</p></div></div>`);
+const mataUang = (mu, n) => (mu === 'egp' ? pound(n) : rupiah(n));
+
+/** Empat angka stok: dicetak, dititipkan, terjual, sisa. */
+function ringkasStok(b) {
+  const st = Store.stokBuku(b);
+  return el(`<div class="grid-stat">
+    ${[{ ik: I.kotakProduksi, n: st.dicetak, l: 'Eksemplar dicetak', w: 'rgba(62,127,184,.14)', wc: '#2C6091' },
+       { ik: I.simpul, n: st.dititipkan, l: `Dititipkan ke wilayah · ${st.gudang} masih di gudang`, w: 'rgba(240,149,30,.14)', wc: '#B87310' },
+       { ik: I.cekBulat, n: st.terjual, l: 'Terjual atau dibagikan', w: 'rgba(140,198,63,.16)', wc: '#4A7A1E' },
+       { ik: I.buku, n: st.sisa, l: 'Sisa stok', w: 'rgba(47,169,140,.14)', wc: '#1F7A64' }]
+      .map((x) => `<div class="stat" style="--w:${x.w};--wc:${x.wc}"><div class="stat-ik">${x.ik}</div>
+        <div class="stat-nilai">${x.n}</div><div class="stat-label">${esc(x.l)}</div></div>`).join('')}</div>`);
+}
+
+/* --- Produksi: kegiatan cetak beserta jumlahnya --- */
 HAL['buku-produksi'] = () => {
   const b = bk();
-  if (!b) return el(`<div class="kartu"><div class="kosong-erp">${I.kotak}<p>Belum ada proyek buku</p></div></div>`);
+  if (!b) return kosongBuku();
   const box = el('<div></div>');
+  box.appendChild(ringkasStok(b));
   const rampung = b.produksi.filter((p) => p.selesai).length;
-
-  const kp = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
-    <h3>Kegiatan Produksi</h3><span class="hitung">(${rampung} dari ${b.produksi.length} selesai)</span>
+  const kp = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Kegiatan Produksi</h3><span class="hitung">(${rampung} dari ${b.produksi.length} selesai · PJ ${esc(Store.namaUser(b.pjProduksiId))})</span>
     <div class="kanan"><button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Kegiatan</button></div>
   </div></div>`);
   const t = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Kegiatan</th><th class="kol-tengah">Status</th>
-      <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    <thead><tr><th class="kol-no">No.</th><th>Kegiatan</th><th>Rencana</th><th>Penanggung Jawab</th><th>Eksemplar</th>
+      <th class="kol-tengah">Selesai</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
   const tb = t.querySelector('tbody');
   b.produksi.forEach((p, i) => {
-    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td>${esc(p.kegiatan)}</td>
+    const lewat = !p.selesai && p.tanggal && p.tanggal < nowTanggal();
+    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td><b>${esc(p.kegiatan)}</b></td>
+      <td class="utuh">${p.tanggal ? tgl(p.tanggal) : '—'}${lewat ? ' <span class="lencana l-merah">terlewat</span>' : ''}</td>
+      <td>${esc(p.pjId ? namaPendek(p.pjId) : '—')}</td>
+      <td class="utuh">${Number(p.eksemplar) ? `<b>${p.eksemplar}</b>` : '—'}</td>
       <td class="kol-tengah"><button class="cek-kotak ${p.selesai ? 'on' : ''}"
-        title="${p.selesai ? 'Batalkan tanda selesai' : 'Tandai selesai'}">${I.cek}</button></td>
+        title="${p.selesai ? `Selesai ${p.selesaiPada ? tgl(p.selesaiPada) : ''} — ketuk untuk membatalkan` : 'Tandai selesai'}">${I.cek}</button></td>
       <td class="kol-aksi"><div class="sel-aksi">
         <button class="ikon-aksi sunting">${I.sunting}</button>
         <button class="ikon-aksi hapus">${I.hapus}</button></div></td></tr>`);
-    tr.querySelector('.cek-kotak').onclick = () => aman(() => {
-      Store.centangProduksi(U, p.id, !p.selesai); gambar();
-    });
+    tr.querySelector('.cek-kotak').onclick = () => { if (aman(() => Store.centangProduksi(U, p.id, !p.selesai))) gambar(); };
     tr.querySelector('.sunting').onclick = () => formProduksi(p);
-    tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus kegiatan',
+    tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus kegiatan produksi',
       `"${p.kegiatan}" akan dihapus.`,
-      () => aman(() => { Store.hapusBagianBuku(U, 'produksi', p.id); toast('Kegiatan dihapus.'); gambar(); }));
+      () => { if (aman(() => { if (p.selesai) Store.centangProduksi(U, p.id, false); Store.hapusBagianBuku(U, 'produksi', p.id); })) { toast('Kegiatan dihapus.'); gambar(); } });
     tb.appendChild(tr);
   });
-  pasangPilih(t, b.produksi, { satuan: 'kegiatan', hapus: (x) => Store.hapusBagianBuku(U, 'produksi', x.id) });
-  kp.appendChild(t);
+  kp.appendChild(b.produksi.length ? t : el(`<div class="kosong-erp">${I.kotak}<p>Belum ada kegiatan produksi</p></div>`));
   kp.querySelector('[data-tambah]').onclick = () => formProduksi(null);
   box.appendChild(kp);
-
-  const kd = el(`<div class="kartu"><div class="kartu-kepala">
-    <h3>Distribusi</h3><span class="hitung">(${b.distribusi.length} Wilayah)</span>
-    <div class="kanan"><button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Wilayah</button></div>
-  </div></div>`);
-  const td = el(`<div class="tabel-bungkus"><table class="t-org">
-    <thead><tr><th class="kol-no">No.</th><th>Wilayah</th><th>Penanggung Jawab</th>
-      <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
-  const tdb = td.querySelector('tbody');
-  b.distribusi.forEach((d, i) => {
-    const tr = el(`<tr><td class="kol-no">${i + 1}</td><td><b>${esc(d.wilayah)}</b></td>
-      <td>${selAnggota(Store.getUser(d.pjId))}</td>
-      <td class="kol-aksi"><div class="sel-aksi">
-        <button class="ikon-aksi sunting">${I.sunting}</button>
-        <button class="ikon-aksi hapus">${I.hapus}</button></div></td></tr>`);
-    tr.querySelector('.sunting').onclick = () => formDistribusi(d);
-    tr.querySelector('.hapus').onclick = () => konfirmasi('Hapus wilayah distribusi',
-      `"${d.wilayah}" akan dihapus.`,
-      () => aman(() => { Store.hapusBagianBuku(U, 'distribusi', d.id); toast('Wilayah dihapus.'); gambar(); }));
-    tdb.appendChild(tr);
-  });
-  pasangPilih(td, b.distribusi, { satuan: 'wilayah', hapus: (d) => Store.hapusBagianBuku(U, 'distribusi', d.id) });
-  kd.appendChild(td);
-  kd.querySelector('[data-tambah]').onclick = () => formDistribusi(null);
-  box.appendChild(kd);
   return box;
 };
-HAL['buku-produksi'].judul = () => ['Produksi & Distribusi', 'Kegiatan cetak dan pembagian wilayah distribusi.'];
+HAL['buku-produksi'].judul = () => ['Produksi', 'Kegiatan cetak, penanggung jawab, dan jumlah eksemplarnya.'];
 
 function formProduksi(p) {
-  const isi = el(`<div class="grup"><label>Nama Kegiatan <span style="color:var(--e-merah)">*</span></label>
-    <input id="pk" value="${esc(p?.kegiatan || '')}" placeholder="Cetak Sampel"></div>`);
-  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
-    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
-  modal({ judul: p ? 'Sunting Kegiatan' : 'Tambah Kegiatan Produksi', isi, kaki });
-  kaki.querySelector('[data-b]').onclick = tutupModal;
-  kaki.querySelector('[data-s]').onclick = () => {
-    const nama = isi.querySelector('#pk').value.trim();
-    if (!nama) return toast('Nama kegiatan wajib diisi.', true);
-    aman(() => {
-      Store.simpanBagianBuku(U, 'produksi', { id: p?.id, kegiatan: nama, selesai: p?.selesai || false });
-      tutupModal(); toast('Kegiatan tersimpan.'); gambar();
-    });
-  };
-}
-
-function formDistribusi(d) {
   const isi = el(`<div>
-    <div class="grup"><label>Wilayah <span style="color:var(--e-merah)">*</span></label>
-      <input id="dw" value="${esc(d?.wilayah || '')}" placeholder="Darrosah"></div>
-    <div class="grup"><label>Penanggung Jawab</label><select id="dp">
-      ${pilihAnggota().map((o) => `<option value="${o.v}" ${d?.pjId === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></div>
+    <div class="grup"><label>Nama Kegiatan <span style="color:var(--e-merah)">*</span></label>
+      <input id="pk" value="${esc(p?.kegiatan || '')}" placeholder="Cetak 100 eksemplar"></div>
+    <div class="grid-form-3">
+      <div class="grup"><label>Rencana Tanggal</label><input type="date" id="pt" value="${esc(p?.tanggal || '')}"></div>
+      <div class="grup"><label>Penanggung Jawab</label><select id="pp"><option value="">—</option>
+        ${pilihAnggota().map((o) => `<option value="${o.v}" ${(p?.pjId || bk().pjProduksiId) === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></div>
+      <div class="grup"><label>Eksemplar Dicetak</label><input type="number" min="0" id="pe" value="${Number(p?.eksemplar) || ''}" placeholder="0"></div>
+    </div>
+    <div class="bantu">Isi jumlah eksemplar hanya pada kegiatan cetak. Jumlahnya masuk stok begitu kegiatan ditandai selesai.</div>
   </div>`);
   const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
     <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
-  modal({ judul: d ? 'Sunting Wilayah' : 'Tambah Wilayah Distribusi', isi, kaki });
+  modal({ judul: p ? 'Sunting Kegiatan Produksi' : 'Tambah Kegiatan Produksi', isi, kaki });
   kaki.querySelector('[data-b]').onclick = tutupModal;
   kaki.querySelector('[data-s]').onclick = () => {
-    const w = isi.querySelector('#dw').value.trim();
-    if (!w) return toast('Wilayah wajib diisi.', true);
-    aman(() => {
-      Store.simpanBagianBuku(U, 'distribusi', { id: d?.id, wilayah: w, pjId: isi.querySelector('#dp').value });
-      tutupModal(); toast('Wilayah tersimpan.'); gambar();
-    });
+    const g = (id) => isi.querySelector('#' + id).value;
+    if (aman(() => Store.simpanProduksi(U, { id: p?.id, kegiatan: g('pk'), tanggal: g('pt'), pjId: g('pp'), eksemplar: g('pe'), selesai: p?.selesai || false }))) {
+      tutupModal(); toast('Kegiatan tersimpan.'); gambar();
+    }
   };
 }
 
-/* --- Keuangan Buku: kasaran modal + totalnya --- */
+/* --- Distribusi & Penjualan: stok per wilayah, penjualan per pembeli, setoran --- */
+HAL['buku-distribusi'] = () => {
+  const b = bk();
+  if (!b) return kosongBuku();
+  const st = Store.stokBuku(b);
+  const box = el('<div></div>');
+  box.appendChild(ringkasStok(b));
+
+  /* wilayah */
+  const kw = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Wilayah Distribusi</h3><span class="hitung">(${st.wilayah.length} wilayah · ${st.gudang} eksemplar belum dititipkan)</span>
+    <div class="kanan"><button class="btn btn-kecil" data-tambah>${I.tambah} Tambah Wilayah</button></div></div></div>`);
+  kw.querySelector('[data-tambah]').onclick = () => formDistribusi(null);
+  if (!st.wilayah.length) kw.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada wilayah</p><small>Buku dititipkan ke wilayah sebelum dijual.</small></div>`));
+  else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Wilayah</th><th>Penanggung Jawab</th><th>Dititipkan</th><th>Terjual</th><th>Sisa</th>
+        <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    st.wilayah.forEach((w, i) => {
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td><td><b>${esc(w.d.wilayah)}</b></td>
+        <td>${w.d.pjId ? selAnggota(Store.getUser(w.d.pjId)) : '—'}</td>
+        <td class="utuh">${w.dititipkan}</td><td class="utuh">${w.terjual}</td><td class="utuh"><b>${w.sisa}</b></td>
+        <td class="kol-aksi"><div class="sel-aksi"><button class="ikon-aksi sunting">${I.sunting}</button>
+          ${w.terjual ? '' : `<button class="ikon-aksi hapus">${I.hapus}</button>`}</div></td></tr>`);
+      tr.querySelector('.sunting').onclick = () => formDistribusi(w.d);
+      tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus wilayah distribusi', `"${w.d.wilayah}" akan dihapus.`,
+        () => { if (aman(() => Store.hapusBagianBuku(U, 'distribusi', w.d.id))) { toast('Wilayah dihapus.'); gambar(); } }));
+      t.querySelector('tbody').appendChild(tr);
+    });
+    kw.appendChild(t);
+  }
+  box.appendChild(kw);
+
+  /* penjualan per pembeli */
+  const jual = [...(b.penjualan || [])].sort((x, y) => y.tanggal.localeCompare(x.tanggal));
+  const belum = Store.belumDisetor(b);
+  const u = Store.uangBuku(b);
+  const kj = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Penjualan</h3><span class="hitung">(${jual.length} pembeli · ${esc(uangDua(u.jualRp, u.jualEgp))} · belum disetor ${esc(uangDua(u.belumRp, u.belumEgp))})</span>
+    <div class="kanan">
+      <button class="btn btn-garis btn-kecil" data-setor ${belum.length ? '' : 'disabled'}>${I.uang} Ajukan Setoran</button>
+      <button class="btn btn-kecil" data-tambah ${st.wilayah.length ? '' : 'disabled title="Tambahkan wilayah lebih dulu"'}>${I.tambah} Catat Penjualan</button></div></div></div>`);
+  kj.querySelector('[data-tambah]').onclick = () => formPenjualan(null);
+  kj.querySelector('[data-setor]').onclick = () => dialogSetoran(b);
+  if (!jual.length) kj.appendChild(el(`<div class="kosong-erp">${I.kotak}<p>Belum ada penjualan</p></div>`));
+  else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Tanggal</th><th>Pembeli</th><th>Wilayah</th><th>Eks.</th><th>Harga</th><th>Total</th><th>Setoran</th>
+        <th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    jual.forEach((x, i) => {
+      const s = (b.setoran || []).find((y) => y.id === x.setoranId);
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh">${tgl(x.tanggal)}</td>
+        <td><b>${esc(x.pembeli)}</b>${x.catatan ? `<br><span class="sub-sel">${esc(x.catatan)}</span>` : ''}</td>
+        <td class="utuh">${esc(b.distribusi.find((d) => d.id === x.wilayahId)?.wilayah || '—')}</td>
+        <td class="utuh">${x.jumlah}</td><td class="utuh">${x.harga ? esc(mataUang(x.mataUang, x.harga)) : 'cuma-cuma'}</td>
+        <td class="utuh"><b>${x.total ? esc(mataUang(x.mataUang, x.total)) : '—'}</b></td>
+        <td>${!x.total ? '—' : !s ? '<span class="lencana l-merah">belum disetor</span>'
+          : Store.statusSetoran(s) === 'diterima' ? '<span class="lencana l-hijau">diterima Bendahara</span>' : '<span class="lencana l-kuning">diajukan</span>'}</td>
+        <td class="kol-aksi"><div class="sel-aksi">${x.setoranId ? '' : `<button class="ikon-aksi sunting">${I.sunting}</button>
+          <button class="ikon-aksi hapus">${I.hapus}</button>`}</div></td></tr>`);
+      tr.querySelector('.sunting')?.addEventListener('click', () => formPenjualan(x));
+      tr.querySelector('.hapus')?.addEventListener('click', () => konfirmasi('Hapus penjualan', `Penjualan kepada "${x.pembeli}" akan dihapus.`,
+        () => { if (aman(() => Store.hapusPenjualan(U, x.id))) { toast('Penjualan dihapus.'); gambar(); } }));
+      t.querySelector('tbody').appendChild(tr);
+    });
+    kj.appendChild(t);
+  }
+  box.appendChild(kj);
+
+  /* setoran */
+  const setor = [...(b.setoran || [])].reverse();
+  const ks = el(`<div class="kartu"><div class="kartu-kepala">
+    <h3>Setoran ke Bendahara</h3><span class="hitung">(${setor.length} setoran · diterima ${esc(uangDua(u.disetorRp, u.disetorEgp))} · menunggu ${esc(uangDua(u.diajukanRp, u.diajukanEgp))})</span></div></div>`);
+  if (!setor.length) ks.appendChild(el(`<div class="kosong-erp" style="padding:22px">${I.kotak}<p>Belum ada setoran</p>
+    <small>Uang penjualan diajukan dari sini; Bendahara menerimanya dan mencatat di Buku Kas.</small></div>`));
+  else {
+    const t = el(`<div class="tabel-bungkus"><table class="t-org">
+      <thead><tr><th class="kol-no">No.</th><th>Diajukan</th><th>Jumlah</th><th>Penjualan</th><th>Status</th><th>Bukti Kas</th><th class="kol-aksi">Aksi</th></tr></thead><tbody></tbody></table></div>`);
+    setor.forEach((s, i) => {
+      const kas = Store.kasSetoran(s.id);
+      const tr = el(`<tr><td class="kol-no">${i + 1}</td><td class="utuh">${tgl(s.tanggal)}</td><td class="utuh"><b>${esc(uangDua(s.rp, s.egp))}</b></td>
+        <td>${s.penjualanIds.length} penjualan${s.catatan ? `<br><span class="sub-sel">${esc(s.catatan)}</span>` : ''}</td>
+        <td>${kas ? '<span class="lencana l-hijau">diterima Bendahara</span>' : '<span class="lencana l-kuning">menunggu Bendahara</span>'}</td>
+        <td class="utuh">${kas ? `<span class="nia">${esc(kas.nomor || '')}</span> · ${tgl(kas.tanggal)}` : '—'}</td>
+        <td class="kol-aksi"><div class="sel-aksi">${kas ? '' : `<button class="btn btn-garis btn-kecil">Tarik</button>`}</div></td></tr>`);
+      tr.querySelector('button')?.addEventListener('click', () => { if (aman(() => Store.batalkanSetoran(U, s.id))) { toast('Setoran ditarik.'); gambar(); } });
+      t.querySelector('tbody').appendChild(tr);
+    });
+    ks.appendChild(t);
+  }
+  box.appendChild(ks);
+  return box;
+};
+HAL['buku-distribusi'].judul = () => ['Distribusi & Penjualan', 'Stok per wilayah, penjualan per pembeli, dan setoran ke Bendahara.'];
+
+function formDistribusi(d) {
+  const st = Store.stokBuku(bk());
+  const bebas = st.gudang + (d ? Number(d.stok) || 0 : 0);
+  const isi = el(`<div>
+    <div class="grup"><label>Nama Wilayah <span style="color:var(--e-merah)">*</span></label>
+      <input id="dw" value="${esc(d?.wilayah || '')}" placeholder="Darrosah"></div>
+    <div class="grid-form">
+      <div class="grup"><label>Penanggung Jawab</label><select id="dp"><option value="">—</option>
+        ${pilihAnggota().map((o) => `<option value="${o.v}" ${d?.pjId === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></div>
+      <div class="grup"><label>Eksemplar Dititipkan</label><input type="number" min="0" id="ds" value="${Number(d?.stok) || ''}" placeholder="0">
+        <div class="bantu">Paling banyak ${bebas} — yang sudah dicetak dan belum dititipkan ke wilayah lain.</div></div>
+    </div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
+  modal({ judul: d ? 'Sunting Wilayah' : 'Tambah Wilayah', isi, kaki });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    const g = (id) => isi.querySelector('#' + id).value;
+    if (aman(() => Store.simpanWilayah(U, { id: d?.id, wilayah: g('dw'), pjId: g('dp'), stok: g('ds') }))) { tutupModal(); toast('Wilayah tersimpan.'); gambar(); }
+  };
+}
+
+function formPenjualan(x) {
+  const b = bk();
+  const st = Store.stokBuku(b);
+  const isi = el(`<div>
+    <div class="grid-form">
+      <div class="grup"><label>Pembeli <span style="color:var(--e-merah)">*</span></label><input id="jp" value="${esc(x?.pembeli || '')}" placeholder="Nama pembeli atau lembaga"></div>
+      <div class="grup"><label>Tanggal</label><input type="date" id="jt" value="${esc(x?.tanggal || nowTanggal())}" max="${nowTanggal()}"></div>
+    </div>
+    <div class="grid-form">
+      <div class="grup"><label>Dari Wilayah</label><select id="jw">${st.wilayah.map((w) =>
+        `<option value="${w.d.id}" ${x?.wilayahId === w.d.id ? 'selected' : ''}>${esc(w.d.wilayah)} — sisa ${w.sisa}</option>`).join('')}</select></div>
+      <div class="grup"><label>Jumlah Eksemplar</label><input type="number" min="1" id="jj" value="${Number(x?.jumlah) || 1}"></div>
+    </div>
+    <div class="grid-form">
+      <div class="grup"><label>Mata Uang</label><select id="jm"><option value="egp" ${x?.mataUang !== 'rp' ? 'selected' : ''}>Pound (EGP)</option>
+        <option value="rp" ${x?.mataUang === 'rp' ? 'selected' : ''}>Rupiah</option></select></div>
+      <div class="grup"><label>Harga per Eksemplar</label><input type="number" min="0" id="jh" value="${x ? Number(x.harga) || 0 : Number(b.harga?.egp) || ''}" placeholder="0">
+        <div class="bantu" data-total></div></div>
+    </div>
+    <div class="grup" style="margin:0"><label>Catatan</label><input id="jc" value="${esc(x?.catatan || '')}" placeholder="Opsional — contoh: hadiah pemateri, harga khusus anggota">
+      <div class="bantu">Harga 0 berarti dibagikan cuma-cuma: stok berkurang, tidak ada uang yang disetor.</div></div>
+  </div>`);
+  const g = (id) => isi.querySelector('#' + id).value;
+  const hitung = () => { isi.querySelector('[data-total]').textContent = `Total: ${mataUang(g('jm'), (Number(g('jj')) || 0) * (Number(g('jh')) || 0))}`; };
+  /* Berganti mata uang pada penjualan baru mengisi harga bakunya. */
+  isi.querySelector('#jm').onchange = () => { if (!x) isi.querySelector('#jh').value = Number(b.harga?.[g('jm')]) || ''; hitung(); };
+  ['jj', 'jh'].forEach((id) => { isi.querySelector('#' + id).oninput = hitung; });
+  hitung();
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Simpan</button></div>`);
+  modal({ judul: x ? 'Sunting Penjualan' : 'Catat Penjualan', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    if (aman(() => Store.simpanPenjualan(U, { id: x?.id, pembeli: g('jp'), tanggal: g('jt'), wilayahId: g('jw'), jumlah: g('jj'),
+      mataUang: g('jm'), harga: g('jh'), catatan: g('jc') }))) { tutupModal(); toast('Penjualan tercatat.'); gambar(); }
+  };
+}
+
+/** Pilih penjualan yang uangnya hendak diserahkan ke Bendahara. */
+function dialogSetoran(b) {
+  const belum = Store.belumDisetor(b);
+  const isi = el(`<div>
+    <p style="margin:0 0 12px;font-size:13.4px;color:var(--e-abu)">Centang penjualan yang uangnya Anda serahkan. Bendahara menerimanya dan mencatat di Buku Kas.</p>
+    <div class="daftar-presensi">${belum.map((x) => `<label class="presensi-baris" style="cursor:pointer">
+      <input type="checkbox" checked value="${x.id}" style="width:auto;accent-color:var(--e-hijau)">
+      <span class="nm">${esc(x.pembeli)}<small>${tgl(x.tanggal)} · ${x.jumlah} eks.</small></span>
+      <b>${esc(mataUang(x.mataUang, x.total))}</b></label>`).join('')}</div>
+    <p style="margin:14px 0 10px;font-size:13.4px"><b data-jml></b></p>
+    <div class="grup" style="margin:0"><label>Catatan untuk Bendahara</label><input data-c placeholder="Opsional — contoh: diserahkan tunai sesudah kajian"></div>
+  </div>`);
+  const pilih = () => [...isi.querySelectorAll('input[type=checkbox]:checked')].map((c) => c.value);
+  const hitung = () => {
+    const d = belum.filter((x) => pilih().includes(x.id));
+    const j = (mu) => d.filter((x) => x.mataUang === mu).reduce((n, x) => n + x.total, 0);
+    isi.querySelector('[data-jml]').textContent = `Disetor: ${uangDua(j('rp'), j('egp'))} dari ${d.length} penjualan`;
+  };
+  isi.querySelectorAll('input[type=checkbox]').forEach((c) => { c.onchange = hitung; });
+  hitung();
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Ajukan Setoran</button></div>`);
+  modal({ judul: 'Ajukan setoran penjualan', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    if (aman(() => Store.ajukanSetoran(U, pilih(), isi.querySelector('[data-c]').value))) { tutupModal(); toast('Setoran diajukan ke Bendahara.'); gambar(); }
+  };
+}
+
+/** Anggaran lawan realisasi, harga jual, titik impas, dan uang penjualan —
+    tiap mata uang dihitung sendiri-sendiri, tak ada kurs yang dikira-kira. */
+function kartuUangBuku(b, r, rencanaRp, rencanaEgp) {
+  const u = Store.uangBuku(b);
+  const st = Store.stokBuku(b);
+  const harga = b.harga || {};
+  const kartu = el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala"><h3>Anggaran, Penjualan & Titik Impas</h3>
+    <span class="hitung">${st.terjual} dari ${st.dicetak} eksemplar keluar</span></div>
+    <div class="panel-isi">
+      <div class="grid-form-3" style="align-items:flex-end;margin-bottom:6px">
+        <div class="grup" style="margin:0"><label>Harga Jual per Eksemplar (Rp)</label><input type="number" min="0" data-hrp value="${Number(harga.rp) || ''}" placeholder="0"></div>
+        <div class="grup" style="margin:0"><label>Harga Jual per Eksemplar (EGP)</label><input type="number" min="0" data-hegp value="${Number(harga.egp) || ''}" placeholder="0"></div>
+        <div><button class="btn btn-lime btn-kecil" data-simpan>${I.cek} Simpan Harga</button></div>
+      </div>
+      <div class="bantu" style="margin-bottom:14px">Menjadi isian awal tiap penjualan dan dasar hitungan titik impas.</div>
+    </div>
+    <div class="tabel-bungkus"><table class="t-org"><thead><tr><th>Uraian</th><th>Rupiah</th><th>Pound</th></tr></thead><tbody>
+      ${[['Kasaran modal (rencana)', rencanaRp, rencanaEgp], ['Pengeluaran di Buku Kas (realisasi)', r.keluarRp, r.keluarEgp],
+         ['Sisa anggaran', rencanaRp - r.keluarRp, rencanaEgp - r.keluarEgp, true],
+         ['Penjualan tercatat', u.jualRp, u.jualEgp], ['Sudah diterima Bendahara', u.disetorRp, u.disetorEgp],
+         ['Diajukan, menunggu Bendahara', u.diajukanRp, u.diajukanEgp], ['Belum disetor', u.belumRp, u.belumEgp, false, true],
+         ['Pemasukan lain di Buku Kas', Math.max(0, r.masukRp - u.disetorRp), Math.max(0, r.masukEgp - u.disetorEgp)],
+         ['Selisih kas proyek (masuk − keluar)', r.masukRp - r.keluarRp, r.masukEgp - r.keluarEgp, true]]
+        .map(([l, a, e, bertanda, awas]) => { const sel = (n, f) => `<td class="utuh"${(bertanda && n < 0) || (awas && n > 0) ? ' style="color:#B23E37;font-weight:700"' : ''}>${n < 0 ? '−' : ''}${f(Math.abs(n))}</td>`;
+          return `<tr><td>${bertanda ? `<b>${l}</b>` : l}</td>${sel(a, rupiah)}${sel(e, pound)}</tr>`; }).join('')}
+      <tr><td><b>Titik impas</b><br><span class="sub-sel">eksemplar yang harus terjual agar biaya tertutup, per mata uang</span></td>
+        ${[['rp', Math.max(rencanaRp, r.keluarRp)], ['egp', Math.max(rencanaEgp, r.keluarEgp)]].map(([mu, biaya]) => {
+          const h = Number(harga[mu]) || 0;
+          return `<td class="utuh">${!biaya ? '—' : !h ? '<span style="color:var(--e-abu)">isi harga jual</span>' : `<b>${Math.ceil(biaya / h)}</b> eks.`}</td>`; }).join('')}</tr>
+    </tbody></table></div></div>`);
+  kartu.querySelector('[data-simpan]').onclick = () => {
+    if (aman(() => Store.aturHargaBuku(U, b.id, { rp: kartu.querySelector('[data-hrp]').value, egp: kartu.querySelector('[data-hegp]').value }))) { toast('Harga jual tersimpan.'); gambar(); }
+  };
+  return kartu;
+}
+
 HAL['buku-keuangan'] = () => {
   const b = bk();
   if (!b) return el(`<div class="kartu"><div class="kosong-erp">${I.kotak}<p>Belum ada proyek buku</p></div></div>`);
@@ -5821,6 +6029,7 @@ HAL['buku-keuangan'] = () => {
 
   /* Realisasi: transaksi buku kas yang ditautkan Bendahara ke proyek ini. */
   const r = realisasiBuku(b);
+  box.appendChild(kartuUangBuku(b, r, totRp, totEgp));
   const tx = [...r.keluar, ...r.masuk].sort((x, y) => y.tanggal.localeCompare(x.tanggal));
   box.appendChild(el(`<div class="kartu" style="margin-top:20px"><div class="kartu-kepala"><h3>Realisasi dari Buku Kas</h3>
     <span class="hitung">keluar ${esc(uangDua(r.keluarRp, r.keluarEgp))} · masuk ${esc(uangDua(r.masukRp, r.masukEgp))}</span></div>
@@ -8489,7 +8698,11 @@ function antreanBendahara() {
   const tunggu = keluar.filter((t) => t.status === 'menunggu');
   const belumTutup = bulanBuku().filter((b) => b < bulan && !Store.bulanTertutup(b));
   const tanpaBukti = keluar.filter((t) => (t.status === 'menunggu' || Store.kasSahkah(t)) && !t.bukti && Store.dicatatHariIni(t) === false && t.dibuat);
+  const setoran = Store.setoranMenunggu();
   return kartuAntrean('Perlu Ditindak', [
+    ...(setoran.length ? [{ rute: 'masuk-internal', ikon: I.buku, judul: 'Setoran Penjualan Buku', n: setoran.length,
+      satuan: 'setoran dari PJ Buku menunggu diterima', kosong: '',
+      rinci: `${setoran[0].b.judul} — ${uangDua(setoran[0].s.rp, setoran[0].s.egp)}` }] : []),
     { rute: 'pengeluaran', ikon: I.peringatan, judul: 'Ditolak Ketua', n: ditolak.length,
       satuan: 'pengeluaran perlu diperbaiki atau dibatalkan', kosong: 'Tidak ada pengeluaran yang ditolak',
       rinci: ditolak[0] && `${ditolak[0].sumber} — ${ditolak[0].persetujuan?.alasan || ''}` },
@@ -8819,8 +9032,53 @@ Object.assign(MODUL, {
   },
 });
 
+/** Setoran penjualan buku yang diajukan PJ Buku dan menunggu diterima. */
+function kartuSetoranBuku() {
+  const tunggu = Store.setoranMenunggu();
+  if (!tunggu.length) return el('<div></div>');
+  const kartu = el(`<div class="kartu" style="margin-bottom:20px"><div class="kartu-kepala">
+    <h3>Setoran Penjualan Buku</h3><span class="hitung">(${tunggu.length} menunggu diterima)</span></div><div class="kj-izin"></div></div>`);
+  tunggu.forEach(({ b, s }) => {
+    const n = el(`<div class="kj-izin-br"><div class="isi"><b>${esc(uangDua(s.rp, s.egp))}</b> · ${esc(b.judul)}
+      <div class="kt">${s.penjualanIds.length} penjualan · diajukan ${esc(namaPendek(s.oleh))}, ${tgl(s.tanggal)}${s.catatan ? ` · "${esc(s.catatan)}"` : ''}</div></div>
+      <div class="aksi"><button class="btn btn-lime btn-kecil">Terima & Catat</button></div></div>`);
+    n.querySelector('button').onclick = () => dialogTerimaSetoran(b, s);
+    kartu.querySelector('.kj-izin').appendChild(n);
+  });
+  return kartu;
+}
+function dialogTerimaSetoran(b, s) {
+  const kat = Store.db.kategoriKeuangan.filter((k) => k.jenis === 'masuk' && !k.nonaktif);
+  const isi = el(`<div>
+    <p style="margin:0 0 14px;font-size:13.6px;color:#44534A">Terima <b>${esc(uangDua(s.rp, s.egp))}</b> dari penjualan <b>${esc(b.judul)}</b>
+      (${s.penjualanIds.length} penjualan). Dicatat sebagai pemasukan di Buku Kas dan ditautkan ke proyeknya.</p>
+    <div class="grid-form-3">
+      <div class="grup"><label>Tanggal Terima</label><input type="date" data-tgl value="${nowTanggal()}" max="${nowTanggal()}"></div>
+      <div class="grup"><label>Masuk ke Akun</label><select data-akun>${pilihanAkun().map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select></div>
+      <div class="grup"><label>Kategori</label><select data-kat>${kat.map((k) => `<option ${/buku/i.test(k.nama) ? 'selected' : ''}>${esc(k.nama)}</option>`).join('')}</select></div>
+    </div>
+    <div class="bantu">Pastikan uangnya benar-benar sudah Anda terima. Nominal mengikuti setoran dan tidak diketik ulang.</div>
+  </div>`);
+  const kaki = el(`<div style="display:flex;gap:9px;justify-content:flex-end">
+    <button class="btn btn-garis" data-b>Batal</button><button class="btn btn-lime" data-s>Terima & Catat</button></div>`);
+  modal({ judul: 'Terima setoran penjualan buku', isi, kaki, lebar: true });
+  kaki.querySelector('[data-b]').onclick = tutupModal;
+  kaki.querySelector('[data-s]').onclick = () => {
+    let t = null;
+    if (aman(() => { t = Store.terimaSetoran(U, b.id, s.id, { akunId: isi.querySelector('[data-akun]').value,
+      kategori: isi.querySelector('[data-kat]').value, tanggal: isi.querySelector('[data-tgl]').value }); })) {
+      tutupModal(); toast(`Setoran diterima — ${t.nomor}.`); gambar();
+    }
+  };
+}
+
 ['masuk-internal', 'masuk-eksternal', 'pengeluaran'].forEach((nama) => {
-  HAL[nama] = () => halamanOrg(nama);
+  HAL[nama] = () => {
+    if (nama !== 'masuk-internal') return halamanOrg(nama);
+    const box = el('<div></div>');
+    box.append(kartuSetoranBuku(), halamanOrg(nama));
+    return box;
+  };
   HAL[nama].judul = () => [MODUL[nama].judul, MODUL[nama].sub];
 });
 

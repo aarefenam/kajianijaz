@@ -2893,6 +2893,161 @@ function bukuSaya(userId) {
   }).filter(Boolean);
 }
 
+/* --- produksi, stok, penjualan, setoran ---
+   Buku dicetak (produksi), dititipkan ke wilayah (distribusi), terjual
+   kepada pembeli (penjualan), lalu uangnya disetor ke Bendahara (setoran).
+   Tiap angka di bawah diturunkan dari keempat daftar itu. */
+const angka = (v) => Math.max(0, Math.round(Number(v) || 0));
+
+/** Ringkasan stok sebuah proyek, keseluruhan dan per wilayah. */
+function stokBuku(b) {
+  const dicetak = (b.produksi || []).filter((p) => p.selesai).reduce((j, p) => j + angka(p.eksemplar), 0);
+  const jual = b.penjualan || [];
+  const wilayah = (b.distribusi || []).map((d) => {
+    const terjual = jual.filter((x) => x.wilayahId === d.id).reduce((j, x) => j + angka(x.jumlah), 0);
+    return { d, dititipkan: angka(d.stok), terjual, sisa: angka(d.stok) - terjual };
+  });
+  const dititipkan = wilayah.reduce((j, w) => j + w.dititipkan, 0);
+  const terjual = jual.reduce((j, x) => j + angka(x.jumlah), 0);
+  return { dicetak, dititipkan, gudang: dicetak - dititipkan, terjual, sisa: dicetak - terjual, wilayah };
+}
+
+function simpanProduksi(user, data, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const lama = data.id ? (b.produksi || []).find((x) => x.id === data.id) : null;
+  const p = { ...(lama || {}), ...data };
+  if (!String(p.kegiatan || '').trim()) throw new Error('Nama kegiatan wajib diisi.');
+  const bersih = { kegiatan: p.kegiatan.trim(), tanggal: p.tanggal || '', pjId: p.pjId || '', eksemplar: angka(p.eksemplar), selesai: !!p.selesai };
+  bersih.selesaiPada = bersih.selesai ? (lama?.selesaiPada || hariIni()) : '';
+  /* Mengurangi cetakan tak boleh membuat stok yang sudah dititipkan menggantung. */
+  const lain = (b.produksi || []).filter((x) => x.id !== p.id && x.selesai).reduce((j, x) => j + angka(x.eksemplar), 0);
+  const st = stokBuku(b);
+  if (lain + (bersih.selesai ? bersih.eksemplar : 0) < st.dititipkan)
+    throw new Error(`Sudah ${st.dititipkan} eksemplar dititipkan ke wilayah — jumlah cetak tidak boleh kurang dari itu.`);
+  if (lama) Object.assign(lama, bersih); else (b.produksi ||= []).push({ id: uid('pd'), ...bersih });
+  segarkanTahap(b);
+  catat(user, 'buku.produksi', p.id || '', `Kegiatan produksi "${bersih.kegiatan}" pada "${b.judul}"${bersih.eksemplar ? ` — ${bersih.eksemplar} eksemplar` : ''}`);
+  simpan();
+}
+
+function simpanWilayah(user, data, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const lama = data.id ? (b.distribusi || []).find((x) => x.id === data.id) : null;
+  const d = { ...(lama || {}), ...data };
+  if (!String(d.wilayah || '').trim()) throw new Error('Nama wilayah wajib diisi.');
+  const stok = angka(d.stok);
+  const st = stokBuku(b);
+  const terjual = lama ? st.wilayah.find((w) => w.d.id === lama.id)?.terjual || 0 : 0;
+  if (stok < terjual) throw new Error(`Wilayah ini sudah menjual ${terjual} eksemplar — titipannya tidak boleh kurang dari itu.`);
+  const titipLain = st.dititipkan - (lama ? angka(lama.stok) : 0);
+  if (titipLain + stok > st.dicetak)
+    throw new Error(`Yang sudah dicetak ${st.dicetak} eksemplar; ${titipLain} sudah dititipkan ke wilayah lain. Paling banyak ${Math.max(0, st.dicetak - titipLain)} untuk wilayah ini.`);
+  const bersih = { wilayah: d.wilayah.trim(), pjId: d.pjId || '', stok };
+  if (lama) Object.assign(lama, bersih); else (b.distribusi ||= []).push({ id: uid('db'), ...bersih });
+  catat(user, 'buku.distribusi', d.id || '', `Wilayah "${bersih.wilayah}" pada "${b.judul}" — titipan ${stok} eksemplar`);
+  simpan();
+}
+
+/** Satu penjualan kepada satu pembeli. Harga 0 = dibagikan cuma-cuma. */
+function simpanPenjualan(user, data, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const lama = data.id ? (b.penjualan || []).find((x) => x.id === data.id) : null;
+  if (lama?.setoranId) throw new Error('Penjualan ini sudah masuk setoran — tidak dapat diubah.');
+  const x = { ...(lama || {}), ...data };
+  if (!String(x.pembeli || '').trim()) throw new Error('Nama pembeli wajib diisi.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(x.tanggal || '')) throw new Error('Tanggal penjualan wajib diisi.');
+  const jumlah = angka(x.jumlah);
+  if (!jumlah) throw new Error('Jumlah eksemplar wajib diisi.');
+  const w = stokBuku(b).wilayah.find((y) => y.d.id === x.wilayahId);
+  if (!w) throw new Error('Pilih wilayah asal bukunya.');
+  const sisa = w.sisa + (lama && lama.wilayahId === x.wilayahId ? angka(lama.jumlah) : 0);
+  if (jumlah > sisa) throw new Error(`Stok ${w.d.wilayah} tinggal ${sisa} eksemplar.`);
+  if (!['rp', 'egp'].includes(x.mataUang)) throw new Error('Pilih mata uangnya.');
+  const harga = Math.max(0, Number(x.harga) || 0);
+  const bersih = { tanggal: x.tanggal, pembeli: x.pembeli.trim(), wilayahId: x.wilayahId, jumlah, mataUang: x.mataUang, harga,
+    total: jumlah * harga, catatan: String(x.catatan || '').trim() };
+  if (lama) Object.assign(lama, bersih); else (b.penjualan ||= []).push({ id: uid('pj'), ...bersih, dicatat: user.id });
+  catat(user, 'buku.penjualan', x.id || '', `Penjualan ${jumlah} eks. "${b.judul}" kepada ${bersih.pembeli}`);
+  simpan();
+}
+function hapusPenjualan(user, id, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const x = (b.penjualan || []).find((y) => y.id === id);
+  if (!x) return;
+  if (x.setoranId) throw new Error('Penjualan ini sudah masuk setoran — tidak dapat dihapus.');
+  b.penjualan = b.penjualan.filter((y) => y.id !== id);
+  catat(user, 'buku.penjualan.hapus', id, `Menghapus penjualan kepada ${x.pembeli} dari "${b.judul}"`);
+  simpan();
+}
+
+/* Setoran: uang penjualan yang diserahkan ke Bendahara. PJ Buku
+   MENGAJUKAN; Bendahara menerima dengan mencatatnya di Buku Kas dan
+   menautkannya ke sini (`setoranId` pada transaksinya). "Diterima"
+   karena itu diturunkan dari Buku Kas — pusat keuangan tetap satu. */
+const kasSetoran = (idSetoran) => (db.keuangan || []).find((t) => t.setoranId === idSetoran && kasSahkah(t)) || null;
+const statusSetoran = (s) => (kasSetoran(s.id) ? 'diterima' : 'diajukan');
+/** Penjualan berbayar yang belum masuk setoran mana pun. */
+const belumDisetor = (b) => (b.penjualan || []).filter((x) => !x.setoranId && x.total > 0);
+
+function ajukanSetoran(user, idPenjualan, catatan, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const pilih = belumDisetor(b).filter((x) => idPenjualan.includes(x.id));
+  if (!pilih.length) throw new Error('Pilih penjualan yang hendak disetorkan.');
+  const s = { id: uid('st'), tanggal: hariIni(), rp: 0, egp: 0, penjualanIds: pilih.map((x) => x.id),
+    catatan: String(catatan || '').trim(), oleh: user.id };
+  pilih.forEach((x) => { s[x.mataUang] += x.total; x.setoranId = s.id; });
+  (b.setoran ||= []).push(s);
+  catat(user, 'buku.setoran', s.id, `Mengajukan setoran penjualan "${b.judul}" — ${nominalGabung(s)}`);
+  simpan();
+  return s;
+}
+/** Tarik setoran yang belum diterima Bendahara. */
+function batalkanSetoran(user, id, idBuku) {
+  RBAC.assertCan(user, 'buku.manage');
+  const b = idBuku ? cariBuku(idBuku) : bukuAktif();
+  const s = (b.setoran || []).find((x) => x.id === id);
+  if (!s) return;
+  if (statusSetoran(s) === 'diterima') throw new Error('Setoran ini sudah diterima Bendahara dan tercatat di Buku Kas.');
+  (b.penjualan || []).forEach((x) => { if (x.setoranId === id) delete x.setoranId; });
+  b.setoran = b.setoran.filter((x) => x.id !== id);
+  catat(user, 'buku.setoran.batal', id, `Menarik setoran penjualan "${b.judul}"`);
+  simpan();
+}
+/** Setoran seluruh proyek yang menunggu diterima Bendahara. */
+const setoranMenunggu = () => db.buku.flatMap((b) => (b.setoran || []).filter((s) => statusSetoran(s) === 'diajukan').map((s) => ({ b, s })));
+
+/** Bendahara menerima setoran: satu pemasukan di Buku Kas, tertaut ke
+    proyek dan setorannya. Dua mata uang menjadi dua transaksi. */
+function terimaSetoran(user, idBuku, idSetoran, { akunId, kategori, tanggal }) {
+  RBAC.assertCan(user, 'keuangan.manage');
+  const b = cariBuku(idBuku);
+  const s = (b.setoran || []).find((x) => x.id === idSetoran);
+  if (!s) throw new Error('Setoran tidak ditemukan.');
+  if (statusSetoran(s) === 'diterima') throw new Error('Setoran ini sudah diterima.');
+  if (!kategori) throw new Error('Pilih kategori pemasukannya.');
+  return simpanTransaksi(user, { jenis: 'masuk', arus: 'internal', tanggal: tanggal || hariIni(), akunId, kategori,
+    sumber: `Setoran penjualan buku "${b.judul}"`, rp: s.rp, egp: s.egp, bukuId: b.id, setoranId: s.id,
+    keterangan: s.catatan || `${s.penjualanIds.length} penjualan` });
+}
+
+/** Ringkasan uang sebuah proyek untuk halaman Anggaran & Realisasi. */
+function uangBuku(b) {
+  const jual = b.penjualan || [];
+  const jml = (daftar, mu) => daftar.filter((x) => x.mataUang === mu).reduce((j, x) => j + x.total, 0);
+  const diterima = (b.setoran || []).filter((s) => statusSetoran(s) === 'diterima');
+  const diajukan = (b.setoran || []).filter((s) => statusSetoran(s) === 'diajukan');
+  const tot = (d, mu) => d.reduce((j, s) => j + Number(s[mu] || 0), 0);
+  return { jualRp: jml(jual, 'rp'), jualEgp: jml(jual, 'egp'),
+    disetorRp: tot(diterima, 'rp'), disetorEgp: tot(diterima, 'egp'),
+    diajukanRp: tot(diajukan, 'rp'), diajukanEgp: tot(diajukan, 'egp'),
+    belumRp: jml(belumDisetor(b), 'rp'), belumEgp: jml(belumDisetor(b), 'egp') };
+}
+
 /** Ubah status proyek. `ke`: berjalan | terbit | dihentikan. */
 function ubahStatusBuku(user, id, ke, { alasan, tanggal } = {}) {
   RBAC.assertCan(user, 'buku.manage');
@@ -2939,6 +3094,16 @@ function cariBuku(id) {
   const b = db.buku.find((x) => x.id === id);
   if (!b) throw new Error('Proyek buku tidak ditemukan.');
   return b;
+}
+
+/** Harga jual baku per eksemplar — pengisi awal formulir penjualan dan
+    dasar hitungan titik impas. */
+function aturHargaBuku(user, id, { rp, egp }) {
+  RBAC.assertCan(user, 'buku.anggaran');
+  const b = cariBuku(id);
+  b.harga = { rp: Math.max(0, Number(rp) || 0), egp: Math.max(0, Number(egp) || 0) };
+  catat(user, 'buku.harga', id, `Harga jual "${b.judul}": ${nominalGabung(b.harga)}`);
+  simpan();
 }
 
 function simpanBuku(user, data) {
@@ -3020,13 +3185,7 @@ function hapusBagianBuku(user, bagian, id, idBuku) {
 /** Centang kegiatan produksi. Terpisah dari simpanBagianBuku agar
     sekali klik tidak menuntut seluruh form dibuka lebih dulu. */
 function centangProduksi(user, id, selesai) {
-  RBAC.assertCan(user, 'buku.manage');
-  const b = bukuAktif();
-  const k = b?.produksi.find((x) => x.id === id);
-  if (!k) throw new Error('Kegiatan produksi tidak ditemukan.');
-  k.selesai = selesai;
-  catat(user, 'buku.produksi.centang', id, `Kegiatan "${k.kegiatan}" ditandai ${selesai ? 'selesai' : 'belum selesai'}`);
-  simpan();
+  simpanProduksi(user, { id, selesai });
 }
 
 /* ============================================================
@@ -3218,6 +3377,8 @@ window.Store = {
   aturIuran, iuranAnggota, terimaIuran, tunggakanIuran, periodeAktif, deretBulan, hapusTransaksi, saldoAkun, nominalGabung,
   simpanKoleksi, hapusKoleksi, centangKegiatan,
   setTargetArtikel, simpanPanduan, simpanProfil,
+  stokBuku, simpanProduksi, simpanWilayah, simpanPenjualan, hapusPenjualan, belumDisetor, ajukanSetoran, batalkanSetoran,
+  aturHargaBuku, statusSetoran, kasSetoran, setoranMenunggu, terimaSetoran, uangBuku,
   keadaanNaskah, putuskanNaskah, simpanNaskahBuku, serahkanNaskah, bukuSaya,
   bukuAktif, bukaBukuProyek, simpanBuku, hapusBuku, ubahStatusBuku, tahapBuku, bukuBerisi, bukuJalan, STATUS_BUKU,
   simpanBagianBuku, hapusBagianBuku, centangProduksi,
