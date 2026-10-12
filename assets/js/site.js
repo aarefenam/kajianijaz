@@ -566,8 +566,8 @@ function pasangPencarian(akar) {
     });
   };
 
-  /* Artikel dibuka di tempat lewat modal yang sudah ada; sisanya belum
-     punya halaman sendiri, jadi diarahkan ke panelnya di beranda —
+  /* Artikel punya halaman bacanya sendiri; sisanya belum punya halaman
+     sendiri, jadi diarahkan ke panelnya di beranda —
      lebih baik daripada tautan yang tidak menuju ke mana-mana. */
   function pilihHasil(h) {
     inp.value = '';
@@ -1064,6 +1064,12 @@ const RENDER = {
         const pil = u.kategori === 'pendiri' ? '<span class="pil pil-pendiri">Pendiri</span>'
           : u.kategori === 'alumni' ? '<span class="pil pil-alumni">Alumni</span>'
             : '<span class="pil">Anggota Aktif</span>';
+        /* Hanya yang benar-benar ada: ikon tanpa tujuan lebih buruk
+           daripada tak ada ikon. */
+        const sosmed = [
+          u.instagram ? `<a href="https://instagram.com/${encodeURIComponent(u.instagram)}" target="_blank" rel="noopener" aria-label="Instagram ${esc(u.nama)}">${IK.instagram}</a>` : '',
+          u.email ? `<a href="mailto:${esc(u.email)}" aria-label="Email">${IK.email}</a>` : '',
+        ].join('');
         return `<div class="kartu-anggota">
           <div class="ang-atas">
             <div class="ang-foto"><img src="${u.foto}" alt="${esc(u.nama)}"><span class="ang-lencana">${u.kategori === 'pendiri' ? IK.bintang : IK.toga}</span></div>
@@ -1075,11 +1081,7 @@ const RENDER = {
           </div>
           <div class="ang-detail">${IK.toga}<span>${esc(u.pendidikan)}</span></div>
           <div class="ang-detail">${IK.orang}<span>${esc(u.jabatan || RBAC.roleLabel(u.role))}</span></div>
-          <div class="ang-sosmed">
-            <a href="#" aria-label="Facebook">${IK.facebook}</a>
-            <a href="#" aria-label="Instagram">${IK.instagram}</a>
-            ${u.email ? `<a href="mailto:${esc(u.email)}" aria-label="Email">${IK.email}</a>` : ''}
-          </div>
+          ${sosmed ? `<div class="ang-sosmed">${sosmed}</div>` : ''}
         </div>`;
       }).join('');
     }
@@ -1194,14 +1196,6 @@ const RENDER = {
 
     cari.oninput = () => { halaman = 1; gambar(); };
     daftarKategori(); miniTerbaru(); gambar();
-
-    /* Tautan bagikan menunjuk ke sini. Artikelnya dibuka langsung supaya
-       yang menerima tautan mendarat pada tulisannya, bukan pada daftar
-       yang harus dicari-cari lagi. */
-    const dibuka = new URLSearchParams(location.search).get('buka');
-    if (dibuka && terbit().some((a) => a.id === dibuka)) {
-      requestAnimationFrame(() => bukaArtikel(dibuka));
-    }
     return sec;
   },
 
@@ -1353,45 +1347,184 @@ function bukaGambar(item, daftar) {
 }
 function tutupGambar() { tiraiGambar?.classList.remove('buka'); }
 
-/* ---------------- modal baca artikel ---------------- */
-let tirai;
-function bukaArtikel(id) {
-  const a = Store.db.artikel.find((x) => x.id === id);
-  if (!a) return;
-  /* Naikkan di layar seketika, catat di server menyusul. Pembacanya
-     pengunjung yang belum masuk, jadi ia tidak menulis koleksi sendiri —
-     api/lihat.php hanya boleh menambah kolom `dilihat`. */
-  a.dilihat = (a.dilihat || 0) + 1;
-  Store.catatBaca(id);
+/* ============================================================
+   HALAMAN BACA ARTIKEL — /artikel?buka=ID
+   ------------------------------------------------------------
+   Dulu artikel dibuka sebagai jendela di atas daftar. Tulisan panjang
+   tidak cocok di sana: ia tak punya alamat yang terasa sebagai halaman,
+   tombol kembali peramban menutup seluruh situs, dan ruang bacanya
+   sempit. Kini tiap artikel adalah halaman — alamatnya tetap ?buka=,
+   yang sudah dipakai tautan bagikan, sitemap, dan halaman.php.
+   ============================================================ */
+const alamatArtikel = (id) => `artikel?buka=${encodeURIComponent(id)}`;
+function bukaArtikel(id) { location.href = alamatArtikel(id); }
 
-  if (!tirai) {
-    tirai = el('<div class="tirai"><div class="modal-baca"></div></div>');
-    document.body.appendChild(tirai);
-    tirai.onclick = (e) => { if (e.target === tirai) tutupArtikel(); };
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') tutupArtikel(); });
-  }
-  tirai.querySelector('.modal-baca').innerHTML = `
-    <button class="baca-tutup" aria-label="Tutup">${IK.tutup}</button>
-    <div class="baca-sampul"><img src="${a.cover}" alt=""></div>
-    <div class="baca-isi">
-      <span class="art-kategori">${esc(a.kategori)}</span>
-      <h1>${esc(a.judul)}</h1>
-      <div class="art-meta" style="margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--garis)">
-        <span>${IK.orang} ${esc(Store.namaUser(a.penulisId))}</span>
-        <span>${IK.kalender} ${tglID(a.tanggal)}</span>
-        <span>${IK.mata} ${a.dilihat}x dibaca</span>
-      </div>
-      ${a.isi.map((p) => `<p>${esc(p)}</p>`).join('')}
-      ${a.tag?.length ? `<div class="baca-tag">${a.tag.map((t) => `<span>#${esc(t)}</span>`).join('')}</div>` : ''}
-    </div>`;
-  tirai.querySelector('.baca-tutup').onclick = tutupArtikel;
-  tirai.classList.add('buka');
-  tirai.querySelector('.modal-baca').scrollTop = 0;
-  document.body.style.overflow = 'hidden';
+const artikelTerbit = () => (Store.db.artikel || []).filter((a) => a.status === 'terbit')
+  .slice().sort((a, b) => (b.tanggal || '').localeCompare(a.tanggal || ''));
+
+/** Artikel yang diminta alamat ini: objeknya, `null` bila ?buka= ada
+    tetapi tulisannya tidak (lagi) terbit, `undefined` bila tak diminta. */
+function artikelDiminta() {
+  const id = new URLSearchParams(location.search).get('buka');
+  if (!id) return undefined;
+  return artikelTerbit().find((a) => a.id === id) || null;
 }
-function tutupArtikel() {
-  tirai?.classList.remove('buka');
-  document.body.style.overflow = '';
+
+/* Paragraf berbahasa Arab ditata dari kanan dengan huruf Arabnya.
+   Ditentukan dari isinya: penulis mengetik teks polos, tanpa penanda. */
+const ARAB = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/g;
+const paragrafArab = (t) => {
+  const huruf = String(t).replace(/[\s\d\p{P}]/gu, '');
+  return huruf.length > 0 && (String(t).match(ARAB) || []).length / huruf.length > 0.6;
+};
+
+const IK_BACA = {
+  whatsapp: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>',
+  tautan: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+  bagi: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.400-4.3M8.3 13.3l7.400 4.3"/></svg>',
+  kiri: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
+};
+
+function halamanBaca(a) {
+  const semua = artikelTerbit();
+  const i = semua.findIndex((x) => x.id === a.id);
+  const lebihBaru = semua[i - 1], lebihLama = semua[i + 1];
+  const sekategori = semua.filter((x) => x.id !== a.id && x.kategori === a.kategori);
+  const terkait = sekategori.concat(semua.filter((x) => x.id !== a.id && x.kategori !== a.kategori)).slice(0, 3);
+
+  const isi = Array.isArray(a.isi) ? a.isi : [];
+  const kata = isi.join(' ').trim().split(/\s+/).filter(Boolean).length;
+  const menit = Math.max(1, Math.round(kata / 200));
+  const penulis = (Store.db.users || []).find((u) => u.id === a.penulisId);
+  const namaPenulis = Store.namaUser(a.penulisId);
+  const url = new URL(alamatArtikel(a.id), location.href).href;
+  const bagiTeks = encodeURIComponent(`${a.judul}\n${url}`);
+
+  const tombolBagi = `
+    <a class="bg-wa" href="https://wa.me/?text=${bagiTeks}" target="_blank" rel="noopener" aria-label="Bagikan ke WhatsApp" title="WhatsApp">${IK_BACA.whatsapp}</a>
+    <a class="bg-tg" href="https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(a.judul)}" target="_blank" rel="noopener" aria-label="Bagikan ke Telegram" title="Telegram">${IK.telegram}</a>
+    <button type="button" data-salin aria-label="Salin tautan" title="Salin tautan">${IK_BACA.tautan}</button>
+    ${navigator.share ? `<button type="button" data-bagikan aria-label="Bagikan lewat aplikasi lain" title="Bagikan">${IK_BACA.bagi}</button>` : ''}`;
+
+  const kartuKecil = (x) => `<a class="bc-kartu" href="${esc(alamatArtikel(x.id))}">
+    <div class="bc-kartu-gambar"><img src="${x.cover}" alt="" loading="lazy"></div>
+    <div class="bc-kartu-isi">
+      <span class="art-kategori">${esc(x.kategori)}</span>
+      <h3>${esc(x.judul)}</h3>
+      <div class="bc-kartu-meta">${esc(Store.namaUser(x.penulisId))} · ${tglID(x.tanggal)}</div>
+    </div></a>`;
+  const tetangga = (x, arah) => (x ? `<a class="bc-tetangga ${arah}" href="${esc(alamatArtikel(x.id))}">
+    <span class="bc-tetangga-arah">${arah === 'baru' ? `${IK_BACA.kiri} Artikel Lebih Baru` : `Artikel Sebelumnya ${IK.panah}`}</span>
+    <span class="bc-tetangga-judul">${esc(x.judul)}</span></a>` : '<span></span>');
+
+  const sec = el(`<main class="baca">
+    <div class="bc-maju" aria-hidden="true"><i></i></div>
+    <article class="bc-lembar" lang="id">
+      <header class="bc-kepala">
+        <nav class="bc-jejak" aria-label="Jejak halaman">
+          <a href="./">Beranda</a><span>/</span><a href="artikel">Artikel</a><span>/</span>
+          <a href="artikel?kategori=${encodeURIComponent(a.kategori)}">${esc(a.kategori)}</a>
+        </nav>
+        <a class="art-kategori" href="artikel?kategori=${encodeURIComponent(a.kategori)}">${esc(a.kategori)}</a>
+        <h1>${esc(a.judul)}</h1>
+        ${a.ringkas ? `<p class="bc-pengantar">${esc(a.ringkas)}</p>` : ''}
+        <div class="bc-meta">
+          ${penulis?.foto ? `<img class="bc-meta-foto" src="${esc(penulis.foto)}" alt="">` : ''}
+          <div>
+            <div class="bc-meta-nama">${esc(namaPenulis)}</div>
+            <div class="bc-meta-rinci">
+              <time datetime="${esc(a.tanggal)}">${tglID(a.tanggal)}</time><i></i>
+              <span>${menit} menit baca</span><i></i>
+              <span>${Number(a.dilihat || 0).toLocaleString('id-ID')}× dibaca</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      ${a.cover ? `<figure class="bc-sampul"><img src="${a.cover}" alt="${esc(a.judul)}"></figure>` : ''}
+
+      <div class="bc-tata">
+        <aside class="bc-rel" aria-label="Bagikan artikel"><span>Bagikan</span>${tombolBagi}</aside>
+        <div class="bc-badan">
+          <div class="bc-isi">
+            ${isi.map((p) => (paragrafArab(p)
+              ? `<p lang="ar" dir="rtl" class="bc-arab">${esc(p)}</p>`
+              : `<p dir="auto">${esc(p)}</p>`)).join('')}
+          </div>
+
+          ${a.tag?.length ? `<div class="baca-tag">${a.tag.map((t) => `<span>#${esc(t)}</span>`).join('')}</div>` : ''}
+
+          <div class="bc-bagi">
+            <span>Bagikan artikel ini</span>
+            <div class="bc-bagi-tombol">${tombolBagi}</div>
+          </div>
+
+          <div class="bc-penulis">
+            ${penulis?.foto ? `<img src="${esc(penulis.foto)}" alt="">` : ''}
+            <div>
+              <span class="bc-penulis-label">Ditulis oleh</span>
+              <div class="bc-penulis-nama">${esc(namaPenulis)}</div>
+              ${penulis ? `<div class="bc-penulis-ket">${esc(penulis.jabatan || RBAC.roleLabel(penulis.role))}${penulis.angkatan ? ' · ' + esc(penulis.angkatan) : ''}</div>` : ''}
+              ${penulis?.instagram ? `<a class="bc-penulis-ig" href="https://instagram.com/${encodeURIComponent(penulis.instagram)}" target="_blank" rel="noopener">${IK.instagram} @${esc(penulis.instagram)}</a>` : ''}
+            </div>
+          </div>
+
+          ${lebihBaru || lebihLama ? `<nav class="bc-tetangga-baris" aria-label="Artikel lain">
+            ${tetangga(lebihBaru, 'baru')}${tetangga(lebihLama, 'lama')}</nav>` : ''}
+        </div>
+      </div>
+    </article>
+
+    ${terkait.length ? `<section class="bc-terkait"><div class="wrap">
+      <div class="bc-terkait-kepala">
+        <h2>${sekategori.length ? 'Artikel Terkait' : 'Artikel Lainnya'}</h2>
+        <a href="artikel">Semua Artikel ${IK.panah}</a>
+      </div>
+      <div class="bc-terkait-grid">${terkait.map(kartuKecil).join('')}</div>
+    </div></section>` : ''}
+  </main>`);
+
+  sec.querySelectorAll('[data-salin]').forEach((b) => {
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(url); toast('Tautan disalin ke papan klip.'); }
+      catch (_) { toast('Peramban menolak menyalin. Salin dari bilah alamat.', true); }
+    };
+  });
+  sec.querySelectorAll('[data-bagikan]').forEach((b) => {
+    b.onclick = () => navigator.share({ title: a.judul, url }).catch(() => { /* dibatalkan — bukan galat */ });
+  });
+  return sec;
+}
+
+function artikelTakAda() {
+  return el(`<main class="baca"><div class="bc-kosong">
+    ${IK.kotakKosong}
+    <h1>Artikel tidak ditemukan</h1>
+    <p>Tulisan ini mungkin sudah ditarik, atau alamatnya keliru.</p>
+    <a class="tombol" href="artikel">Lihat Semua Artikel</a>
+  </div></main>`);
+}
+
+/* Garis kemajuan baca. Satu pendengar untuk seumur halaman: render()
+   berjalan ulang saat ERP mengubah isi, dan pendengar yang dipasang
+   tiap kali akan menumpuk. Elemennya dicari saat gulir, bukan disimpan. */
+let majuTerpasang = false;
+function pasangMaju() {
+  const ukur = () => {
+    const garis = document.querySelector('.bc-maju i');
+    const lembar = document.querySelector('.bc-isi');
+    if (!garis || !lembar) return;
+    const k = lembar.getBoundingClientRect();
+    const jarak = k.height - innerHeight * 0.55;
+    const maju = jarak <= 0 ? (k.top < innerHeight ? 1 : 0) : Math.min(1, Math.max(0, (innerHeight * 0.45 - k.top) / jarak));
+    garis.style.transform = `scaleX(${maju})`;
+  };
+  if (!majuTerpasang) {
+    majuTerpasang = true;
+    addEventListener('scroll', ukur, { passive: true });
+    addEventListener('resize', ukur);
+  }
+  requestAnimationFrame(ukur);
 }
 
 /* ============================================================
@@ -1415,7 +1548,24 @@ function render(namaHalaman, fileAktif) {
   const hal = Store.cms.halaman[namaHalaman];
   document.title = `${hal.judul} — ${Store.cms.situs.nama} | ${Store.cms.situs.tagline}`;
 
-  hal.sections.filter((s) => s.aktif).forEach((s) => {
+  /* /artikel?buka=ID adalah halaman baca, bukan daftar artikel. */
+  const dibaca = namaHalaman === 'artikel' ? artikelDiminta() : undefined;
+  if (dibaca) {
+    /* Hitungan baca naik sekali per pemuatan halaman — render() berjalan
+       lagi tiap ERP mengubah isi, dan itu bukan pembaca baru. Naikkan di
+       layar seketika, catat di server menyusul: pembacanya pengunjung
+       yang belum masuk, dan api/lihat.php hanya menambah `dilihat`. */
+    if (window.__terbaca !== dibaca.id) {
+      window.__terbaca = dibaca.id;
+      dibaca.dilihat = (dibaca.dilihat || 0) + 1;
+      Store.catatBaca(dibaca.id);
+    }
+    document.title = `${dibaca.judul} — ${Store.cms.situs.nama}`;
+    app.appendChild(halamanBaca(dibaca));
+    pasangMaju();
+  } else if (dibaca === null) {
+    app.appendChild(artikelTakAda());
+  } else hal.sections.filter((s) => s.aktif).forEach((s) => {
     const fn = RENDER[s.tipe];
     if (!fn) { console.warn('Tipe section belum didukung:', s.tipe); return; }
     try { app.appendChild(fn(s.data)); }
