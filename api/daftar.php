@@ -38,6 +38,11 @@ $tglLahir    = $bersih($d['tglLahir'] ?? '', 10);
 $angkatan    = $bersih($d['angkatan'] ?? '', 40);
 $pendidikan  = $bersih($d['pendidikan'] ?? '', 160);
 $catatan     = $bersih($d['catatan'] ?? '', 500);
+/* Instagram disimpan sebagai nama pengguna saja, apa pun yang ditempel:
+   '@nama', 'instagram.com/nama', atau tautan lengkapnya. Aturannya harus
+   sama dengan rapikanInstagram() di assets/js/store.js. */
+$instagram   = preg_replace('#^(https?://)?(www\.)?instagram\.com/#i', '', trim((string) ($d['instagram'] ?? '')));
+$instagram   = preg_split('#[/?\#]#', ltrim($instagram, '@'))[0];
 /* Alamat boleh beberapa baris. */
 $alamat = mb_substr(trim(strip_tags((string) ($d['alamat'] ?? ''))), 0, 300);
 
@@ -46,6 +51,7 @@ if ($nama === '' || $email === '' || $paspor === '' || $alamat === '')
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) galat('Alamat surel tidak sah.');
 if (strlen($paspor) < 5) galat('Nomor paspor terlalu pendek.');
 if ($tglLahir !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $tglLahir)) galat('Tanggal lahir tidak sah.');
+if ($instagram !== '' && !preg_match('/^[A-Za-z0-9._]{1,30}$/', $instagram)) galat('Nama pengguna Instagram tidak sah.');
 if ($telepon !== '' && !preg_match('/^[0-9+\-() ]{6,30}$/', $telepon)) galat('Nomor telepon tidak sah.');
 
 $k = bacaKoleksi('pendaftaran');
@@ -86,7 +92,7 @@ array_unshift($isi, [
   'status' => 'menunggu', 'ts' => gmdate('c'), 'sidik' => $sidik,
   'nama' => $nama, 'email' => $email, 'telepon' => $telepon, 'paspor' => $paspor,
   'alamat' => $alamat, 'tempatLahir' => $tempatLahir, 'tglLahir' => $tglLahir,
-  'angkatan' => $angkatan, 'pendidikan' => $pendidikan, 'catatan' => $catatan, 'foto' => $foto,
+  'angkatan' => $angkatan, 'pendidikan' => $pendidikan, 'instagram' => $instagram, 'catatan' => $catatan, 'foto' => $foto,
 ]);
 tulisKoleksi('pendaftaran', $isi, null);
 catatAudit(null, 'pendaftaran.masuk', 'daftar', "Permohonan pendaftaran dari $nama");

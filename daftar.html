@@ -48,8 +48,9 @@ Situs.mulaiKhusus('daftar.html', 'Pendaftaran Anggota', () => {
       <div class="grup"><label>Alamat di Mesir <i>*</i></label><textarea name="alamat" required maxlength="300" style="min-height:84px" placeholder="Nama gedung, jalan, distrik, kota"></textarea></div>
       <div class="dua-kolom">
         <div class="grup"><label>Angkatan</label><input name="angkatan" maxlength="40" placeholder="Bila sudah tahu — mis. Angkatan XII"></div>
-        <div class="grup"><label>Pendidikan</label><input name="pendidikan" maxlength="160" placeholder="Fakultas dan universitas"></div>
+        <div class="grup"><label>Instagram</label><input name="instagram" maxlength="80" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="@namapengguna"></div>
       </div>
+      <div class="grup"><label>Pendidikan</label><input name="pendidikan" maxlength="160" placeholder="Fakultas dan universitas"></div>
       <div class="grup"><label>Pas Foto</label>
         <div class="pilih-foto"><img data-pratinjau alt="" hidden>
           <label class="tombol tombol-garis" style="cursor:pointer;margin:0">Pilih Foto<input type="file" name="foto" accept="image/jpeg,image/png,image/webp" hidden></label>
@@ -59,7 +60,8 @@ Situs.mulaiKhusus('daftar.html', 'Pendaftaran Anggota', () => {
       <label class="setuju"><input type="checkbox" name="setuju" required>
         <span>Saya menyatakan data di atas benar, dan menyetujui data ini disimpan pengurus
           ${esc(Store.cms.situs.nama)} untuk keperluan keanggotaan. Nomor paspor, alamat, dan pas foto
-          hanya dapat dilihat Sekretaris dan Ketua Umum, serta tidak ditampilkan di website.</span></label>
+          hanya dapat dilihat Sekretaris dan Ketua Umum, serta tidak ditampilkan di website.
+          Instagram, bila diisi, tampil pada kartu anggota di halaman Tentang.</span></label>
       <button class="tombol" type="submit">Kirim Pendaftaran</button>
     </form>
     <div class="kartu-form daftar-selesai" id="selesai" hidden>
@@ -91,7 +93,7 @@ Situs.mulaiKhusus('daftar.html', 'Pendaftaran Anggota', () => {
     tbl.disabled = true; tbl.textContent = 'Mengirim…';
     try {
       const data = {};
-      ['nama', 'email', 'paspor', 'telepon', 'tempatLahir', 'tglLahir', 'alamat', 'angkatan', 'pendidikan', 'catatan', 'situs']
+      ['nama', 'email', 'paspor', 'telepon', 'tempatLahir', 'tglLahir', 'alamat', 'angkatan', 'instagram', 'pendidikan', 'catatan', 'situs']
         .forEach((k) => { data[k] = String(f.get(k) || ''); });
       await Store.kirimPendaftaran(data, foto.files[0] || null);
       form.hidden = true;

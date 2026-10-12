@@ -87,7 +87,7 @@ if (!$u) {
      menjawab seragam agar surel terdaftar tidak dapat ditebak — membagikan
      daftarnya di sini akan meniadakan upaya itu sama sekali. */
   if (isset($semua['isi']['users']) && is_array($semua['isi']['users'])) {
-    $tampak = ['id', 'nama', 'angkatan', 'level', 'pendidikan', 'kategori', 'foto', 'role', 'jabatan'];
+    $tampak = ['id', 'nama', 'angkatan', 'level', 'pendidikan', 'kategori', 'foto', 'role', 'jabatan', 'instagram'];
     $semua['isi']['users'] = array_values(array_map(
       fn($x) => array_intersect_key($x, array_flip($tampak)),
       array_filter($semua['isi']['users'], fn($x) => ($x['status'] ?? 'aktif') !== 'nonaktif')

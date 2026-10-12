@@ -2735,6 +2735,8 @@ function formAnggota(u) {
       <div class="bantu">Jabatan organisasi yang tampil di halaman Tentang. Berbeda dari role ERP di
         atas — role menentukan wewenang, ini menentukan sebutan. Dikosongkan berarti mengikuti role.</div></div>
     <div class="grup"><label>Riwayat Pendidikan</label><input id="p" value="${esc(u?.pendidikan || '')}" placeholder="S1 Tafsir & Ilmu al-Quran, Universitas Al-Azhar Kairo"></div>
+    <div class="grup"><label>Instagram</label><input id="ig" value="${esc(u?.instagram || '')}" autocomplete="off" spellcheck="false" placeholder="@namapengguna">
+      <div class="bantu">Tampil sebagai ikon pada kartu anggota di halaman Tentang. Dikosongkan berarti ikonnya tidak tampil.</div></div>
     ${bisaDiri ? `<div class="fa-diri">
       <div class="fa-diri-kepala">${I.perisai}<div><b>Data Diri</b>
         <span>Hanya terlihat Sekretaris dan Ketua Umum. Tidak tampil di website maupun di kartu anggota.</span></div></div>
@@ -2772,7 +2774,7 @@ function formAnggota(u) {
     aman(() => {
       const tersimpan = Store.simpanAnggota(U, {
         id: u?.id, nama: g('n').trim(), email: g('e').trim(), angkatan: g('a'), level: g('l'),
-        status: g('s'), role: g('r'), kategori: g('kt'), pendidikan: g('p'), jabatan: g('jb').trim(),
+        status: g('s'), role: g('r'), kategori: g('kt'), pendidikan: g('p'), jabatan: g('jb').trim(), instagram: g('ig'),
       });
       if (bisaDiri) Store.simpanDataDiri(U, tersimpan.id, {
         paspor: g('dp'), telepon: g('dt'), tempatLahir: g('dl'), tglLahir: g('dg'), alamat: g('da'),
@@ -4915,6 +4917,9 @@ HAL.akun = () => {
         <div class="grup"><label>Nama Lengkap</label><input id="an" value="${esc(U.nama)}"></div>
         <div class="grup"><label>Email</label><input id="ae" type="email" value="${esc(U.email)}"></div>
       </div>
+      <div class="grup" style="max-width:340px"><label>Instagram</label>
+        <input id="ai" value="${esc(U.instagram || '')}" autocomplete="off" spellcheck="false" placeholder="@namapengguna">
+        <div class="bantu">Tampil pada kartu Anda di halaman Tentang. Dikosongkan berarti tidak tampil.</div></div>
       <button class="btn btn-lime" id="simpanAkun">${I.cek} Simpan Perubahan</button>
     </div></div>`);
 
@@ -4948,7 +4953,7 @@ HAL.akun = () => {
     const nama = g('an').trim(), email = g('ae').trim();
     if (!nama || !email) return toast('Nama dan email wajib diisi.', true);
     aman(() => {
-      Store.simpanProfil(U, { nama, email, foto });
+      Store.simpanProfil(U, { nama, email, foto, instagram: g('ai') });
       toast('Perubahan akun tersimpan.'); gambar();
     });
   };
@@ -8383,7 +8388,7 @@ function tinjauPendaftaran(p) {
       <dl class="tp-data">
         ${baris('Nama', p.nama)}${baris('Surel', p.email)}${baris('Telepon', p.telepon)}${baris('Nomor Paspor', p.paspor)}
         ${baris('Tempat, Tanggal Lahir', [p.tempatLahir, p.tglLahir ? tgl(p.tglLahir) : ''].filter(Boolean).join(', '))}
-        ${baris('Pendidikan', p.pendidikan)}${baris('Alamat', p.alamat)}${baris('Catatan', p.catatan)}
+        ${baris('Pendidikan', p.pendidikan)}${baris('Instagram', p.instagram ? '@' + p.instagram : '')}${baris('Alamat', p.alamat)}${baris('Catatan', p.catatan)}
         ${baris('Dikirim', tglJam(p.ts))}
       </dl></div>
     <div class="grid-form" style="margin-top:14px">

@@ -1880,8 +1880,19 @@ function hapusKajian(user, id) {
   simpan();
 }
 
+/** Nama pengguna Instagram, tanpa '@' dan tanpa alamat. Orang menempel
+    apa saja — '@nama', 'instagram.com/nama', tautan lengkap — jadi yang
+    disimpan selalu namanya saja, dan tautannya disusun saat ditampilkan. */
+function rapikanInstagram(v) {
+  const s = String(v || '').trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, '')
+    .replace(/^@/, '').split(/[/?#]/)[0];
+  if (s && !/^[A-Za-z0-9._]{1,30}$/.test(s)) throw new Error('Nama pengguna Instagram tidak sah.');
+  return s;
+}
+
 function simpanAnggota(user, data) {
   RBAC.assertCan(user, 'anggota.manage');
+  if (data.instagram !== undefined) data = { ...data, instagram: rapikanInstagram(data.instagram) };
   /* Mengganti role butuh izin lebih tinggi. Anggota baru lahir sebagai
      'anggota', jadi menambah orang tanpa menyentuh rolenya tidak
      menuntut izin itu — dulu pembandingnya `undefined`, sehingga
@@ -1980,10 +1991,10 @@ function terimaPendaftaran(user, id, { angkatan, level }) {
 
   const baru = simpanAnggota(user, {
     nama: p.nama, email: p.email, angkatan: String(angkatan).trim(), level: level || 'Tatsqif',
-    pendidikan: p.pendidikan || '',
+    pendidikan: p.pendidikan || '', instagram: p.instagram || '',
   });
   simpanDataDiri(user, baru.id, p);
-  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan']).forEach((k) => { delete p[k]; });
+  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan', 'instagram']).forEach((k) => { delete p[k]; });
   Object.assign(p, { status: 'diterima', userId: baru.id, diproses: nowISO(), oleh: user.id });
   catat(user, 'pendaftaran.terima', p.id, `Menerima pendaftaran ${p.nama} sebagai ${baru.nia}`);
   simpan();
@@ -1996,7 +2007,7 @@ function tolakPendaftaran(user, id, alasan) {
   if (!p) throw new Error('Permohonan tidak ditemukan.');
   if (p.status !== 'menunggu') throw new Error('Permohonan ini sudah diproses.');
   /* Yang ditolak tak menjadi anggota, jadi data pribadinya dibuang saat itu juga. */
-  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan', 'foto']).forEach((k) => { delete p[k]; });
+  KOLOM_DIRI.concat(['catatan', 'sidik', 'pendidikan', 'instagram', 'foto']).forEach((k) => { delete p[k]; });
   Object.assign(p, { status: 'ditolak', alasan: String(alasan || '').trim(), diproses: nowISO(), oleh: user.id });
   catat(user, 'pendaftaran.tolak', p.id, `Menolak pendaftaran ${p.nama}`);
   simpan();
@@ -2052,9 +2063,11 @@ function simpanProfil(user, data) {
   if (!data.nama?.trim() || !email) throw new Error('Nama dan email wajib diisi.');
   if (db.users.some((x) => x.id !== u.id && x.email.toLowerCase() === email))
     throw new Error('Email itu sudah dipakai akun lain.');
+  const instagram = data.instagram === undefined ? undefined : rapikanInstagram(data.instagram);
 
   u.nama = data.nama.trim();
   u.email = data.email.trim();
+  if (instagram !== undefined) u.instagram = instagram;
   if (data.foto) u.foto = data.foto;
   catat(u, 'akun.ubah', u.id, `${u.nama} memperbarui data akunnya`);
   simpan();
