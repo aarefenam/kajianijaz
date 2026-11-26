@@ -3870,7 +3870,8 @@ function formOrg(nama, item) {
       g.appendChild(el(`<input data-k="${f.k}" type="${tipe}" ${f.jenis === 'angka' ? 'min="0" step="any"' : ''}
         value="${esc(nilaiAwal)}" placeholder="${esc(f.ph || '')}">`));
     }
-    if (f.bantu && f.jenis !== 'gambar') g.appendChild(el(`<div class="bantu">${esc(f.bantu)}</div>`));
+    const bantu = nilai(f.bantu);
+    if (bantu && f.jenis !== 'gambar') g.appendChild(el(`<div class="bantu">${esc(bantu)}</div>`));
     isi.appendChild(g);
   });
   m.sesudahForm?.(isi, item);
@@ -8948,8 +8949,13 @@ const namaAkun = (id) => Store.db.akunKas.find((a) => a.id === id)?.nama || '—
 const aktifDulu = (a, b) => (a.nonaktif === true) - (b.nonaktif === true);
 const kategoriUntuk = (jenis) => Store.db.kategoriKeuangan.filter((k) => k.jenis === jenis).sort(aktifDulu)
   .map((k) => ({ v: k.nama, l: k.nonaktif ? `${k.nama} (nonaktif)` : k.nama }));
-const pilihanAkun = () => [...Store.db.akunKas].sort(aktifDulu)
-  .map((a) => ({ v: a.id, l: a.nonaktif ? `${a.nama} (nonaktif)` : a.nama }));
+/* Database yang baru dikosongkan tak punya akun sama sekali; tanpa
+   baris pengganti, pilihannya tampil sebagai kotak kosong tanpa sebab. */
+const pilihanAkun = () => (Store.db.akunKas.length
+  ? [...Store.db.akunKas].sort(aktifDulu).map((a) => ({ v: a.id, l: a.nonaktif ? `${a.nama} (nonaktif)` : a.nama }))
+  : [{ v: '', l: '— belum ada akun kas —' }]);
+const bantuAkunKosong = () => (Store.db.akunKas.some((a) => !a.nonaktif) ? ''
+  : 'Belum ada akun kas yang aktif. Tambahkan dulu lewat menu Akun & Tempat Uang, lalu catat transaksinya.');
 const lencanaNonaktif = (x) => (x.nonaktif ? ' <span class="lencana l-abu">nonaktif</span>' : '');
 const pilihStatus = { k: 'nonaktif', l: 'Status', jenis: 'pilih', bawaan: 'tidak',
   pilihan: [{ v: 'tidak', l: 'Aktif' }, { v: 'ya', l: 'Nonaktif — tak dipakai untuk transaksi baru' }] };
@@ -9183,7 +9189,7 @@ const medanNominal = [
   { k: 'rp', l: 'Nominal Rupiah (Rp)', jenis: 'angka', ph: '0' },
   { k: 'egp', l: 'Nominal Pound (EGP)', jenis: 'angka', ph: '0',
     bantu: 'Rupiah dan pound dicatat terpisah — isi salah satu atau keduanya, sesuai uang yang benar-benar diterima.' },
-  { k: 'akunId', l: 'Disimpan di', jenis: 'pilih', pilihan: pilihanAkun },
+  { k: 'akunId', l: 'Disimpan di', jenis: 'pilih', pilihan: pilihanAkun, bantu: bantuAkunKosong },
   { k: 'tanggal', l: 'Tanggal', jenis: 'tanggal', wajib: true },
   { k: 'ket', l: 'Keterangan', ph: 'Iuran anggota' },
   medanBukti,

@@ -2138,6 +2138,7 @@ function simpanTransaksi(user, data) {
     if (!lama && k?.nonaktif) throw new Error(`Kategori "${k.nama}" sudah dinonaktifkan. Pilih kategori lain.`);
   }
   tolakBilaTertutup(rapi.tanggal || lama?.tanggal);
+  if (!db.akunKas.length) throw new Error('Belum ada akun kas. Tambahkan dulu lewat menu Akun & Tempat Uang.');
   const akun = db.akunKas.find((a) => a.id === (rapi.akunId || lama?.akunId || 'ak1'));
   if (!akun) throw new Error('Akun tujuan tidak ditemukan. Pilih akun yang tersedia.');
   if (!lama && akun.nonaktif) throw new Error(`Akun "${akun.nama}" sudah dinonaktifkan. Pilih akun lain.`);
